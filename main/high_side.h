@@ -2,10 +2,7 @@
 
 #pragma once
 
-#include "driver/i2c_master.h"
-
 //////////////////////////////////////////////////////////////////////
 
-void i2c_task_start();
-
-#define I2C_TIMEOUT_MS 100
+esp_err_t high_side_init();
+void high_side_set_channel(int channel); // 0 means all off else switch on channel 1..16

@@ -1,45 +1,36 @@
 //////////////////////////////////////////////////////////////////////
 
-#include "driver/i2c.h"
+#include "driver/i2c_master.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "i2c_task.h"
 #include "mcp_4017.h"
 
 //////////////////////////////////////////////////////////////////////
 
-#define MCP4017_I2C_ADDR 0x2F
+#define MCP4017_I2C_ADDR 0x2f
 
-static char const *TAG = "MCP4017";
+// static char const *TAG = "MCP4017";
 
-/************************************************************************
- * @brief Set the wiper position of the MCP4017 digital potentiometer.
- * Performs a blocking I2C write operation
- * @param i2c_port The I2C port number.
- * @param wiper_value The 8-bit value (0-255) for the wiper position.
- * @return esp_err_t ESP_OK on success, otherwise error code.
- */
+static i2c_master_dev_handle_t mcp_i2c_handle;
 
-esp_err_t mcp4017_set_wiper(i2c_port_t i2c_port, uint8_t wiper_value)
+//////////////////////////////////////////////////////////////////////
+
+esp_err_t mcp4017_init(i2c_master_bus_handle_t bus)
 {
-    esp_err_t err;
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = MCP4017_I2C_ADDR,
+        .scl_speed_hz = 100000,
+    };
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &mcp_i2c_handle));
+    return ESP_OK;
+}
 
-    static i2c_cmd_handle_t cmd = nullptr;
-
-    if(cmd == nullptr) {
-        cmd = i2c_cmd_link_create();
-        i2c_master_start(cmd);
-        i2c_master_write_byte(cmd, (MCP4017_I2C_ADDR << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(cmd, wiper_value, true);
-        i2c_master_stop(cmd);
-    }
-
-    err = i2c_master_cmd_begin(i2c_port, cmd, 1000 / portTICK_PERIOD_MS);
-    if(err != ESP_OK) {
-        ESP_LOGE(TAG, "MCP4017 transaction failed: %s", esp_err_to_name(err));
-    } else {
-        ESP_LOGI(TAG, "Set MCP4017 wiper to %u", wiper_value);
-    }
-    return err;
+esp_err_t mcp4017_set_wiper(uint8_t wiper_value)
+{
+    uint8_t write_data[1] = { wiper_value };
+    return i2c_master_transmit(mcp_i2c_handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS);
 }

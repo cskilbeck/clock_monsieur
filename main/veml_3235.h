@@ -4,4 +4,5 @@
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t veml3235_read_lux(i2c_port_t i2c_port, uint16_t *lux_value);
+esp_err_t veml3235_init(i2c_master_bus_handle_t bus);
+esp_err_t veml3235_read_lux(uint16_t lux_value[2]);

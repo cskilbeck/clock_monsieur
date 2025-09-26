@@ -4,4 +4,5 @@
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t mcp4017_set_wiper(i2c_port_t i2c_port, uint8_t wiper_value);
+esp_err_t mcp4017_init(i2c_master_bus_handle_t bus);
+esp_err_t mcp4017_set_wiper(uint8_t wiper_value);
