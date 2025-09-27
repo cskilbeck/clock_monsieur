@@ -43,60 +43,49 @@ static_assert(ctl_total == 257);
 
 static void tlc5948_pulse_xlat(void)
 {
-    gpio_set_level(TLC5948_PIN_XLAT, 1);
-    esp_rom_delay_us(1);
-    gpio_set_level(TLC5948_PIN_XLAT, 0);
+    // gpio_set_level(TLC5948_PIN_XLAT, 1);
+    // esp_rom_delay_us(1);
+    // gpio_set_level(TLC5948_PIN_XLAT, 0);
 }
 
 //////////////////////////////////////////////////////////////////////
 
 static esp_err_t spi_send(uint8_t *buffer, size_t bit_count)
 {
-    spi_transaction.flags = 0;
-    spi_transaction.cmd = 0;
-    spi_transaction.addr = 0;
-    spi_transaction.override_freq_hz = 0;
-    spi_transaction.user = 0;
     spi_transaction.length = bit_count;
-    spi_transaction.rxlength = 0;
     spi_transaction.tx_buffer = buffer;
-    spi_transaction.rx_buffer = NULL;
-    ESP_ERROR_CHECK(spi_device_transmit(spi_device_handle, &spi_transaction));
+    ESP_ERROR_CHECK(spi_device_queue_trans(spi_device_handle, &spi_transaction, portMAX_DELAY));
     return ESP_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
-// overwrite some bits in an array of bytes
+// overwrite up to 32 bits in an array of bytes
 
 static void set_bits(uint8_t a[], uint32_t const val, size_t const offset, size_t const count)
 {
     uint32_t const src = val & (((uint64_t)1 << count) - 1);
-    size_t byte_index = offset / 8;
-    size_t const start_bit_pos = offset % 8;
-    size_t bits_done = 0;
-    size_t len = 8 - start_bit_pos;
-
+    size_t index = offset / 8;
+    size_t const bit_pos = offset % 8;
+    size_t len = 8 - bit_pos;
     if(count < len) {
         len = count;
     }
+    size_t bits_done = 0;
     if(len != 0) {
-        uint8_t const mask_ones = (uint8_t)((1U << len) - 1);
-        uint8_t const mask = mask_ones << (8 - (start_bit_pos + len));
-        uint8_t const fragment = (uint8_t)(src >> (count - len) << (8 - (start_bit_pos + len)));
-        a[byte_index] &= ~mask;
-        a[byte_index] |= (fragment & mask);
+        uint8_t const mask = ((1U << len) - 1) << (8 - (bit_pos + len));
+        uint8_t const fragment = (uint8_t)(src >> (count - len) << (8 - (bit_pos + len)));
+        a[index] = (a[index] & ~mask) | (fragment & mask);
         bits_done += len;
     }
-    for(byte_index += 1; (bits_done + 8) <= count; byte_index += 1) {
-        a[byte_index] = (uint8_t)(src >> (count - (bits_done + 8)));
+    for(index += 1; (bits_done + 8) <= count; ++index) {
+        a[index] = (uint8_t)(src >> (count - (bits_done + 8)));
         bits_done += 8;
     }
     len = count - bits_done;
     if(len != 0) {
-        uint8_t const mask = ((uint8_t)((1U << len) - 1)) << (8 - len);
+        uint8_t const mask = ((1U << len) - 1) << (8 - len);
         uint8_t const fragment = (uint8_t)(src << (8 - len));
-        a[byte_index] &= ~mask;
-        a[byte_index] |= (fragment & mask);
+        a[index] = (a[index] & ~mask) | (fragment & mask);
     }
 }
 
@@ -132,8 +121,8 @@ esp_err_t tlc5948_init(void)
 
     spi_device_interface_config_t devcfg = {
         .mode = 0,
-        .clock_speed_hz = 10 * 1000 * 1000,
-        .spics_io_num = GPIO_NUM_38, // TLC5948_PIN_XLAT,
+        .clock_speed_hz = 32000000,
+        .spics_io_num = TLC5948_PIN_XLAT,
         .queue_size = 2,
     };
     ESP_ERROR_CHECK(spi_bus_add_device(TLC5948_HOST, &devcfg, &spi_device_handle));

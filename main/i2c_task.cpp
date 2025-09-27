@@ -63,7 +63,7 @@ static void i2c_task(void *pvParameters)
             // int len = (int)(illum * 3.0f);
             uint8_t wiper_value = 127 - (illum / 20.0f * 127);
             // ESP_LOGI(TAG, "ILLUM: %5.3f,W: %5d,ALS: %5d,WIPER: %3d, %*s", illum, lux_value[0], lux_value[1], wiper_value, len, "*");
-            mcp4017_set_wiper(wiper_value);
+            mcp4017_set_wiper(0);
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
