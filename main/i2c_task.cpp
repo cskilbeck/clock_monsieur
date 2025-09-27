@@ -25,20 +25,16 @@ i2c_master_bus_handle_t i2c_bus_handle = NULL;
 
 static esp_err_t i2c_master_init(gpio_num_t sda_io_num, gpio_num_t scl_io_num, uint32_t clk_speed_hz)
 {
-    // 1. Bus Configuration
     i2c_master_bus_config_t conf = {
         .sda_io_num = sda_io_num,
         .scl_io_num = scl_io_num,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
-        .flags = {.enable_internal_pullup = true},
+        .flags = { .enable_internal_pullup = true },
     };
-
-    // 2. Install the driver and get the bus handle
     ESP_ERROR_CHECK(i2c_new_master_bus(&conf, &i2c_bus_handle));
-
-    ESP_LOGI(TAG, "I2C master initialized successfully");
-    return ESP_OK;}
+    return ESP_OK;
+}
 
 //////////////////////////////////////////////////////////////////////
 
@@ -53,16 +49,14 @@ static void i2c_task(void *pvParameters)
     while(true) {
 
         if(veml3235_read_lux(lux_value) == ESP_OK) {
-            if (lux_value[0] > 32767)  {
+            if(lux_value[0] > 32767) {
                 lux_value[0] = 32767;
             }
-            if (lux_value[1] > 32767)  {
+            if(lux_value[1] > 32767) {
                 lux_value[1] = 32767;
             }
             illum = illum * 0.9f + lux_value[1] / 16384.0f;
-            // int len = (int)(illum * 3.0f);
             uint8_t wiper_value = 127 - (illum / 20.0f * 127);
-            // ESP_LOGI(TAG, "ILLUM: %5.3f,W: %5d,ALS: %5d,WIPER: %3d, %*s", illum, lux_value[0], lux_value[1], wiper_value, len, "*");
             mcp4017_set_wiper(0);
         }
         vTaskDelay(pdMS_TO_TICKS(100));

@@ -6,6 +6,7 @@ idf_component_register(
         veml_3235.cpp
         mcp_4017.cpp
         high_side.cpp
+        display.cpp
     PRIV_REQUIRES
         driver
         log
@@ -15,4 +16,4 @@ idf_component_register(
     INCLUDE_DIRS
         .
 )
-target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-missing-field-initializers)
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-missing-field-initializers -Wno-unused-variable)
