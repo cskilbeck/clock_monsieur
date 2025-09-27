@@ -95,16 +95,6 @@ esp_err_t tlc5948_init(void)
 {
     ESP_LOGI(TAG, "TLC5948 INIT");
 
-    gpio_config_t io_conf{};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = (1ULL << TLC5948_PIN_XLAT);
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-
-    gpio_config(&io_conf);
-    gpio_set_level(TLC5948_PIN_XLAT, 0);
-
     spi_bus_config_t buscfg = {
         .mosi_io_num = TLC5948_PIN_MOSI,
         .miso_io_num = -1,

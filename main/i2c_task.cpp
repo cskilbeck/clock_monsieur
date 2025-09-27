@@ -31,7 +31,7 @@ static esp_err_t i2c_master_init(gpio_num_t sda_io_num, gpio_num_t scl_io_num, u
         .scl_io_num = scl_io_num,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
-        .flags = {.enable_internal_pullup = false},
+        .flags = {.enable_internal_pullup = true},
     };
 
     // 2. Install the driver and get the bus handle
