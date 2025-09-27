@@ -16,7 +16,7 @@ static char const *TAG = "main";
 
 //////////////////////////////////////////////////////////////////////
 
-int gamma(int x)
+int gamma(uint32_t x)
 {
     x = (x * x) >> 16;
     return (x * x) >> 16;
@@ -24,23 +24,28 @@ int gamma(int x)
 
 //////////////////////////////////////////////////////////////////////
 
+uint16_t a[256];
+
 extern "C" void app_main()
 {
     init_display();
 
-    int frame = 0;
-    uint32_t x = 0;
-
+    int x = 0;
     while(true) {
         waitvb();
-        for(int i = 0; i < 16; ++i) {
-            int level = i * 4096;
-            int bright = (level - x) & 0xffff;
-            if(bright > 65535) {
-                bright = 65535;
-            }
-            tlc5948_control.brightness[i] = gamma(bright);
+        for(int i = 0; i < 256; ++i) {
+            int level = i * 256;
+            a[i] = (level - x) & 0xffff;
         }
-        x = (x + 173) % 65536;
+        int b = 0;
+        for(int i = 0; i < 256; i += 16) {
+            int e = i + 16;
+            uint32_t t = 0;
+            for(int j = i; j < e; ++j) {
+                t += a[j];
+            }
+            tlc5948_control.brightness[b++] = gamma(t >> 4);
+        }
+        x = (x + 27) % 65536;
     }
 }
