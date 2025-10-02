@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "./../esp/v5.5.1/esp-idf/components"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"format": "cpp",
+			"bitset": "cpp",
+			"string_view": "cpp",
+			"regex": "cpp"
+		}
+	}
+}

@@ -8,7 +8,6 @@
 #include "esp_log.h"
 
 #include "tlc_5948.h"
-#include "display.h"
 
 //////////////////////////////////////////////////////////////////////
 
@@ -28,11 +27,11 @@ uint16_t a[256];
 
 extern "C" void app_main()
 {
-    init_display();
+    display_init();
 
     int x = 0;
     while(true) {
-        waitvb();
+        display_waitvb();
         for(int i = 0; i < 256; ++i) {
             int level = i * 256;
             a[i] = (level - x) & 0xffff;
@@ -46,6 +45,10 @@ extern "C" void app_main()
             }
             tlc5948_control.brightness[b++] = gamma(t >> 4);
         }
+        display_set_grayscale();
         x = (x + 27) % 65536;
+        if(x < 28) {
+            ESP_LOGI(TAG, "!!");
+        }
     }
 }

@@ -35,11 +35,8 @@ struct fcontrol_data_t
 struct tlc5948_control_t
 {
     uint16_t brightness[16];
-
     fcontrol_data_t fcntrl;
-
     uint8_t global_bc;
-
     uint8_t dc[16];
 };
 
@@ -47,6 +44,13 @@ struct tlc5948_control_t
 
 extern tlc5948_control_t tlc5948_control;
 
-esp_err_t tlc5948_init(void);
-void tlc5948_set_grayscale();
-void tlc5948_set_fcntrl();
+void display_init();
+
+// wait for 'vertical blank' type thing
+void display_waitvb();
+
+// call this when you have set the values in tlc5948_control.brightness
+void display_set_grayscale();
+
+// call this when you have set the other stuff in tlc5948_control
+void display_set_fcntrl();

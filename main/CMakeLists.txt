@@ -6,7 +6,6 @@ idf_component_register(
         veml_3235.cpp
         mcp_4017.cpp
         high_side.cpp
-        display.cpp
     PRIV_REQUIRES
         driver
         log
