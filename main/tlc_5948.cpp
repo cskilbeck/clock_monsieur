@@ -4,6 +4,15 @@
 #include "driver/i2s_std.h"
 #include "driver/rmt_tx.h"
 
+#include "hal/spi_hal.h"
+#include "hal/spi_ll.h"
+#include "hal/gpio_ll.h"
+
+#include "soc/spi_reg.h"
+#include "soc/spi_struct.h"
+#include "soc/gpio_reg.h"
+#include "soc/gpio_struct.h"
+
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 
@@ -27,34 +36,22 @@ tlc5948_control_t tlc5948_control{};
 // HIGH (1), LOW (2499) uS = 400Hz for now = 200Hz framerate
 // because two latches per frame (grayscale + fcontrol)
 #define HIGH_PULSE_US (1)
-#define LOW_SPACE_US (62 - HIGH_PULSE_US)
+#define LOW_SPACE_US (32 - HIGH_PULSE_US)
 
-// Display task
-static TaskHandle_t frame_task;
+#define CMD_BITS 1
+#define DATA_BITS 256
 
-// For notifying display task that spi sends have been kicked off
-static volatile EventGroupHandle_t display_event_group;
-
-// RMT stuff for pulsing tlc5948 LATCH
-static rmt_channel_handle_t tx_chan = NULL;
-static rmt_encoder_handle_t copy_encoder = NULL;
-
-// SPI for sending to tlc5948
-static spi_device_handle_t spi_device_handle;
-static spi_transaction_t spi_transaction{};
-
-// I2S for tlc5948 GSCLK
-static i2s_chan_handle_t i2s_tx_chan_handle;
-
+//////////////////////////////////////////////////////////////////////
 // Double buffered SPI data
+
 struct buffer_t
 {
-    static constexpr size_t buffer_size = 33;    // 33 * 8 = 264, > 257 bits required
+    static constexpr size_t buffer_size = 256 / 32;
 
-    uint8_t buffer[2][buffer_size];
+    uint32_t buffer[2][buffer_size];
     int index;
 
-    buffer_t()
+    void reset()
     {
         index = 0;
         memset(buffer[0], 0, buffer_size);
@@ -62,28 +59,51 @@ struct buffer_t
     }
 };
 
-// One each for sending grayscale and fcontrol
-buffer_t grayscale_buffer;
-buffer_t fcontrol_buffer;
-buffer_t *buffers[2] = { &grayscale_buffer, &fcontrol_buffer };
-int which_to_send = 0;
+//////////////////////////////////////////////////////////////////////
 
-// fcontrol layout bit offsets
-static constexpr size_t tag_pos = 0;
-static constexpr size_t tag_len = 120;
+namespace
+{
+    // Display task
+    TaskHandle_t frame_task;
 
-static constexpr size_t fcntl_pos = tag_pos + tag_len;
-static constexpr size_t fcntl_len = 18;
+    // For notifying display task that spi sends have been kicked off
+    volatile EventGroupHandle_t display_event_group;
 
-static constexpr size_t global_bc_pos = fcntl_pos + fcntl_len;
-static constexpr size_t global_bc_len = 7;
+    // RMT stuff for pulsing tlc5948 LATCH
+    rmt_channel_handle_t tx_chan = NULL;
+    rmt_encoder_handle_t copy_encoder = NULL;
 
-static constexpr size_t dc_pos = global_bc_pos + global_bc_len;
-static constexpr size_t dc_len = 16 * 7;
+    // SPI for sending to tlc5948
+    spi_device_handle_t spi_device_handle;
+    spi_transaction_t spi_transaction{};
 
-static constexpr size_t ctl_total = dc_pos + dc_len;
+    // I2S for tlc5948 GSCLK
+    i2s_chan_handle_t i2s_tx_chan_handle;
 
-static_assert(ctl_total == 257);
+    // One each for sending grayscale and fcontrol
+    buffer_t grayscale_buffer;
+    buffer_t fcontrol_buffer;
+    buffer_t *buffers[2] = { &grayscale_buffer, &fcontrol_buffer };
+
+    int which_to_send = 0;
+    // fcontrol layout bit offsets
+    constexpr size_t tag_pos = 0;
+    constexpr size_t tag_len = 120;
+
+    constexpr size_t fcntl_pos = tag_pos + tag_len;
+    constexpr size_t fcntl_len = 18;
+
+    constexpr size_t global_bc_pos = fcntl_pos + fcntl_len;
+    constexpr size_t global_bc_len = 7;
+
+    constexpr size_t dc_pos = global_bc_pos + global_bc_len;
+    constexpr size_t dc_len = 16 * 7;
+
+    constexpr size_t ctl_total = dc_pos + dc_len;
+
+    static_assert(ctl_total == 257);
+
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 // overwrite up to 32 bits in an array of bytes
@@ -118,107 +138,48 @@ static void set_bits(uint8_t a[], uint32_t const val, size_t const offset, size_
 
 //////////////////////////////////////////////////////////////////////
 
-static esp_err_t tlc5948_init(void)
+void tlc5948_control_t::set_dc(int channel, uint8_t value)
 {
-    ESP_LOGI(TAG, "TLC5948 INIT");
-
-    spi_bus_config_t buscfg = {
-        .mosi_io_num = TLC5948_PIN_MOSI,
-        .miso_io_num = -1,
-        .sclk_io_num = TLC5948_PIN_SCLK,
-        .quadwp_io_num = -1,
-        .quadhd_io_num = -1,
-        .data4_io_num = -1,
-        .data5_io_num = -1,
-        .data6_io_num = -1,
-        .data7_io_num = -1,
-        .max_transfer_sz = 64,
-    };
-    ESP_ERROR_CHECK(spi_bus_initialize(TLC5948_HOST, &buscfg, SPI_DMA_CH_AUTO));
-
-    spi_device_interface_config_t devcfg = {
-        .mode = 0,
-        .clock_speed_hz = 32000000,
-        .spics_io_num = TLC5948_PIN_XLAT,
-        .queue_size = 2,
-    };
-    ESP_ERROR_CHECK(spi_bus_add_device(TLC5948_HOST, &devcfg, &spi_device_handle));
-
-    // 3. Initialize I2S for GSCLK (32MHz)
-    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(TLC5948_I2S_NUM, I2S_ROLE_MASTER);
-
-    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &i2s_tx_chan_handle, NULL));
-
-    i2s_std_config_t std_cfg = {};
-
-    std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
-    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
-    std_cfg.clk_cfg.sample_rate_hz = 125000;    // 125000 * 256 = 32MHz
-
-    std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_8BIT;
-    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_16BIT;
-    std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
-    std_cfg.slot_cfg.ws_width = 0;
-    std_cfg.slot_cfg.ws_pol = false;
-
-    std_cfg.gpio_cfg.mclk = TLC5948_PIN_GSCLK;
-    std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
-    std_cfg.gpio_cfg.ws = I2S_GPIO_UNUSED;
-    std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
-    std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;
-
-    ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_tx_chan_handle, &std_cfg));
-    ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx_chan_handle));
-
-    ESP_LOGI(TAG, "TLC5948 Initialized. GSCLK on pin %d at 32MHz. SPI on host %d.", TLC5948_PIN_GSCLK, TLC5948_HOST);
-
-    tlc5948_control.fcntrl.dsprpt = 1;
-    tlc5948_control.global_bc = 127;
-    for(int i = 0; i < 16; ++i) {
-        tlc5948_control.dc[i] = 127;
-    }
-    for(int i = 0; i < 16; ++i) {
-        tlc5948_control.brightness[i] = 0;
-    }
-
-    for(int i = 0; i < 2; ++i) {
-        fcontrol_buffer.index = i;
-        grayscale_buffer.index = i;
-        display_set_grayscale();
-        display_set_fcntrl();
-    }
-
-    return ESP_OK;
+    set_bits(fcntrl.dc, value, (15 - channel) * 7, 7);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-static void IRAM_ATTR on_frame(void *)
+void tlc5948_control_t::set_brightness(int channel, uint16_t value)
 {
-    while(true) {
-        // wait for latch to get toggle (tlc5948 just latched last spi send)
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    brightness[channel] = (value << 8) | (value >> 8);
+}
 
-        // Kick off the next SPI send
-        // alternates between sending grayscale and fcontrol buffers
-        buffer_t &buffer = *buffers[which_to_send];
-        buffer.index ^= 1;
-        spi_transaction.length = 257;
-        spi_transaction.tx_buffer = buffer.buffer;
-        ESP_ERROR_CHECK(spi_device_queue_trans(spi_device_handle, &spi_transaction, portMAX_DELAY));
+//////////////////////////////////////////////////////////////////////
 
-        // for notifying client that something was sent
-        // 1 - we sent grayscale (ON_GRAYSCALE_BIT)
-        // 2 - we sent fcontrol (ON_FCONTROL_BIT)
-        int sent = which_to_send + 1;
-
-        // toggle sending grayscale, fcontrol
-        which_to_send ^= 1;
-
-        // notify display_waitvb
-        xEventGroupSetBits(display_event_group, sent);
+void tlc5948_control_t::reset()
+{
+    memset(this, 0, sizeof(*this));
+    fcntrl.tmgrst = 1;
+    fcntrl.global_bc = 127;
+    for(int i = 0; i < 16; ++i) {
+        set_dc(i, 127);
+        set_brightness(i, 0);
     }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+static void spi_send(uint32_t const *const data, int cmd)
+{
+    GPSPI2.user2.usr_command_value = cmd ? 0xffff : 0;
+    GPSPI2.cmd.update = 1;
+
+    GPSPI2.data_buf[0] = data[0];
+    GPSPI2.data_buf[1] = data[1];
+    GPSPI2.data_buf[2] = data[2];
+    GPSPI2.data_buf[3] = data[3];
+    GPSPI2.data_buf[4] = data[4];
+    GPSPI2.data_buf[5] = data[5];
+    GPSPI2.data_buf[6] = data[6];
+    GPSPI2.data_buf[7] = data[7];
+
+    GPSPI2.cmd.usr = 1;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -226,7 +187,21 @@ static void IRAM_ATTR on_frame(void *)
 static void IRAM_ATTR gpio_isr_handler(void *arg)
 {
     BaseType_t woken = pdFALSE;
-    vTaskNotifyGiveFromISR((TaskHandle_t)arg, &woken);
+
+    buffer_t &buffer = *buffers[which_to_send];
+    spi_send(buffer.buffer[buffer.index], which_to_send);
+
+    // for notifying client that something was sent
+    // 1 - we sent grayscale (ON_GRAYSCALE_BIT)
+    // 2 - we sent fcontrol (ON_FCONTROL_BIT)
+    int sent = which_to_send + 1;
+
+    // toggle sending grayscale, fcontrol
+    which_to_send ^= 1;
+
+    // notify display_waitvb
+    xEventGroupSetBitsFromISR(display_event_group, sent, &woken);
+
     if(woken == pdTRUE) {
         portYIELD_FROM_ISR();
     }
@@ -276,6 +251,92 @@ static esp_err_t setup_rmt_gpio_interrupt(TaskHandle_t task_to_notify)
 
 //////////////////////////////////////////////////////////////////////
 
+static esp_err_t tlc5948_init(void)
+{
+    ESP_LOGI(TAG, "TLC5948 INIT");
+
+    // 1. Init the SPI bus using the driver
+
+    spi_bus_config_t buscfg = {
+        .mosi_io_num = TLC5948_PIN_MOSI,
+        .miso_io_num = -1,
+        .sclk_io_num = TLC5948_PIN_SCLK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+        .data4_io_num = -1,
+        .data5_io_num = -1,
+        .data6_io_num = -1,
+        .data7_io_num = -1,
+        .max_transfer_sz = 0,
+    };
+    ESP_ERROR_CHECK(spi_bus_initialize(TLC5948_HOST, &buscfg, SPI_DMA_CH_AUTO));
+
+    spi_device_interface_config_t devcfg = {
+        .mode = 0,
+        .clock_speed_hz = 27666666,
+        .spics_io_num = -1,
+        .queue_size = 2,
+    };
+    ESP_ERROR_CHECK(spi_bus_add_device(TLC5948_HOST, &devcfg, &spi_device_handle));
+
+    // GPIOs for SPI2 are set up, now set up the clock and other SPI stuff
+
+    GPSPI2.clock.clkcnt_n = 2;
+    GPSPI2.clock.clkcnt_l = 2;
+    GPSPI2.clock.clkcnt_h = 0;
+    GPSPI2.clock.clkdiv_pre = 0;
+    GPSPI2.clock.clk_equ_sysclk = 0;
+    GPSPI2.clk_gate.clk_en = 1;
+    GPSPI2.user.val = 0;
+    GPSPI2.user.usr_mosi = 1;
+    GPSPI2.user.usr_command = 1;
+    GPSPI2.user2.usr_command_bitlen = CMD_BITS - 1;
+    GPSPI2.ms_dlen.ms_data_bitlen = DATA_BITS - 1;
+    GPSPI2.cmd.update = 1;
+    while(GPSPI2.cmd.update) {
+    }
+
+    // 2. Initialize I2S for GSCLK (32MHz)
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(TLC5948_I2S_NUM, I2S_ROLE_MASTER);
+
+    ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &i2s_tx_chan_handle, NULL));
+
+    i2s_std_config_t std_cfg = {};
+
+    std_cfg.clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
+    std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
+    std_cfg.clk_cfg.sample_rate_hz = 125000;    // 125000 * 256 = 32MHz
+
+    std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_8BIT;
+    std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_16BIT;
+    std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
+    std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_LEFT;
+    std_cfg.slot_cfg.ws_width = 0;
+    std_cfg.slot_cfg.ws_pol = false;
+
+    std_cfg.gpio_cfg.mclk = TLC5948_PIN_GSCLK;
+    std_cfg.gpio_cfg.bclk = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.ws = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.dout = I2S_GPIO_UNUSED;
+    std_cfg.gpio_cfg.din = I2S_GPIO_UNUSED;
+
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_tx_chan_handle, &std_cfg));
+    ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx_chan_handle));
+
+    // 3. init the control structures and buffers
+    tlc5948_control.reset();
+    fcontrol_buffer.reset();
+    grayscale_buffer.reset();
+
+    display_set_fcntrl();
+
+    ESP_LOGI(TAG, "TLC5948 Initialized. GSCLK on pin %d at 32MHz. SPI on host %d.", TLC5948_PIN_GSCLK, TLC5948_HOST);
+
+    return ESP_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
 void display_init()
 {
     ESP_LOGI(TAG, "init");
@@ -286,41 +347,9 @@ void display_init()
 
     i2c_task_start();
 
-    xTaskCreate(on_frame, "on_frame", 2048, nullptr, 20, &frame_task);
-
     tlc5948_init();
 
     setup_rmt_gpio_interrupt(frame_task);
-}
-
-//////////////////////////////////////////////////////////////////////
-// Put the bits into one of the grayscale buffers and set
-// the pointer so it gets picked up next time
-
-void display_set_fcntrl()
-{
-    uint8_t *buffer = fcontrol_buffer.buffer[fcontrol_buffer.index];
-    set_bits(buffer, 0x1, tag_pos, 1);
-    set_bits(buffer, tlc5948_control.fcntrl.fcntrl_data, fcntl_pos, fcntl_len);
-    set_bits(buffer, tlc5948_control.global_bc, global_bc_pos, global_bc_len);
-    size_t pos = dc_pos;
-    for(int i = 0; i < 16; ++i) {
-        set_bits(buffer, tlc5948_control.dc[i], pos, 7);
-        pos += 7;
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void display_set_grayscale()
-{
-    uint8_t *buffer = grayscale_buffer.buffer[grayscale_buffer.index];
-    set_bits(buffer, 0x0, tag_pos, 1);
-    size_t pos = 1;
-    for(int i = 0; i < 16; ++i) {
-        set_bits(buffer, tlc5948_control.brightness[i], pos, 16);
-        pos += 16;
-    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -328,4 +357,38 @@ void display_set_grayscale()
 void display_waitvb()
 {
     xEventGroupWaitBits(display_event_group, ON_GRAYSCALE_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
+}
+
+// call this when you have set the values in tlc5948_control.brightness
+void display_set_grayscale()
+{
+    int which = grayscale_buffer.index ^ 1;
+    uint32_t *src = (uint32_t *)tlc5948_control.brightness;
+    uint32_t *dst = grayscale_buffer.buffer[which];
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+    grayscale_buffer.index = which;
+}
+
+// call this when you have set the values in tlc5948_control.fcntrl
+void display_set_fcntrl()
+{
+    int which = fcontrol_buffer.index ^ 1;
+    uint32_t *src = (uint32_t *)&tlc5948_control.fcntrl;
+    uint32_t *dst = fcontrol_buffer.buffer[which];
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+    fcontrol_buffer.index = which;
 }

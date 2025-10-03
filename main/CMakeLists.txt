@@ -11,7 +11,6 @@ idf_component_register(
         log
         freertos
         spi_flash
-        esp_timer
     INCLUDE_DIRS
         .
 )
