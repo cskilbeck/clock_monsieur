@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS
         main.cpp
-        tlc_5948.cpp
+        display.cpp
         i2c_task.cpp
         veml_3235.cpp
         mcp_4017.cpp

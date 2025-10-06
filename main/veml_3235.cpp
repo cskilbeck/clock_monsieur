@@ -23,12 +23,22 @@ static const char *TAG = "VEML_3235";
 
 static i2c_master_dev_handle_t veml_i2c_handle;
 
-// We assume VEML3235_I2C_ADDR (0x10) is configured when
-// veml3235_i2c_handle is created elsewhere using i2c_master_bus_add_device().
-// So, we don't need the I2C_ADDR define here if we stick to the handle.
+//////////////////////////////////////////////////////////////////////
 
-// The extern device handle is assumed to be defined/initialized in another file.
-// extern i2c_master_dev_handle_t veml3235_i2c_handle; 
+static esp_err_t read_register(uint8_t reg_addr, uint16_t &value)
+{
+    uint8_t reg[1] = { reg_addr };
+    uint8_t data[2];
+
+    esp_err_t err = i2c_master_transmit_receive(veml_i2c_handle, reg, sizeof(reg), data, sizeof(data), I2C_TIMEOUT_MS);
+
+    if(err != ESP_OK) {
+        ESP_LOGE(TAG, "VEML3235 transaction failed: %s", esp_err_to_name(err));
+    } else {
+        value = (data[1] << 8) | data[0];
+    }
+    return err;
+}
 
 //////////////////////////////////////////////////////////////////////
 
@@ -44,34 +54,8 @@ esp_err_t veml3235_init(i2c_master_bus_handle_t bus)
 
     // Register address + 2 data bytes
     uint8_t write_data[3] = { VEML3235_ALS_CONF, 0b0100000, 0b00000001 };
-    
-    // The new API combines the transaction into a single function call.
-    // i2c_master_transmit is used for a master WRITE.
+
     return i2c_master_transmit(veml_i2c_handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-static esp_err_t read_register(uint8_t reg_addr, uint16_t &value) {
-
-    uint8_t reg_address[1] = { reg_addr };
-    uint8_t data_buf[2];
-    
-    esp_err_t err = i2c_master_transmit_receive(
-        veml_i2c_handle, 
-        reg_address, 
-        sizeof(reg_address), 
-        data_buf, 
-        sizeof(data_buf), 
-        I2C_TIMEOUT_MS
-    );
-    
-    if(err != ESP_OK) {
-        ESP_LOGE(TAG, "VEML3235 transaction failed: %s", esp_err_to_name(err));
-    } else {
-        value = (data_buf[1] << 8) | data_buf[0];
-    }
-    return err;
 }
 
 //////////////////////////////////////////////////////////////////////

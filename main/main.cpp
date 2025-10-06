@@ -1,21 +1,14 @@
 //////////////////////////////////////////////////////////////////////
 
-#include "driver/gptimer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/event_groups.h"
 #include "esp_log.h"
 
-#include "tlc_5948.h"
+#include "display.h"
 #include "i2c_task.h"
-
-//////////////////////////////////////////////////////////////////////
 
 static char const *TAG = "main";
 
-//////////////////////////////////////////////////////////////////////
-
-uint16_t a[256];
+int16_t a[256];
+int16_t b[256];
 
 uint16_t gamma(uint16_t x)
 {
@@ -23,26 +16,35 @@ uint16_t gamma(uint16_t x)
     return (x * x) >> 11;
 }
 
+int v()
+{
+    return ((rand() & 15) + 3) << 1;
+}
+
 extern "C" void app_main()
 {
     display_init();
 
+    for(int i = 0; i < 256; ++i) {
+        a[i] = 0;
+        b[i] = v();
+    }
+
     int frames = 0;
     while(true) {
-        display_waitvb();
-        uint8_t b = brightness;
-        tlc5948_control.fcntrl.global_bc = b;
-        for(int i = 0; i < 16; ++i) {
-            tlc5948_control.set_dc(i, b);
+        uint16_t *backbuffer = display_update();
+        for(int i = 0; i < 256; ++i) {
+            int x = a[i] + b[i];
+            if(x < 0) {
+                x = 0;
+                b[i] = v();
+            } else if(x > 2040) {
+                x = 2040;
+                b[i] = -v();
+            }
+            a[i] = (int16_t)x;
+            backbuffer[i] = gamma(a[i]);
         }
-        int mul = 0;
-        if((frames & 15) == 0) {
-            mul = 120;
-        }
-        for(int i = 0; i < 16; ++i) {
-            tlc5948_control.set_brightness(i, gamma((i + 1) * mul));
-        }
-        display_update();
         frames += 1;
     }
 }
