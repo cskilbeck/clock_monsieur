@@ -57,8 +57,5 @@ void display_init();
 // wait for 'vertical blank' type thing
 void display_waitvb();
 
-// call this when you have set the values in tlc5948_control.brightness
-void display_set_grayscale();
-
-// call this when you have set the other stuff in tlc5948_control
-void display_set_fcntrl();
+// call this when you have set the values in tlc5948_control
+void display_update();

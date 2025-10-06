@@ -3,6 +3,7 @@
 #include "driver/spi_master.h"
 #include "driver/i2s_std.h"
 #include "driver/rmt_tx.h"
+#include "driver/gpio.h"
 
 #include "hal/spi_hal.h"
 #include "hal/spi_ll.h"
@@ -106,41 +107,22 @@ namespace
 }    // namespace
 
 //////////////////////////////////////////////////////////////////////
-// overwrite up to 32 bits in an array of bytes
-
-static void set_bits(uint8_t a[], uint32_t const val, size_t const offset, size_t const count)
-{
-    uint32_t const src = val & (((uint64_t)1 << count) - 1);
-    size_t index = offset / 8;
-    size_t const bit_pos = offset % 8;
-    size_t len = 8 - bit_pos;
-    if(count < len) {
-        len = count;
-    }
-    size_t bits_done = 0;
-    if(len != 0) {
-        uint8_t const mask = ((1U << len) - 1) << (8 - (bit_pos + len));
-        uint8_t const fragment = (uint8_t)(src >> (count - len) << (8 - (bit_pos + len)));
-        a[index] = (a[index] & ~mask) | (fragment & mask);
-        bits_done += len;
-    }
-    for(index += 1; (bits_done + 8) <= count; ++index) {
-        a[index] = (uint8_t)(src >> (count - (bits_done + 8)));
-        bits_done += 8;
-    }
-    len = count - bits_done;
-    if(len != 0) {
-        uint8_t const mask = ((1U << len) - 1) << (8 - len);
-        uint8_t const fragment = (uint8_t)(src << (8 - len));
-        a[index] = (a[index] & ~mask) | (fragment & mask);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
 
 void tlc5948_control_t::set_dc(int channel, uint8_t value)
 {
-    set_bits(fcntrl.dc, value, (15 - channel) * 7, 7);
+    // assert(channel >= 0 && channel <= 15);
+    // assert(value < 128);
+
+    int bit_pos = channel * 7;
+    int byte_idx = 13 - (bit_pos >> 3);
+    int bit_offset = bit_pos & 7;
+    fcntrl.dc[byte_idx] = (fcntrl.dc[byte_idx] & ~(0x7F << bit_offset)) | (value << bit_offset);
+    if(bit_offset > 1) {
+        bit_offset = 8 - bit_offset;
+        int upper_bits = 7 - bit_offset;
+        byte_idx -= 1;
+        fcntrl.dc[byte_idx] = (fcntrl.dc[byte_idx] & ~((1 << upper_bits) - 1)) | (value >> bit_offset);
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -180,6 +162,42 @@ static void spi_send(uint32_t const *const data, int cmd)
     GPSPI2.data_buf[7] = data[7];
 
     GPSPI2.cmd.usr = 1;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+static void set_grayscale()
+{
+    int which = grayscale_buffer.index ^ 1;
+    uint32_t *src = (uint32_t *)tlc5948_control.brightness;
+    uint32_t *dst = grayscale_buffer.buffer[which];
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+    grayscale_buffer.index = which;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+static void set_fcntrl()
+{
+    int which = fcontrol_buffer.index ^ 1;
+    uint32_t *src = (uint32_t *)&tlc5948_control.fcntrl;
+    uint32_t *dst = fcontrol_buffer.buffer[which];
+    dst[0] = src[0];
+    dst[1] = src[1];
+    dst[2] = src[2];
+    dst[3] = src[3];
+    dst[4] = src[4];
+    dst[5] = src[5];
+    dst[6] = src[6];
+    dst[7] = src[7];
+    fcontrol_buffer.index = which;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -328,7 +346,7 @@ static esp_err_t tlc5948_init(void)
     fcontrol_buffer.reset();
     grayscale_buffer.reset();
 
-    display_set_fcntrl();
+    set_fcntrl();
 
     ESP_LOGI(TAG, "TLC5948 Initialized. GSCLK on pin %d at 32MHz. SPI on host %d.", TLC5948_PIN_GSCLK, TLC5948_HOST);
 
@@ -359,36 +377,8 @@ void display_waitvb()
     xEventGroupWaitBits(display_event_group, ON_GRAYSCALE_BIT, pdTRUE, pdFALSE, portMAX_DELAY);
 }
 
-// call this when you have set the values in tlc5948_control.brightness
-void display_set_grayscale()
+void display_update()
 {
-    int which = grayscale_buffer.index ^ 1;
-    uint32_t *src = (uint32_t *)tlc5948_control.brightness;
-    uint32_t *dst = grayscale_buffer.buffer[which];
-    dst[0] = src[0];
-    dst[1] = src[1];
-    dst[2] = src[2];
-    dst[3] = src[3];
-    dst[4] = src[4];
-    dst[5] = src[5];
-    dst[6] = src[6];
-    dst[7] = src[7];
-    grayscale_buffer.index = which;
-}
-
-// call this when you have set the values in tlc5948_control.fcntrl
-void display_set_fcntrl()
-{
-    int which = fcontrol_buffer.index ^ 1;
-    uint32_t *src = (uint32_t *)&tlc5948_control.fcntrl;
-    uint32_t *dst = fcontrol_buffer.buffer[which];
-    dst[0] = src[0];
-    dst[1] = src[1];
-    dst[2] = src[2];
-    dst[3] = src[3];
-    dst[4] = src[4];
-    dst[5] = src[5];
-    dst[6] = src[6];
-    dst[7] = src[7];
-    fcontrol_buffer.index = which;
+    set_grayscale();
+    set_fcntrl();
 }

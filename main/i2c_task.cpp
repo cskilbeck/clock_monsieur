@@ -19,6 +19,8 @@
 
 static const char *TAG = "I2C_DRIVER";
 
+uint8_t brightness;
+
 i2c_master_bus_handle_t i2c_bus_handle = NULL;
 
 //////////////////////////////////////////////////////////////////////
@@ -45,7 +47,10 @@ static void i2c_task(void *pvParameters)
     ESP_ERROR_CHECK(veml3235_init(i2c_bus_handle));
     ESP_ERROR_CHECK(mcp4017_init(i2c_bus_handle));
 
-    float illum = 0.0f;
+    mcp4017_set_wiper(64);
+
+    float target = 0;
+
     while(true) {
 
         if(veml3235_read_lux(lux_value) == ESP_OK) {
@@ -55,9 +60,20 @@ static void i2c_task(void *pvParameters)
             if(lux_value[1] > 32767) {
                 lux_value[1] = 32767;
             }
-            illum = illum * 0.9f + lux_value[1] / 16384.0f;
-            uint8_t wiper_value = 127 - (illum / 20.0f * 127);
-            mcp4017_set_wiper(0);
+            if(target == 0) {
+                target = (float)lux_value[1];
+            } else {
+                float diff = (lux_value[1] - target) / 8;
+                target += diff;
+            }
+            int b = (int)target >> 8;
+            if(b < 2) {
+                b = 2;
+            }
+            if(b > 127) {
+                b = 127;
+            }
+            brightness = (uint8_t)b;
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
