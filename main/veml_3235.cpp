@@ -50,18 +50,30 @@ esp_err_t veml3235_init(i2c_master_bus_handle_t bus)
         .device_address = VEML3235_I2C_ADDR,
         .scl_speed_hz = 100000,
     };
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &veml_i2c_handle));
+    auto err = i2c_master_bus_add_device(bus, &dev_cfg, &veml_i2c_handle);
+    if(err != ESP_OK) {
+        return err;
+    }
 
     // Register address + 2 data bytes
     uint8_t write_data[3] = { VEML3235_ALS_CONF, 0b0100000, 0b00000001 };
 
-    return i2c_master_transmit(veml_i2c_handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS);
+    err = i2c_master_transmit(veml_i2c_handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS);
+    if(err != ESP_OK) {
+        veml_i2c_handle = nullptr;
+    }
+    return err;
 }
 
 //////////////////////////////////////////////////////////////////////
 
 esp_err_t veml3235_read_lux(uint16_t lux_value[2])
 {
+    if(veml_i2c_handle == nullptr) {
+        lux_value[0] = 64;
+        lux_value[1] = 64;
+        return ESP_OK;
+    }
     esp_err_t err = read_register(VEML3235_W_DATA, lux_value[0]);
     if(err != ESP_OK) {
         return err;

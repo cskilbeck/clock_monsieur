@@ -9,7 +9,6 @@
 #include "gpio_defs.h"
 #include "i2c_task.h"
 #include "veml_3235.h"
-#include "mcp_4017.h"
 
 //////////////////////////////////////////////////////////////////////
 // I2C Port and GPIO pins
@@ -44,10 +43,7 @@ static void i2c_task(void *pvParameters)
 {
     uint16_t lux_value[2];
     ESP_ERROR_CHECK(i2c_master_init(I2C_MASTER_SDA_GPIO, I2C_MASTER_SCL_GPIO, I2C_MASTER_FREQ_HZ));
-    ESP_ERROR_CHECK(veml3235_init(i2c_bus_handle));
-    ESP_ERROR_CHECK(mcp4017_init(i2c_bus_handle));
-
-    mcp4017_set_wiper(64);
+    veml3235_init(i2c_bus_handle);
 
     float target = 0;
 

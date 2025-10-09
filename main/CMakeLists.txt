@@ -4,7 +4,6 @@ idf_component_register(
         display.cpp
         i2c_task.cpp
         veml_3235.cpp
-        mcp_4017.cpp
         high_side.cpp
     PRIV_REQUIRES
         driver
