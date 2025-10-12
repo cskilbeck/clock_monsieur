@@ -90,7 +90,6 @@ namespace
 
         void reset();
         void set_dc(int channel, uint8_t value);
-        void set_brightness(int channel, uint16_t value);
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -197,16 +196,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void tlc5948_control_t::set_brightness(int channel, uint16_t value)
-    {
-        // assert(channel >= 0 && channel <= 15);
-        // value: full brightness is 2045 (ish), anything above that = full on
-
-        brightness[channel] = __builtin_bswap16(value);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
     void tlc5948_control_t::set_dc(int channel, uint8_t value)
     {
         // assert(channel >= 0 && channel <= 15);
@@ -234,17 +223,19 @@ namespace
         buffer_t &buffer = *buffers[brightness_fcntrl_toggle];
         uint32_t *data = buffer.buffer[buffer.index];
 
-        GPSPI2.user2.usr_command_value = brightness_fcntrl_toggle ? 0xffff : 0;
+        GPSPI2.user2.usr_command_value = (uint16_t)(-brightness_fcntrl_toggle);    // 1 -> 0xffff, 0 -> 0x0
         GPSPI2.cmd.update = 1;
 
-        GPSPI2.data_buf[0] = data[0];
-        GPSPI2.data_buf[1] = data[1];
-        GPSPI2.data_buf[2] = data[2];
-        GPSPI2.data_buf[3] = data[3];
-        GPSPI2.data_buf[4] = data[4];
-        GPSPI2.data_buf[5] = data[5];
-        GPSPI2.data_buf[6] = data[6];
-        GPSPI2.data_buf[7] = data[7];
+        uint32_t *p = (uint32_t *)GPSPI2.data_buf;
+        p[0] = data[0];
+        p[1] = data[1];
+        p[2] = data[2];
+        p[3] = data[3];
+        p[4] = data[4];
+        p[5] = data[5];
+        p[6] = data[6];
+        p[7] = data[7];
+        __asm__ __volatile__("memw\n");
 
         GPSPI2.cmd.usr = 1;
 
@@ -264,7 +255,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // Call this on the CPU which display_task will be running on
 
-    esp_err_t setup_rmt_gpio_interrupt()
+    esp_err_t setup_rmt()
     {
         // must call this BEFORE setting up RMT apparently
         ESP_ERROR_CHECK(gpio_install_isr_service(ESP_INTR_FLAG_IRAM));
@@ -392,23 +383,36 @@ namespace
     {
         i2c_task_start();
         tlc5948_init();
-        setup_rmt_gpio_interrupt();
+        setup_rmt();
 
         int frames = 0;
         while(true) {
-            // wait for notification from ISR
+            // wait for notification from rmt/gpio ISR
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
             // setup the SPI buffers for next time
             uint8_t b = brightness;
             tlc5948_control.fcntrl.global_bc = b;
-            int offset = (frames & 15) * 16;
             for(int i = 0; i < 16; ++i) {
                 tlc5948_control.set_dc(i, b);
-                tlc5948_control.set_brightness(i, display_ram[backbuffer_id][offset + i]);
             }
-            set_grayscale();
             set_fcntrl();
+
+            int which = grayscale_buffer.index ^ 1;
+            uint32_t *dst = grayscale_buffer.buffer[which];
+
+            int offset = (frames & 15) * 16;
+            uint16_t *src = display_ram[backbuffer_id] + offset;
+            uint16_t *end = src + 16;
+
+            do {
+                uint32_t p0 = __builtin_bswap16(*src++);
+                uint32_t p1 = __builtin_bswap16(*src++);
+                *dst++ = p0 | (p1 << 16);
+            } while(src < end);
+
+            grayscale_buffer.index = which;
+
             frames = (frames + 1) & 127;
             if(frames == 0) {
                 backbuffer_id ^= 1;
