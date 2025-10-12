@@ -1,0 +1,3 @@
+Record=TopLevelDocument|FileName=clock_led.SchDoc
+Record=SheetSymbol|SourceDocument=clock_led.SchDoc|Designator=CLOCK FACE|SchDesignator=CLOCK FACE|FileName=clock_led_face.SchDoc|SymbolType=Normal|RawFileName=clock_led_face.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
+Record=SheetSymbol|SourceDocument=clock_led.SchDoc|Designator=POWER SWITCHES|SchDesignator=POWER SWITCHES|FileName=clock_led_switches.SchDoc|SymbolType=Normal|RawFileName=clock_led_switches.SchDoc|DesignItemId= |SourceLibraryName= |ObjectKind=Sheet Symbol|RevisionGUID= |ItemGUID= |VaultGUID= 
