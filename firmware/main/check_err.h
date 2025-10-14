@@ -2,8 +2,6 @@
 
 #include "esp_err.h"
 
-//////////////////////////////////////////////////////////////////////
-
 #define CHECK_ERR(x)                                       \
     do {                                                   \
         esp_err_t _err = ESP_ERROR_CHECK_WITHOUT_ABORT(x); \
@@ -11,3 +9,5 @@
             return _err;                                   \
         }                                                  \
     } while(false)
+
+#define REPORT_ERR(x) ESP_ERROR_CHECK_WITHOUT_ABORT(x)

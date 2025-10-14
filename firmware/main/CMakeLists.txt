@@ -3,11 +3,13 @@ idf_component_register(
         main.cpp
         display.cpp
         i2c_task.cpp
-        veml_3235.cpp
         high_side.cpp
+        wifi.cpp
     PRIV_REQUIRES
         driver
         log
+        esp_wifi
+        nvs_flash
         freertos
         spi_flash
     INCLUDE_DIRS

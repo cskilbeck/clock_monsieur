@@ -4,7 +4,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-// start display_task on core 1
+// start display_task on core 1, ambient light sensor task on core 0
 void display_init();
 
 // wait for display refresh, returns current backbuffer (256 pixels)

@@ -2,7 +2,9 @@
 
 #pragma once
 
+#include "esp_err.h"
+
 //////////////////////////////////////////////////////////////////////
 
 esp_err_t high_side_init();
-void high_side_set_channel(int channel); // 0 means all off else switch on channel 1..16
+void high_side_set_channel(int channel);    // 0 means all off else switch on channel 1..16

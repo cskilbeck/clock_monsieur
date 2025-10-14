@@ -2,12 +2,8 @@
 
 #pragma once
 
-#include "driver/i2c_master.h"
-
 //////////////////////////////////////////////////////////////////////
 
 extern uint8_t brightness;
 
 void i2c_task_start();
-
-#define I2C_TIMEOUT_MS 100
