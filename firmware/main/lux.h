@@ -4,6 +4,5 @@
 
 //////////////////////////////////////////////////////////////////////
 
-extern uint8_t brightness;
-
-void i2c_task_start();
+void lux_init();
+uint8_t get_lux();

@@ -45,7 +45,7 @@ struct display_data_t
 void display_init();
 
 // wait for display refresh, returns current backbuffer (256 pixels)
-display_data_t *display_update();
+display_data_t &display_update();
 
 // notify display task that we're done writing into backbuffer
 void display_flip();

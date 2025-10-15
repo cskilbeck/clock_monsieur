@@ -2,8 +2,7 @@ idf_component_register(
     SRCS
         main.cpp
         display.cpp
-        i2c_task.cpp
-        high_side.cpp
+        lux.cpp
         wifi.cpp
     PRIV_REQUIRES
         driver

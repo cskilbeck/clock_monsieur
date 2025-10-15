@@ -40,7 +40,7 @@ namespace
 
     bool wifi_got_credentials = false;
 
-    int8 rssi = 0;
+    int8_t rssi = 0;
 
     //////////////////////////////////////////////////////////////////////
 
@@ -205,7 +205,7 @@ esp_err_t wifi_init()
 
     LOG_INFO("prepare to init");
 
-    if(sta_netif == null) {
+    if(sta_netif == nullptr) {
         return ESP_ERR_ESP_NETIF_NO_MEM;
     }
 
@@ -251,16 +251,16 @@ esp_err_t wifi_init()
 
 //////////////////////////////////////////////////////////////////////
 
-int8 wifi_get_rssi()
+int8_t wifi_get_rssi()
 {
     return rssi;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-uint32 wifi_wait_for_event(TickType_t timeout)
+uint32_t wifi_wait_for_event(TickType_t timeout)
 {
-    uint32 constexpr wifi_events_bit_mask = wifi_event_connected | wifi_event_disconnected;
+    uint32_t constexpr wifi_events_bit_mask = wifi_event_connected | wifi_event_disconnected;
 
     return xEventGroupWaitBits(signal_wifi_event_group, wifi_events_bit_mask, true, false, timeout);
 }

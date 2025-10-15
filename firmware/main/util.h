@@ -2,8 +2,6 @@
 
 #include "esp_log.h"
 #include "esp_err.h"
-#include "driver/i2c.h"
-#include "types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,12 +23,6 @@ extern "C" {
             abort();                                                                                                         \
         }                                                                                                                    \
     } while(false)
-
-//////////////////////////////////////////////////////////////////////
-
-void log_buffer(char const *tag, void const *buffer, uint16_t buff_len, esp_log_level_t log_level);
-esp_err_t i2c_master_write_write_device(i2c_port_t i2c_num, uint8_t dev_addr, uint8_t const *b1, size_t s1, uint8_t const *b2, size_t s2,
-                                        TickType_t timeout);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -86,34 +78,34 @@ esp_err_t i2c_master_write_write_device(i2c_port_t i2c_num, uint8_t dev_addr, ui
 
 //////////////////////////////////////////////////////////////////////
 
-#define ESP_CHECK(x)                                                                      \
-    do {                                                                                  \
-        esp_err_t __err = (x);                                                            \
-        if(__err != ESP_OK) {                                                             \
-            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint)__err, esp_err_to_name(__err)); \
-            return __err;                                                                 \
-        }                                                                                 \
+#define ESP_CHECK(x)                                                                          \
+    do {                                                                                      \
+        esp_err_t __err = (x);                                                                \
+        if(__err != ESP_OK) {                                                                 \
+            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint32_t)__err, esp_err_to_name(__err)); \
+            return __err;                                                                     \
+        }                                                                                     \
     } while(0)
 
 //////////////////////////////////////////////////////////////////////
 
-#define ESP_LOG_ERR(x)                                                                    \
-    do {                                                                                  \
-        esp_err_t __err = (x);                                                            \
-        if(__err != ESP_OK) {                                                             \
-            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint)__err, esp_err_to_name(__err)); \
-        }                                                                                 \
+#define ESP_LOG_ERR(x)                                                                        \
+    do {                                                                                      \
+        esp_err_t __err = (x);                                                                \
+        if(__err != ESP_OK) {                                                                 \
+            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint32_t)__err, esp_err_to_name(__err)); \
+        }                                                                                     \
     } while(0)
 
 //////////////////////////////////////////////////////////////////////
 
-#define ESP_VOID(x)                                                                       \
-    do {                                                                                  \
-        esp_err_t __err = (x);                                                            \
-        if(__err != ESP_OK) {                                                             \
-            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint)__err, esp_err_to_name(__err)); \
-            return;                                                                       \
-        }                                                                                 \
+#define ESP_VOID(x)                                                                           \
+    do {                                                                                      \
+        esp_err_t __err = (x);                                                                \
+        if(__err != ESP_OK) {                                                                 \
+            LOG_ERROR("%s failed: 0x%08x (%s)", #x, (uint32_t)__err, esp_err_to_name(__err)); \
+            return;                                                                           \
+        }                                                                                     \
     } while(0)
 
 //////////////////////////////////////////////////////////////////////

@@ -6,7 +6,6 @@
 
 #include "util.h"
 #include "display.h"
-#include "i2c_task.h"
 #include "wifi.h"
 
 static char const *TAG = "main";
@@ -53,8 +52,8 @@ extern "C" void app_main()
 
     int frames = 0;
     while(true) {
-        display_data_t *dd = display_update();
-        uint16_t *backbuffer = dd->grayscale_buffer;
+        display_data_t &dd = display_update();
+        uint16_t *backbuffer = dd.grayscale_buffer;
         for(int i = 0; i < 256; ++i) {
             backbuffer[i] = 6000;
             // int x = a[i] + b[i];

@@ -8,11 +8,6 @@
 //  - kick off grayscale spi send
 // And wait for the timer to fire again (grayscale spi completes before then)
 
-#include <cstdint>
-#include <cstring>
-
-#include "esp_log.h"
-
 #include "driver/spi_master.h"
 #include "driver/gptimer.h"
 #include "driver/i2s_std.h"
@@ -32,7 +27,7 @@
 
 #include "display.h"
 #include "gpio_defs.h"
-#include "i2c_task.h"
+#include "lux.h"
 #include "util.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -55,60 +50,60 @@
 
 namespace
 {
-    char const *TAG = "display";
-
     LOG_CONTEXT("display");
 
     //////////////////////////////////////////////////////////////////////
 
     EventGroupHandle_t event_group_handle = NULL;
-
-    volatile int current_state = STATE_IDLE;
     TaskHandle_t display_task_handle = NULL;
-
     i2s_chan_handle_t i2s_tx_chan_handle;
-
-    spi_device_handle_t spi2_device_handle;
     gptimer_handle_t gptimer_handle = NULL;
 
-    spi_transaction_t spi_transaction[2];
-
-    uint32_t s_fcntrl_data[8];
-    uint32_t s_grayscale_data[8];
-
     display_data_t display_data[2];
-
     display_data_t *current_display_data;
     int backbuffer_index = 0;
-
     bool flip = false;
+
+    DRAM_ATTR gpio_num_t const high_side_gpios[16] = {
+        HIGH_SIDE_GPIO_00, HIGH_SIDE_GPIO_01, HIGH_SIDE_GPIO_02, HIGH_SIDE_GPIO_03, HIGH_SIDE_GPIO_04, HIGH_SIDE_GPIO_05,
+        HIGH_SIDE_GPIO_06, HIGH_SIDE_GPIO_07, HIGH_SIDE_GPIO_08, HIGH_SIDE_GPIO_09, HIGH_SIDE_GPIO_10, HIGH_SIDE_GPIO_11,
+        HIGH_SIDE_GPIO_12, HIGH_SIDE_GPIO_13, HIGH_SIDE_GPIO_14, HIGH_SIDE_GPIO_15,
+    };
 
     //////////////////////////////////////////////////////////////////////
     // Per-column timer ISR
 
     bool IRAM_ATTR timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
     {
-        current_state = STATE_BEGIN;
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         vTaskNotifyGiveFromISR(display_task_handle, &xHigherPriorityTaskWoken);
         return xHigherPriorityTaskWoken == pdTRUE;
     }
 
     //////////////////////////////////////////////////////////////////////
-    // Init GPIO for TLC5948 LATCH
+    // Init GPIOs for TLC5948 LATCH and high side switches
 
     esp_err_t gpio_init(void)
     {
+        uint32_t mask = 0;
+
+        for(size_t i = 0; i < 16; ++i) {
+            mask |= 1 << (int)high_side_gpios[i];
+            gpio_set_level(high_side_gpios[i], 0);
+        }
+        mask |= (1ULL << LATCH_PIN);
+        gpio_set_level(LATCH_PIN, 0);
+
         gpio_config_t io_conf{};
         io_conf.mode = GPIO_MODE_OUTPUT;
-        io_conf.pin_bit_mask = (1ULL << LATCH_PIN);
+        io_conf.pin_bit_mask = mask;
         return gpio_config(&io_conf);
     }
 
     //////////////////////////////////////////////////////////////////////
     // Init I2S MCLK @ 32MHz for TLC5948 GSCLK
 
-    esp_err_t gsclk_init(void)
+    esp_err_t i2s_init(void)
     {
         i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(TLC5948_I2S_NUM, I2S_ROLE_MASTER);
 
@@ -219,7 +214,7 @@ namespace
 
         cleanup.cancel();
 
-        LOG_INFO("GPTimer initialized and started for 15.00094 kHz interrupt.");
+        LOG_INFO("GPTimer initialized");
         return ESP_OK;
     }
 
@@ -228,20 +223,19 @@ namespace
 
     __attribute__((always_inline)) inline void toggle_latch()
     {
-        auto gpio = GPIO_LL_GET_HW(GPIO_PORT_0);
-        gpio_ll_set_level(gpio, LATCH_PIN, 1);
+        gpio_ll_set_level(&GPIO, LATCH_PIN, 1);
 
         // No need for any delay nops here because the volatile write
         // issues a `memw` instruction which takes some time (gpio stays
         // high for ~60nS)
 
-        gpio_ll_set_level(gpio, LATCH_PIN, 0);
+        gpio_ll_set_level(&GPIO, LATCH_PIN, 0);
     }
 
     //////////////////////////////////////////////////////////////////////
     // Start an SPI2 send with 1 CMD bit, 256 MOSI bits
 
-    __attribute__((always_inline)) inline void spi_kick(uint32_t *data, uint16_t command)
+    __attribute__((always_inline)) inline void spi_kick(uint32_t const *data, uint16_t command)
     {
         GPSPI2.user2.usr_command_value = command;
         GPSPI2.cmd.update = 1;
@@ -268,11 +262,12 @@ namespace
         ESP_VOID(gpio_init());
         ESP_VOID(spi2_init());
         ESP_VOID(gptimer_init());
-        ESP_VOID(gsclk_init());
+        ESP_VOID(i2s_init());
 
-        LOG_INFO("Entering main loop, waiting for Timer ISR notification (15kHz).");
+        LOG_INFO("Entering main loop");
 
-        int column = 0;
+        int prev_column = 0;
+        int current_column = 0;
         int frame = 0;
 
         while(1) {
@@ -280,18 +275,43 @@ namespace
             // wait for timer to fire
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-            // latch in the grayscale data from previous loop
+            // switch off previous column
+            gpio_ll_set_level(&GPIO, high_side_gpios[prev_column], 0);
+
+            // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
 
+            // switch on current column
+            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
+
+            display_data_t &cur_data = display_data[backbuffer_index];
+
             // start sending fcntl data
-            spi_kick((uint32_t *)&display_data[backbuffer_index].fcontrol, 0xffff);
+            spi_kick((uint32_t *)&cur_data.fcontrol, 0xffff);
+
+            prev_column = current_column;
+
+            // prepare for next column
+            current_column = (current_column + 1) & 15;
 
             // prepare grayscale data
-            uint16_t *src = display_data[backbuffer_index].grayscale_buffer + column * 16;
+            uint16_t *src = cur_data.grayscale_buffer + current_column * 16;
+            uint32_t s_grayscale_data[8];
+
             for(int i = 0; i < 8; i++) {
                 uint32_t a = __builtin_bswap16(*src++);
                 uint32_t b = __builtin_bswap16(*src++);
                 s_grayscale_data[i] = (a << 16) | b;
+            }
+
+            if(current_column == 0) {
+                frame = (frame + 1) & 7;
+                if(frame == 0 && flip) {
+                    current_display_data = &cur_data;
+                    backbuffer_index = 1 - backbuffer_index;
+                    flip = false;
+                    xEventGroupSetBits(event_group_handle, VBLANK_BIT);
+                }
             }
 
             // BLOCKING wait for fcntl SPI complete
@@ -303,24 +323,12 @@ namespace
 
             // start sending grayscale data
             spi_kick(s_grayscale_data, 0);
-
-            // prepare for next column/frame
-            column = (column + 1) & 15;
-            if(column == 0) {
-                frame = (frame + 1) & 7;
-                if(frame == 0 && flip) {
-                    current_display_data = display_data + backbuffer_index;
-                    backbuffer_index = 1 - backbuffer_index;
-                    flip = false;
-                    xEventGroupSetBits(event_group_handle, VBLANK_BIT);
-                }
-            }
         }
     }
 }    // namespace
 
 //////////////////////////////////////////////////////////////////////
-// Set the DC (= dot correction (i.e. brightness)) for a channel
+// Set the dot correction (i.e. brightness) for a channel
 
 void fcontrol_data_t::set_dc(int channel, uint8_t value)
 {
@@ -358,7 +366,7 @@ void display_init(void)
         return;
     }
 
-    i2c_task_start();
+    lux_init();
 
     // core 1, priority 15
     xTaskCreatePinnedToCore(display_task, "display_task", 4096, nullptr, 15, &display_task_handle, 1);
@@ -367,10 +375,10 @@ void display_init(void)
 //////////////////////////////////////////////////////////////////////
 // Wait for display to refresh 8 times
 
-display_data_t *display_update()
+display_data_t &display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-    return current_display_data;
+    return *current_display_data;
 }
 
 //////////////////////////////////////////////////////////////////////
