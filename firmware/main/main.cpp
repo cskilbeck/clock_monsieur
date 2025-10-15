@@ -53,7 +53,8 @@ extern "C" void app_main()
 
     int frames = 0;
     while(true) {
-        uint16_t *backbuffer = display_update();
+        display_data_t *dd = display_update();
+        uint16_t *backbuffer = dd->grayscale_buffer;
         for(int i = 0; i < 256; ++i) {
             backbuffer[i] = 6000;
             // int x = a[i] + b[i];
@@ -68,5 +69,6 @@ extern "C" void app_main()
             // backbuffer[i] = gamma(a[i]);
         }
         frames += 1;
+        display_flip();
     }
 }

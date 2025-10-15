@@ -3,10 +3,10 @@
 // When the timer fires:
 //  - toggle latch (to latch previously sent grayscale and fcontrol data)
 //  - kick off fcontrol spi send
-// When fcontrol spi send completes
+//  - BLOCKING wait for fcontrol spi to complete
 //  - toggle latch (to pre-latch fcontrol data)
 //  - kick off grayscale spi send
-// And wait for the timer to fire again
+// And wait for the timer to fire again (grayscale spi completes before then)
 
 #include <cstdint>
 #include <cstring>
@@ -20,6 +20,8 @@
 
 #include "soc/gpio_struct.h"
 #include "soc/gpio_periph.h"
+#include "soc/spi_reg.h"
+#include "soc/spi_struct.h"
 
 #include "hal/gpio_hal.h"
 #include "hal/gpio_ll.h"
@@ -28,6 +30,7 @@
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 
+#include "display.h"
 #include "gpio_defs.h"
 #include "i2c_task.h"
 #include "util.h"
@@ -58,37 +61,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    struct fcontrol_data_t
-    {
-        uint16_t pad0[7];
-
-        uint16_t lattmg0 : 1;
-        uint16_t idmena : 1;
-        uint16_t idmrpt : 1;
-        uint16_t idmcur : 2;
-        uint16_t oldena : 1;
-        uint16_t psmode : 3;
-        uint16_t : 7;
-
-        uint8_t dsprpt : 1;
-        uint8_t tmgrst : 1;
-        uint8_t espwm : 1;
-        uint8_t lodvlt : 2;
-        uint8_t lsdvlt : 2;
-        uint8_t lattmg1 : 1;
-
-        uint8_t global_bc : 7;
-        uint8_t blank : 1;
-
-        uint8_t dc[14];
-
-        void set_dc(int channel, uint8_t value);
-    };
-
-    static_assert(sizeof(fcontrol_data_t) == 256 / 8);
-
-    //////////////////////////////////////////////////////////////////////
-
     EventGroupHandle_t event_group_handle = NULL;
 
     volatile int current_state = STATE_IDLE;
@@ -101,47 +73,18 @@ namespace
 
     spi_transaction_t spi_transaction[2];
 
-    int s_current_slot = 0;
-
     uint32_t s_fcntrl_data[8];
     uint32_t s_grayscale_data[8];
 
-    fcontrol_data_t fcontrol;
-    uint16_t grayscale_buffer[2][256];
-    uint16_t *backbuffer;
+    display_data_t display_data[2];
+
+    display_data_t *current_display_data;
     int backbuffer_index = 0;
 
-    //////////////////////////////////////////////////////////////////////
-
-    void fcontrol_data_t::set_dc(int channel, uint8_t value)
-    {
-        int bit_pos = channel * 7;
-        int byte_idx = 13 - (bit_pos >> 3);
-        int bit_offset = bit_pos & 7;
-        dc[byte_idx] = (dc[byte_idx] & ~(0x7F << bit_offset)) | (value << bit_offset);
-        if(bit_offset > 1) {
-            bit_offset = 8 - bit_offset;
-            int upper_bits = 7 - bit_offset;
-            byte_idx -= 1;
-            dc[byte_idx] = (dc[byte_idx] & ~((1 << upper_bits) - 1)) | (value >> bit_offset);
-        }
-    }
+    bool flip = false;
 
     //////////////////////////////////////////////////////////////////////
-
-    void spi2_isr(spi_transaction_t *trans)
-    {
-        if(trans->cmd == 1) {    // Command 1: FCNTRL (Buffer A). This requires the task to continue the sequence.
-            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            current_state = STATE_SENT;
-            vTaskNotifyGiveFromISR(display_task_handle, &xHigherPriorityTaskWoken);
-            if(xHigherPriorityTaskWoken == pdTRUE) {
-                portYIELD_FROM_ISR();
-            }
-        }
-    }
-
-    //////////////////////////////////////////////////////////////////////
+    // Per-column timer ISR
 
     bool IRAM_ATTR timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
     {
@@ -152,6 +95,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Init GPIO for TLC5948 LATCH
 
     esp_err_t gpio_init(void)
     {
@@ -162,6 +106,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Init I2S MCLK @ 32MHz for TLC5948 GSCLK
 
     esp_err_t gsclk_init(void)
     {
@@ -194,12 +139,13 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Init SPI2
 
     esp_err_t spi2_init(void)
     {
         esp_err_t ret;
 
-        // 3. Bus Configuration
+        // Initialize SPI bus GPIOs (SPI2_HOST)
         spi_bus_config_t buscfg{};
         buscfg.flags = SPICOMMON_BUSFLAG_MASTER;
         buscfg.mosi_io_num = SPI2_MOSI_PIN;
@@ -209,36 +155,34 @@ namespace
         buscfg.quadhd_io_num = -1;
         buscfg.max_transfer_sz = 32;
 
-        // 4. Device Configuration
-        spi_device_interface_config_t devcfg{};
-        devcfg.clock_speed_hz = 26666666;    // Target 26.666MHz
-        devcfg.mode = 0;
-        devcfg.spics_io_num = SPI2_CS_PIN;    // No CS line required (-1)
-        devcfg.queue_size = 2;
-        devcfg.command_bits = 1;    // One command bit as requested
-        devcfg.address_bits = 0;
-        devcfg.dummy_bits = 0;
-        devcfg.flags = 0;
-        devcfg.post_cb = spi2_isr;
-
-        // Initialize the SPI bus (SPI2_HOST)
         ESP_CHECK(spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_DISABLED));
 
-        auto cleanup = DEFERRED[]()
-        {
-            spi_bus_free(SPI2_HOST);
-        };
+        // Set up SPI clocks and transfer stuff
+        GPSPI2.clock.clkcnt_n = 2;    // N: 2 (= 3) so 80Mhz / 3 = 26.6666MHz
+        GPSPI2.clock.clkcnt_l = 2;    // L: 2 (= 3)
+        GPSPI2.clock.clkcnt_h = 0;    // H: 0 (= 1) so 1/3rd duty cycle for clock (seems to work)
+        GPSPI2.clock.clkdiv_pre = 0;
+        GPSPI2.clock.clk_equ_sysclk = 0;
 
-        // Add the device to the bus
-        ESP_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &spi2_device_handle));
+        GPSPI2.clk_gate.mst_clk_sel = 1;    // 80MHz PLL CLK
+        GPSPI2.clk_gate.mst_clk_active = 1;
+        GPSPI2.clk_gate.clk_en = 1;
 
-        cleanup.cancel();
+        GPSPI2.user.val = 0;
+        GPSPI2.user.usr_mosi = 1;
+        GPSPI2.user.usr_command = 1;
+        GPSPI2.user2.usr_command_bitlen = 1 - 1;
+        GPSPI2.ms_dlen.ms_data_bitlen = 256 - 1;
+        GPSPI2.cmd.update = 1;
+        while(GPSPI2.cmd.update) {
+        }
 
         LOG_INFO("SPI2 initialized successfully.");
         return ESP_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Init gptimer for per-column IRQ
 
     esp_err_t gptimer_init(void)
     {
@@ -248,8 +192,12 @@ namespace
         timer_config.resolution_hz = 40000000;
         timer_config.intr_priority = 0;
 
+        // For 2048 levels of grayscale, at 32MHz GSCLK we need 64uS
+        // 64uS per column = 1024uS per frame = 976.5625 Hz refresh rate
+        // 2560 would be correct value for 64uS @ 40MHz gptimer clock
+        // But 2600 gives a tiny bit of headroom...
         gptimer_alarm_config_t alarm_config{};
-        alarm_config.alarm_count = 6000;
+        alarm_config.alarm_count = 2600;
         alarm_config.reload_count = 0;
         alarm_config.flags.auto_reload_on_alarm = true;
 
@@ -276,39 +224,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    esp_err_t spi2_send(uint8_t command_bit, const uint32_t *mosi_data)
-    {
-        int slot_index = s_current_slot;
-        spi_transaction_t *t = &spi_transaction[slot_index];
-        t->cmd = command_bit & 0x1;
-        t->length = 256;
-        t->tx_buffer = mosi_data;
-        t->user = (void *)slot_index;
-
-        ESP_CHECK(spi_device_queue_trans(spi2_device_handle, t, 0));
-
-        s_current_slot = 1 - s_current_slot;
-        return ESP_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    __attribute__((always_inline)) inline void memcpy256(void *dst, void *src)
-    {
-        uint32_t *d = (uint32_t *)dst;
-        uint32_t *s = (uint32_t *)src;
-        d[0] = s[0];
-        d[1] = s[1];
-        d[2] = s[2];
-        d[3] = s[3];
-        d[4] = s[4];
-        d[5] = s[5];
-        d[6] = s[6];
-        d[7] = s[7];
-    }
-
-    //////////////////////////////////////////////////////////////////////
+    // Toggle TLC5948 LATCH for at least 30nS
 
     __attribute__((always_inline)) inline void toggle_latch()
     {
@@ -323,6 +239,27 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+    // Start an SPI2 send with 1 CMD bit, 256 MOSI bits
+
+    __attribute__((always_inline)) inline void spi_kick(uint32_t *data, uint16_t command)
+    {
+        GPSPI2.user2.usr_command_value = command;
+        GPSPI2.cmd.update = 1;
+        uint32_t *p = (uint32_t *)GPSPI2.data_buf;
+        p[0] = data[0];
+        p[1] = data[1];
+        p[2] = data[2];
+        p[3] = data[3];
+        p[4] = data[4];
+        p[5] = data[5];
+        p[6] = data[6];
+        p[7] = data[7];
+        __asm__ __volatile__("memw\n");
+        GPSPI2.cmd.usr = 1;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Main display task
 
     IRAM_ATTR void display_task(void *)
     {
@@ -336,89 +273,83 @@ namespace
         LOG_INFO("Entering main loop, waiting for Timer ISR notification (15kHz).");
 
         int column = 0;
-        int frames = 0;
+        int frame = 0;
 
         while(1) {
 
+            // wait for timer to fire
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-            switch(current_state) {
+            // latch in the grayscale data from previous loop
+            toggle_latch();
 
-            case STATE_IDLE:
-                LOG_WARN("display reached idle state!?");
-                break;
+            // start sending fcntl data
+            spi_kick((uint32_t *)&display_data[backbuffer_index].fcontrol, 0xffff);
 
-            case STATE_BEGIN: {
+            // prepare grayscale data
+            uint16_t *src = display_data[backbuffer_index].grayscale_buffer + column * 16;
+            for(int i = 0; i < 8; i++) {
+                uint32_t a = __builtin_bswap16(*src++);
+                uint32_t b = __builtin_bswap16(*src++);
+                s_grayscale_data[i] = (a << 16) | b;
+            }
 
-                // timer fired, latch the grayscale data that was sent last time
-                toggle_latch();
+            // BLOCKING wait for fcntl SPI complete
+            while(GPSPI2.cmd.usr) {
+            }
 
-                column = (column + 1) & 15;
+            // latch in the fcntl data
+            toggle_latch();
 
-                if(column == 0) {
-                    frames = (frames + 1) & 7;
-                    if(frames == 0) {
-                        backbuffer = grayscale_buffer[backbuffer_index];
-                        backbuffer_index = 1 - backbuffer_index;
-                        xEventGroupSetBits(event_group_handle, VBLANK_BIT);
-                    }
+            // start sending grayscale data
+            spi_kick(s_grayscale_data, 0);
+
+            // prepare for next column/frame
+            column = (column + 1) & 15;
+            if(column == 0) {
+                frame = (frame + 1) & 7;
+                if(frame == 0 && flip) {
+                    current_display_data = display_data + backbuffer_index;
+                    backbuffer_index = 1 - backbuffer_index;
+                    flip = false;
+                    xEventGroupSetBits(event_group_handle, VBLANK_BIT);
                 }
-
-                // Prepare fcntrl buffer
-                memcpy256(s_fcntrl_data, (uint32_t *)&fcontrol);
-
-                // start sending it with command = 1
-                esp_err_t err = spi2_send(0x1, s_fcntrl_data);
-
-                if(err != ESP_OK) {
-                    LOG_ERROR("Failed to send FCNTRL: %s. Skipping rest of frame.", esp_err_to_name(err));
-                    // If this fails, we must reset state and wait for the next timer tick (Step 8)
-                    current_state = STATE_IDLE;
-                    continue;
-                }
-
-                // prepare the grayscale data while the fcontrol is being sent
-                uint16_t *src = grayscale_buffer[backbuffer_index] + column * 16;
-                for(int i = 0; i < 8; i++) {
-                    uint32_t a = __builtin_bswap16(*src++);
-                    uint32_t b = __builtin_bswap16(*src++);
-                    s_grayscale_data[i] = (a << 16) | b;
-                }
-
-                // Set state back to IDLE, waiting for SPI ISR completion of Send A
-                current_state = STATE_IDLE;
-            } break;
-
-            case STATE_SENT: {
-
-                // fcontrol send completed, notify TLC5948
-                toggle_latch();
-
-                // start sending grayscale data (command = 0)
-                ESP_LOG_ERR(spi2_send(0x0, s_grayscale_data));
-
-                current_state = STATE_IDLE;
-            } break;
-
-            default:
-                esp_system_abort("INVALID display state");
-                break;
             }
         }
     }
-
 }    // namespace
 
 //////////////////////////////////////////////////////////////////////
+// Set the DC (= dot correction (i.e. brightness)) for a channel
+
+void fcontrol_data_t::set_dc(int channel, uint8_t value)
+{
+    int bit_pos = channel * 7;
+    int byte_idx = 13 - (bit_pos >> 3);
+    int bit_offset = bit_pos & 7;
+    dc[byte_idx] = (dc[byte_idx] & ~(0x7F << bit_offset)) | (value << bit_offset);
+    if(bit_offset > 1) {
+        bit_offset = 8 - bit_offset;
+        int upper_bits = 7 - bit_offset;
+        byte_idx -= 1;
+        dc[byte_idx] = (dc[byte_idx] & ~((1 << upper_bits) - 1)) | (value >> bit_offset);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+// Kick off display task and ambient lux task
 
 void display_init(void)
 {
     // setup default fcontrol
-    memset(&fcontrol, 0, sizeof(fcontrol));
-    fcontrol.tmgrst = 1;
-    fcontrol.global_bc = 127;
-    for(int i = 0; i < 16; ++i) {
-        fcontrol.set_dc(i, 127);
+    for(int i = 0; i < 2; ++i) {
+        auto &fcontrol = display_data[i].fcontrol;
+        memset(&fcontrol, 0, sizeof(fcontrol));
+        fcontrol.tmgrst = 1;
+        fcontrol.global_bc = 127;
+        for(int i = 0; i < 16; ++i) {
+            fcontrol.set_dc(i, 127);
+        }
     }
     // Create VBLANK EventGroup
     event_group_handle = xEventGroupCreate();
@@ -434,9 +365,18 @@ void display_init(void)
 }
 
 //////////////////////////////////////////////////////////////////////
+// Wait for display to refresh 8 times
 
-uint16_t *display_update()
+display_data_t *display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-    return backbuffer;
+    return current_display_data;
+}
+
+//////////////////////////////////////////////////////////////////////
+// Tell display driver to flip backbuffer at next refresh cycle
+
+void display_flip()
+{
+    flip = true;
 }
