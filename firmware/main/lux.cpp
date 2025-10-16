@@ -28,7 +28,7 @@ namespace
 {
     const char *TAG = "I2C_DRIVER";
 
-    uint8_t brightness;
+    uint16_t brightness;
 
     i2c_master_bus_handle_t i2c_bus_handle = NULL;
     i2c_master_dev_handle_t veml_i2c_handle;
@@ -103,20 +103,7 @@ namespace
 
             uint16_t lux_value[2];
             if(veml3235_read_lux(lux_value) == ESP_OK) {
-                float target = lux_value[1] / 32767.0f;
-                if(lux < 0) {
-                    lux = (float)target;
-                }
-                lux += (target - lux) / 8.0f;
-
-                // ghetto inverse gamma ramp
-                float t = 2 * lux - lux * lux;
-
-                // scale lux to 10..127
-                int base = 10;
-                int max = 127;
-                int range = max - base;
-                brightness = (uint8_t)(t * range) + base;
+                brightness = lux_value[1];
             }
             vTaskDelay(pdMS_TO_TICKS(100));
         }
@@ -133,7 +120,7 @@ void lux_init()
 
 //////////////////////////////////////////////////////////////////////
 
-uint8_t get_lux()
+uint16_t get_lux()
 {
     return brightness;
 }

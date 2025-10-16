@@ -71,27 +71,17 @@ namespace
     };
 
     //////////////////////////////////////////////////////////////////////
-    // Per-column timer ISR
-
-    bool IRAM_ATTR timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
-    {
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        vTaskNotifyGiveFromISR(display_task_handle, &xHigherPriorityTaskWoken);
-        return xHigherPriorityTaskWoken == pdTRUE;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // Init GPIOs for TLC5948 LATCH and high side switches
 
     esp_err_t gpio_init(void)
     {
-        uint32_t mask = 0;
+        uint64_t mask = 0;
 
         for(size_t i = 0; i < 16; ++i) {
-            mask |= 1 << (int)high_side_gpios[i];
+            mask |= 1ULL << (int)high_side_gpios[i];
             gpio_set_level(high_side_gpios[i], 0);
         }
-        mask |= (1ULL << LATCH_PIN);
+        mask |= 1ULL << LATCH_PIN;
         gpio_set_level(LATCH_PIN, 0);
 
         gpio_config_t io_conf{};
@@ -174,6 +164,16 @@ namespace
 
         LOG_INFO("SPI2 initialized successfully.");
         return ESP_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Per-column timer ISR
+
+    bool timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(display_task_handle, &xHigherPriorityTaskWoken);
+        return xHigherPriorityTaskWoken == pdTRUE;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -270,6 +270,8 @@ namespace
         int current_column = 0;
         int frame = 0;
 
+        float lux = -1.0f;
+
         while(1) {
 
             // wait for timer to fire
@@ -283,6 +285,9 @@ namespace
 
             // switch on current column
             gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
+
+
+
 
             display_data_t &cur_data = display_data[backbuffer_index];
 
@@ -305,11 +310,35 @@ namespace
             }
 
             if(current_column == 0) {
+
+                // ambient light response
+                float target = (float)get_lux();
+                if(lux < 0) {
+                    lux = (float)target;
+                }
+                lux += (target - lux) / 1000.0f;
+
+                // ghetto inverse gamma ramp
+                float t = lux / 65535.0f;
+                t = 1.0f - t;
+                t = 1.0f - t * t * t;
+
+                // scale lux to two 7 bit numbers
+                int base = 1;
+                int max = 255;
+                int range = max - base;
+                int b = (int)(t * range) + base;
+                uint8_t c = (uint8_t)(b / 2);
+                cur_data.fcontrol.global_bc = c;
+                uint8_t d = (uint8_t)((b + 1) / 2);
+                for(int i = 0; i < 16; ++i) {
+                    cur_data.fcontrol.set_dc(i, d);
+                }
+
                 frame = (frame + 1) & 7;
-                if(frame == 0 && flip) {
+                if(frame == 0) {
                     current_display_data = &cur_data;
                     backbuffer_index = 1 - backbuffer_index;
-                    flip = false;
                     xEventGroupSetBits(event_group_handle, VBLANK_BIT);
                 }
             }
@@ -379,12 +408,4 @@ display_data_t &display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
     return *current_display_data;
-}
-
-//////////////////////////////////////////////////////////////////////
-// Tell display driver to flip backbuffer at next refresh cycle
-
-void display_flip()
-{
-    flip = true;
 }

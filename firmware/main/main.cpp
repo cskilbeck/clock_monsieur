@@ -50,24 +50,26 @@ extern "C" void app_main()
 
     display_init();
 
+    // brightness 0..127 7 bits
+    // pwm 0..2047  11 bits
+
+
     int frames = 0;
     while(true) {
         display_data_t &dd = display_update();
         uint16_t *backbuffer = dd.grayscale_buffer;
         for(int i = 0; i < 256; ++i) {
-            backbuffer[i] = 6000;
-            // int x = a[i] + b[i];
-            // if(x < 0) {
-            //     x = 0;
-            //     b[i] = v();
-            // } else if(x > 2040) {
-            //     x = 2040;
-            //     b[i] = -v();
-            // }
-            // a[i] = (int16_t)x;
-            // backbuffer[i] = gamma(a[i]);
+            int x = a[i] + b[i];
+            if(x < 0) {
+                x = 0;
+                b[i] = v();
+            } else if(x > 2040) {
+                x = 2040;
+                b[i] = -v();
+            }
+            a[i] = (int16_t)x;
+            backbuffer[i] = gamma(a[i]);
         }
         frames += 1;
-        display_flip();
     }
 }
