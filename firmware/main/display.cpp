@@ -56,8 +56,8 @@ namespace
     gptimer_handle_t gptimer_handle = NULL;
 
     display_data_t display_data[2];
-    display_data_t *current_display_data;
-    int backbuffer_index = 0;
+    display_data_t *backbuffer;
+    int buffer_index = 0;
 
     DRAM_ATTR gpio_num_t const high_side_gpios[16] = {
         HIGH_SIDE_GPIO_00, HIGH_SIDE_GPIO_01, HIGH_SIDE_GPIO_02, HIGH_SIDE_GPIO_03, HIGH_SIDE_GPIO_04, HIGH_SIDE_GPIO_05,
@@ -248,38 +248,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-
-    __attribute__((always_inline)) inline uint32_t swap(uint32_t s)
-    {
-        uint32_t l = s << 8;
-        uint32_t r = s >> 8;
-        uint32_t a = l & 0xff00;
-        uint32_t b = r & 0x00ff;
-        uint32_t c = l & 0xff000000;
-        uint32_t d = r & 0x00ff0000;
-        return a | b | c | d;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    __attribute__((always_inline)) inline void spi_swap_kick(uint32_t const *data, uint16_t command)
-    {
-        GPSPI2.user2.usr_command_value = command;
-        GPSPI2.cmd.update = 1;
-        uint32_t *p = (uint32_t *)GPSPI2.data_buf;
-        p[0] = swap(data[0]);
-        p[1] = swap(data[1]);
-        p[2] = swap(data[2]);
-        p[3] = swap(data[3]);
-        p[4] = swap(data[4]);
-        p[5] = swap(data[5]);
-        p[6] = swap(data[6]);
-        p[7] = swap(data[7]);
-        __asm__ __volatile__("memw\n");
-        GPSPI2.cmd.usr = 1;
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // Main display task
 
     IRAM_ATTR void display_task(void *)
@@ -323,18 +291,19 @@ namespace
 
             // if done all columns, swap backbuffer
             if(current_column == 0) {
-                backbuffer_index = 1 - backbuffer_index;
+                // backbuffer is the one we just finished displaying
+                backbuffer = &display_data[buffer_index];
+                buffer_index = 1 - buffer_index;
             }
-            display_data_t &cur_data = display_data[backbuffer_index];
+            display_data_t &front_buffer = display_data[buffer_index];
 
             // start sending fcntl data
-            spi_kick((uint32_t const *)&cur_data.fcontrol, 0xffff);
+            spi_kick((uint32_t const *)&front_buffer.fcontrol, 0xffff);
 
             // done 8 frames?
             if(current_column == 0) {
                 frame += 1;
                 if((frame & 7) == 0) {
-                    current_display_data = &cur_data;
                     xEventGroupSetBits(event_group_handle, VBLANK_BIT);
                 }
             }
@@ -347,7 +316,7 @@ namespace
             toggle_latch();
 
             // start sending grayscale data
-            spi_swap_kick((uint32_t const *)(cur_data.grayscale_buffer + current_column * 16), 0);
+            spi_kick((uint32_t const *)(front_buffer.grayscale_buffer + current_column * 16), 0);
         }
     }
 }    // namespace
@@ -379,9 +348,9 @@ void display_init(void)
         auto &fcontrol = display_data[i].fcontrol;
         memset(&fcontrol, 0, sizeof(fcontrol));
         fcontrol.tmgrst = 1;
-        fcontrol.global_bc = 127;
+        fcontrol.global_bc = 0;
         for(int i = 0; i < 16; ++i) {
-            fcontrol.set_dc(i, 127);
+            fcontrol.set_dc(i, 0);
         }
     }
     // Create VBLANK EventGroup
@@ -401,5 +370,5 @@ void display_init(void)
 display_data_t &display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-    return *current_display_data;
+    return *backbuffer;
 }

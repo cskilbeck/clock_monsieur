@@ -120,7 +120,7 @@ void lux_init()
 
 //////////////////////////////////////////////////////////////////////
 
-uint16_t get_lux()
+uint16_t lux_get()
 {
     return brightness;
 }

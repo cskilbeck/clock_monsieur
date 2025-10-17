@@ -76,8 +76,6 @@ esp_err_t button_get(button_t result[NUM_BUTTONS])
 {
     for(int i = 0; i < NUM_BUTTONS; ++i) {
         result[i] = buttons[i];
-    }
-    for(int i = 0; i < NUM_BUTTONS; ++i) {
         buttons[i].pressed = 0;
         buttons[i].released = 0;
     }
