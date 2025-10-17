@@ -27,24 +27,19 @@
 
 #include "display.h"
 #include "gpio_defs.h"
-#include "lux.h"
 #include "util.h"
 
 //////////////////////////////////////////////////////////////////////
 
 #define TLC5948_I2S_NUM I2S_NUM_0    // For GSCLK
 
-#define STATE_IDLE 0
-#define STATE_BEGIN 1
-#define STATE_SENT 2
-
-#define VBLANK_BIT BIT0
-
 #define SPI2_MOSI_PIN TLC5948_PIN_MOSI
 #define SPI2_CLK_PIN TLC5948_PIN_SCLK
 #define SPI2_MISO_PIN -1
 #define SPI2_CS_PIN -1
 #define LATCH_PIN TLC5948_PIN_XLAT
+
+#define VBLANK_BIT BIT0
 
 //////////////////////////////////////////////////////////////////////
 
@@ -56,13 +51,13 @@ namespace
 
     EventGroupHandle_t event_group_handle = NULL;
     TaskHandle_t display_task_handle = NULL;
+
     i2s_chan_handle_t i2s_tx_chan_handle;
     gptimer_handle_t gptimer_handle = NULL;
 
     display_data_t display_data[2];
     display_data_t *current_display_data;
     int backbuffer_index = 0;
-    bool flip = false;
 
     DRAM_ATTR gpio_num_t const high_side_gpios[16] = {
         HIGH_SIDE_GPIO_00, HIGH_SIDE_GPIO_01, HIGH_SIDE_GPIO_02, HIGH_SIDE_GPIO_03, HIGH_SIDE_GPIO_04, HIGH_SIDE_GPIO_05,
@@ -253,6 +248,38 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
+
+    __attribute__((always_inline)) inline uint32_t swap(uint32_t s)
+    {
+        uint32_t l = s << 8;
+        uint32_t r = s >> 8;
+        uint32_t a = l & 0xff00;
+        uint32_t b = r & 0x00ff;
+        uint32_t c = l & 0xff000000;
+        uint32_t d = r & 0x00ff0000;
+        return a | b | c | d;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    __attribute__((always_inline)) inline void spi_swap_kick(uint32_t const *data, uint16_t command)
+    {
+        GPSPI2.user2.usr_command_value = command;
+        GPSPI2.cmd.update = 1;
+        uint32_t *p = (uint32_t *)GPSPI2.data_buf;
+        p[0] = swap(data[0]);
+        p[1] = swap(data[1]);
+        p[2] = swap(data[2]);
+        p[3] = swap(data[3]);
+        p[4] = swap(data[4]);
+        p[5] = swap(data[5]);
+        p[6] = swap(data[6]);
+        p[7] = swap(data[7]);
+        __asm__ __volatile__("memw\n");
+        GPSPI2.cmd.usr = 1;
+    }
+
+    //////////////////////////////////////////////////////////////////////
     // Main display task
 
     IRAM_ATTR void display_task(void *)
@@ -268,7 +295,7 @@ namespace
 
         int prev_column = 0;
         int current_column = 0;
-        int frame = 0;
+        uint32_t frame = 0;
 
         float lux = -1.0f;
 
@@ -277,68 +304,37 @@ namespace
             // wait for timer to fire
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+            // BLOCKING wait for grayscale SPI complete (which it should have anyway)
+            while(GPSPI2.cmd.usr) {
+            }
+
             // switch off previous column
             gpio_ll_set_level(&GPIO, high_side_gpios[prev_column], 0);
 
             // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
 
-            // switch on current column
+            // switch on current column so it actually lights up
             gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
 
+            // next column
+            prev_column = current_column;
+            current_column = (current_column + 1) & 15;
 
-
-
+            // if done all columns, swap backbuffer
+            if(current_column == 0) {
+                backbuffer_index = 1 - backbuffer_index;
+            }
             display_data_t &cur_data = display_data[backbuffer_index];
 
             // start sending fcntl data
-            spi_kick((uint32_t *)&cur_data.fcontrol, 0xffff);
+            spi_kick((uint32_t const *)&cur_data.fcontrol, 0xffff);
 
-            prev_column = current_column;
-
-            // prepare for next column
-            current_column = (current_column + 1) & 15;
-
-            // prepare grayscale data
-            uint16_t *src = cur_data.grayscale_buffer + current_column * 16;
-            uint32_t s_grayscale_data[8];
-
-            for(int i = 0; i < 8; i++) {
-                uint32_t a = __builtin_bswap16(*src++);
-                uint32_t b = __builtin_bswap16(*src++);
-                s_grayscale_data[i] = (a << 16) | b;
-            }
-
+            // done 8 frames?
             if(current_column == 0) {
-
-                // ambient light response
-                float target = (float)get_lux();
-                if(lux < 0) {
-                    lux = (float)target;
-                }
-                lux += (target - lux) / 1000.0f;
-
-                // ghetto inverse gamma ramp
-                float t = lux / 65535.0f;
-                t = 1.0f - t;
-                t = 1.0f - t * t * t;
-
-                // scale lux to two 7 bit numbers
-                int base = 1;
-                int max = 255;
-                int range = max - base;
-                int b = (int)(t * range) + base;
-                uint8_t c = (uint8_t)(b / 2);
-                cur_data.fcontrol.global_bc = c;
-                uint8_t d = (uint8_t)((b + 1) / 2);
-                for(int i = 0; i < 16; ++i) {
-                    cur_data.fcontrol.set_dc(i, d);
-                }
-
-                frame = (frame + 1) & 7;
-                if(frame == 0) {
+                frame += 1;
+                if((frame & 7) == 0) {
                     current_display_data = &cur_data;
-                    backbuffer_index = 1 - backbuffer_index;
                     xEventGroupSetBits(event_group_handle, VBLANK_BIT);
                 }
             }
@@ -351,7 +347,7 @@ namespace
             toggle_latch();
 
             // start sending grayscale data
-            spi_kick(s_grayscale_data, 0);
+            spi_swap_kick((uint32_t const *)(cur_data.grayscale_buffer + current_column * 16), 0);
         }
     }
 }    // namespace
@@ -394,8 +390,6 @@ void display_init(void)
         LOG_ERROR("Failed to create EventGroup!");
         return;
     }
-
-    lux_init();
 
     // core 1, priority 15
     xTaskCreatePinnedToCore(display_task, "display_task", 4096, nullptr, 15, &display_task_handle, 1);

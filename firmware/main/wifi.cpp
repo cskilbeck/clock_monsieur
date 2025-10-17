@@ -48,10 +48,10 @@ namespace
     {
         EventBits_t uxBits;
 
-        ESP_ERROR_CHECK(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
+        ESP_LOG_ERR(esp_smartconfig_set_type(SC_TYPE_ESPTOUCH_AIRKISS));
 
         smartconfig_start_config_t cfg = SMARTCONFIG_START_CONFIG_DEFAULT();
-        ESP_ERROR_CHECK(esp_smartconfig_start(&cfg));
+        ESP_LOG_ERR(esp_smartconfig_start(&cfg));
 
         while(true) {
 
@@ -151,14 +151,14 @@ namespace
                 // LOG_INFO("PASSWORD:%s", password);
 
                 if(evt->type == SC_TYPE_ESPTOUCH_V2) {
-                    ESP_ERROR_CHECK(esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)));
+                    ESP_LOG_ERR(esp_smartconfig_get_rvd_data(rvd_data, sizeof(rvd_data)));
                     LOG_INFO("RVD_DATA:%s", rvd_data);
                 }
 
-                ESP_ERROR_CHECK(esp_wifi_disconnect());
-                ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+                ESP_LOG_ERR(esp_wifi_disconnect());
+                ESP_LOG_ERR(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
-                ESP_ERROR_CHECK(esp_wifi_connect());
+                ESP_LOG_ERR(esp_wifi_connect());
             } break;
 
             case SC_EVENT_SEND_ACK_DONE:

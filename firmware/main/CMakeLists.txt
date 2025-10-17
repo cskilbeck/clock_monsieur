@@ -4,6 +4,7 @@ idf_component_register(
         display.cpp
         lux.cpp
         wifi.cpp
+        button.cpp
     PRIV_REQUIRES
         driver
         log
@@ -11,6 +12,7 @@ idf_component_register(
         nvs_flash
         freertos
         spi_flash
+        esp_timer
     INCLUDE_DIRS
         .
 )

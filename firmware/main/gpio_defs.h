@@ -34,3 +34,5 @@
 #define HIGH_SIDE_GPIO_15 GPIO_NUM_11
 
 // Buttons
+
+#define BUTTON_0_GPIO GPIO_NUM_37
