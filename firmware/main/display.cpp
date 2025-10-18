@@ -49,13 +49,14 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    display_data_t __attribute__((__aligned__(32))) display_data[2];
+
     EventGroupHandle_t event_group_handle = NULL;
     TaskHandle_t display_task_handle = NULL;
 
     i2s_chan_handle_t i2s_tx_chan_handle;
     gptimer_handle_t gptimer_handle = NULL;
 
-    display_data_t display_data[2];
     display_data_t *backbuffer;
     int buffer_index = 0;
 
@@ -235,31 +236,38 @@ namespace
         GPSPI2.user2.usr_command_value = command;
         GPSPI2.cmd.update = 1;
         uint32_t *p = (uint32_t *)GPSPI2.data_buf;
+        // Apparently Xtensa LX7 write buffer is 4 entries
         uint32_t s0;
         uint32_t s1;
         uint32_t s2;
         uint32_t s3;
-        asm volatile("l32i.n %0,%4, 0\n"
-                     "l32i.n %1,%4, 4\n"
-                     "l32i.n %2,%4, 8\n"
-                     "l32i.n %3,%4, 12\n"
-                     "s32i.n %0,%5, 0\n"
-                     "s32i.n %1,%5, 4\n"
-                     "s32i.n %2,%5, 8\n"
-                     "s32i.n %3,%5, 12\n"
-                     "l32i.n %0,%4, 16\n"
-                     "l32i.n %1,%4, 20\n"
-                     "l32i.n %2,%4, 24\n"
-                     "l32i.n %3,%4, 28\n"
-                     "s32i.n %0,%5, 16\n"
-                     "s32i.n %1,%5, 20\n"
-                     "s32i.n %2,%5, 24\n"
-                     "s32i.n %3,%5, 28\n"
-                     "memw\n"
+        asm volatile("l32i.n %0, %4, 0\n"
+                     "l32i.n %1, %4, 4\n"
+                     "l32i.n %2, %4, 8\n"
+                     "l32i.n %3, %4, 12\n"
+
+                     "s32i.n %0, %5, 0\n"
+                     "s32i.n %1, %5, 4\n"
+                     "s32i.n %2, %5, 8\n"
+                     "s32i.n %3, %5, 12\n"
+
+                     "l32i.n %0, %4, 16\n"
+                     "l32i.n %1, %4, 20\n"
+                     "l32i.n %2, %4, 24\n"
+                     "l32i.n %3, %4, 28\n"
+
+                     "s32i.n %0, %5, 16\n"
+                     "s32i.n %1, %5, 20\n"
+                     "s32i.n %2, %5, 24\n"
+                     "s32i.n %3, %5, 28\n"
+
+                     "memw\n"    // write buffer flush fence
+
                      : "=&r"(s0), "=&r"(s1), "=&r"(s2), "=&r"(s3)
                      : "r"(data), "r"(p)
-                     :);
-        GPSPI2.cmd.usr = 1;
+                     :    // no need for memory or flags clobber, only HW registers are written to
+        );
+        GPSPI2.cmd.usr = 1;    // start the transfer
     }
 
     //////////////////////////////////////////////////////////////////////

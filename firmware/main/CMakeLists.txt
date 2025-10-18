@@ -5,14 +5,7 @@ idf_component_register(
         lux.cpp
         wifi.cpp
         button.cpp
-    PRIV_REQUIRES
-        driver
-        log
-        esp_wifi
-        nvs_flash
-        freertos
-        spi_flash
-        esp_timer
+        app_blufi.cpp
     INCLUDE_DIRS
         .
 )
