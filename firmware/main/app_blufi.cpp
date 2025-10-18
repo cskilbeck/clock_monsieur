@@ -64,8 +64,6 @@ LOG_CONTEXT("blufi");
 
 const int CONNECTED_BIT = BIT0;
 
-extern void btc_blufi_report_error(esp_blufi_error_state_t state);
-
 //////////////////////////////////////////////////////////////////////
 
 struct blufi_security
@@ -241,7 +239,7 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
 {
     if(data == NULL || len < 3) {
         LOG_ERROR("BLUFI Invalid data format");
-        btc_blufi_report_error(ESP_BLUFI_DATA_FORMAT_ERROR);
+        esp_blufi_send_error_info(ESP_BLUFI_DATA_FORMAT_ERROR);
         return;
     }
 
@@ -250,7 +248,7 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
 
     if(blufi_sec == NULL) {
         LOG_ERROR("BLUFI Security is not initialized");
-        btc_blufi_report_error(ESP_BLUFI_INIT_SECURITY_ERROR);
+        esp_blufi_send_error_info(ESP_BLUFI_INIT_SECURITY_ERROR);
         return;
     }
 
@@ -264,7 +262,7 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
         blufi_sec->dh_param = (uint8_t *)malloc(blufi_sec->dh_param_len);
         if(blufi_sec->dh_param == NULL) {
             blufi_sec->dh_param_len = 0; /* Reset length to avoid using unallocated memory */
-            btc_blufi_report_error(ESP_BLUFI_DH_MALLOC_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_DH_MALLOC_ERROR);
             LOG_ERROR("%s, malloc failed", __func__);
             return;
         }
@@ -272,13 +270,13 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
     case SEC_TYPE_DH_PARAM_DATA: {
         if(blufi_sec->dh_param == NULL) {
             LOG_ERROR("%s, blufi_sec->dh_param == NULL", __func__);
-            btc_blufi_report_error(ESP_BLUFI_DH_PARAM_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_DH_PARAM_ERROR);
             return;
         }
 
         if(len < (blufi_sec->dh_param_len + 1)) {
             LOG_ERROR("%s, invalid dh param len", __func__);
-            btc_blufi_report_error(ESP_BLUFI_DH_PARAM_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_DH_PARAM_ERROR);
             return;
         }
 
@@ -287,7 +285,7 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
         ret = mbedtls_dhm_read_params(&blufi_sec->dhm, &param, &param[blufi_sec->dh_param_len]);
         if(ret) {
             LOG_ERROR("%s read param failed %d", __func__, ret);
-            btc_blufi_report_error(ESP_BLUFI_READ_PARAM_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_READ_PARAM_ERROR);
             return;
         }
         free(blufi_sec->dh_param);
@@ -297,21 +295,21 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
 
         if(dhm_len > DH_SELF_PUB_KEY_LEN) {
             LOG_ERROR("%s dhm len not support %d", __func__, dhm_len);
-            btc_blufi_report_error(ESP_BLUFI_DH_PARAM_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_DH_PARAM_ERROR);
             return;
         }
 
         ret = mbedtls_dhm_make_public(&blufi_sec->dhm, dhm_len, blufi_sec->self_public_key, DH_SELF_PUB_KEY_LEN, myrand, NULL);
         if(ret) {
             LOG_ERROR("%s make public failed %d", __func__, ret);
-            btc_blufi_report_error(ESP_BLUFI_MAKE_PUBLIC_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_MAKE_PUBLIC_ERROR);
             return;
         }
 
         ret = mbedtls_dhm_calc_secret(&blufi_sec->dhm, blufi_sec->share_key, SHARE_KEY_LEN, &blufi_sec->share_len, myrand, NULL);
         if(ret) {
             LOG_ERROR("%s mbedtls_dhm_calc_secret failed %d", __func__, ret);
-            btc_blufi_report_error(ESP_BLUFI_DH_PARAM_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_DH_PARAM_ERROR);
             return;
         }
 
@@ -319,7 +317,7 @@ static void blufi_dh_negotiate_data_handler(uint8_t *data, int len, uint8_t **ou
 
         if(ret) {
             LOG_ERROR("%s mbedtls_md5 failed %d", __func__, ret);
-            btc_blufi_report_error(ESP_BLUFI_CALC_MD5_ERROR);
+            esp_blufi_send_error_info(ESP_BLUFI_CALC_MD5_ERROR);
             return;
         }
 

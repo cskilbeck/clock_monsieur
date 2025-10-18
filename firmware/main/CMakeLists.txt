@@ -3,9 +3,13 @@ idf_component_register(
         main.cpp
         display.cpp
         lux.cpp
-        wifi.cpp
         button.cpp
         app_blufi.cpp
+    PRIV_REQUIRES
+        driver
+        bt
+        nvs_flash
+        mbedtls
     INCLUDE_DIRS
         .
 )

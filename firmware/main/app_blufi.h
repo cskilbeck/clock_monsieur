@@ -36,7 +36,7 @@ typedef void (*app_blufi_callback_t)(app_blufi_event_t event);
  *
  * @param cb The callback function to notify the application of status changes.
  */
-esp_err_t app_blufi_init(app_blufi_callback_t cb);
+esp_err_t app_blufi_init();
 
 #ifdef __cplusplus
 }

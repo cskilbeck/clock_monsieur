@@ -8,16 +8,24 @@
 
 #include "util.h"
 #include "display.h"
-#include "wifi.h"
+#include "app_blufi.h"
 #include "lux.h"
 #include "button.h"
+
+#include "sdkconfig.h"
 
 LOG_CONTEXT("main");
 
 #define PWM_MAX 2048
 #define GAMMA_VALUE 2.2f    // Standard display gamma
 
-namespace
+
+#if UC_BT_BLUFI_ENABLE
+sd;
+lkjf sdlkfhj lksdfjklsd jfk
+#endif
+
+    namespace
 {
     // approximate pow(2.2) for 11 bit fixed point
     // and convert endianness for display buffer
@@ -38,7 +46,7 @@ namespace
 
     float lux = 0.0f;
 
-    void update_ambient(display_data_t &display)
+    void update_ambient(display_data_t & display)
     {
         // ambient light response
         float target = (float)lux_get();
@@ -80,7 +88,8 @@ extern "C" void app_main()
     }
     ESP_LOG_ERR(ret);
 
-    wifi_init();
+    app_blufi_init();
+
     lux_init();
     display_init();
     button_init();
