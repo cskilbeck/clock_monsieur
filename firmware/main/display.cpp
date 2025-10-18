@@ -235,15 +235,30 @@ namespace
         GPSPI2.user2.usr_command_value = command;
         GPSPI2.cmd.update = 1;
         uint32_t *p = (uint32_t *)GPSPI2.data_buf;
-        p[0] = data[0];
-        p[1] = data[1];
-        p[2] = data[2];
-        p[3] = data[3];
-        p[4] = data[4];
-        p[5] = data[5];
-        p[6] = data[6];
-        p[7] = data[7];
-        __asm__ __volatile__("memw\n");
+        uint32_t s0;
+        uint32_t s1;
+        uint32_t s2;
+        uint32_t s3;
+        asm volatile("l32i.n %0,%4, 0\n"
+                     "l32i.n %1,%4, 4\n"
+                     "l32i.n %2,%4, 8\n"
+                     "l32i.n %3,%4, 12\n"
+                     "s32i.n %0,%5, 0\n"
+                     "s32i.n %1,%5, 4\n"
+                     "s32i.n %2,%5, 8\n"
+                     "s32i.n %3,%5, 12\n"
+                     "l32i.n %0,%4, 16\n"
+                     "l32i.n %1,%4, 20\n"
+                     "l32i.n %2,%4, 24\n"
+                     "l32i.n %3,%4, 28\n"
+                     "s32i.n %0,%5, 16\n"
+                     "s32i.n %1,%5, 20\n"
+                     "s32i.n %2,%5, 24\n"
+                     "s32i.n %3,%5, 28\n"
+                     "memw\n"
+                     : "=&r"(s0), "=&r"(s1), "=&r"(s2), "=&r"(s3)
+                     : "r"(data), "r"(p)
+                     :);
         GPSPI2.cmd.usr = 1;
     }
 
