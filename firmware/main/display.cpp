@@ -57,8 +57,9 @@ namespace
     i2s_chan_handle_t i2s_tx_chan_handle;
     gptimer_handle_t gptimer_handle = NULL;
 
-    display_data_t *backbuffer;
     int buffer_index = 0;
+    display_data_t *back_buffer = display_data + 0;
+    display_data_t *front_buffer = display_data + 1;
 
     DRAM_ATTR gpio_num_t const high_side_gpios[16] = {
         HIGH_SIDE_GPIO_00, HIGH_SIDE_GPIO_01, HIGH_SIDE_GPIO_02, HIGH_SIDE_GPIO_03, HIGH_SIDE_GPIO_04, HIGH_SIDE_GPIO_05,
@@ -305,28 +306,23 @@ namespace
             // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
 
-            // switch on current column so it actually lights up
-            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
-
             // next column
             prev_column = current_column;
             current_column = (current_column + 1) & 15;
 
-            // if done all columns, swap backbuffer
-            if(current_column == 0) {
-                // backbuffer is the one we just finished displaying
-                backbuffer = &display_data[buffer_index];
-                buffer_index = 1 - buffer_index;
-            }
-            display_data_t &front_buffer = display_data[buffer_index];
+            // switch on current column so it actually lights up
+            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
 
             // start sending fcntl data
-            spi_kick((uint32_t const *)&front_buffer.fcontrol, 0xffff);
+            spi_kick((uint32_t const *)&front_buffer->fcontrol, 0xffff);
 
-            // done 8 frames?
+            // if done all columns 8 times, swap front,back buffer
             if(current_column == 0) {
                 frame += 1;
                 if((frame & 7) == 0) {
+                    buffer_index = 1 - buffer_index;
+                    back_buffer = display_data + buffer_index;
+                    front_buffer = display_data + (1 - buffer_index);
                     xEventGroupSetBits(event_group_handle, VBLANK_BIT);
                 }
             }
@@ -339,7 +335,7 @@ namespace
             toggle_latch();
 
             // start sending grayscale data
-            spi_kick((uint32_t const *)(front_buffer.grayscale_buffer + current_column * 16), 0);
+            spi_kick((uint32_t const *)(front_buffer->grayscale_buffer + current_column * 16), 0);
         }
     }
 }    // namespace
@@ -393,5 +389,5 @@ void display_init(void)
 display_data_t &display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-    return *backbuffer;
+    return *back_buffer;
 }

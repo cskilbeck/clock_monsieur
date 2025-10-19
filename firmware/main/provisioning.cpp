@@ -15,12 +15,8 @@
 
 #include <wifi_provisioning/scheme_ble.h>
 
-#include "qrcode.h"
-
 #define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 1
 #define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 0
-
-#define CONFIG_EXAMPLE_PROV_SHOW_QR 1
 
 #define PROV_QR_VERSION "v1"
 #define PROV_TRANSPORT_BLE "ble"
@@ -37,7 +33,7 @@ static char const *TAG = "provisioning";
 static EventGroupHandle_t wifi_event_group;
 
 /* This salt,verifier has been generated for username = "wifiprov" and password = "abcd1234"
- * IMPORTANT NOTE: For production cases, this must be unique to every device
+ * IMPORTANT NOTE: Forses, this m production caust be unique to every device
  * and should come from device manufacturing partition.*/
 static const char sec2_salt[] = { 0x03, 0x6e, 0xe0, 0xc7, 0xbc, 0xb9, 0xed, 0xa8, 0x4c, 0x9e, 0xac, 0x97, 0xd9, 0x3d, 0xec, 0xf4 };
 
@@ -178,18 +174,11 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     }
 }
 
-static void wifi_init_sta(void)
-{
-    /* Start Wi-Fi in station mode */
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-}
-
 
 static void get_device_service_name(char *service_name, size_t max)
 {
     uint8_t eth_mac[6];
-    const char *ssid_prefix = "PROV_";
+    const char *ssid_prefix = "CLOCK_";
     esp_wifi_get_mac(WIFI_IF_STA, eth_mac);
     snprintf(service_name, max, "%s%02X%02X%02X", ssid_prefix, eth_mac[3], eth_mac[4], eth_mac[5]);
 }
@@ -236,12 +225,6 @@ static void wifi_prov_print_qr(const char *name, const char *username, const cha
                  ",\"transport\":\"%s\"}",
                  PROV_QR_VERSION, name, transport);
     }
-#ifdef CONFIG_EXAMPLE_PROV_SHOW_QR
-    ESP_LOGI(TAG, "Scan this QR code from the provisioning application for Provisioning.");
-    esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
-    esp_qrcode_generate(&cfg, payload);
-#endif /* CONFIG_APP_WIFI_PROV_SHOW_QR */
-    ESP_LOGI(TAG, "If QR code is not visible, copy paste the below URL in a browser.\n%s?data=%s", QRCODE_BASE_URL, payload);
 }
 
 void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *event_data)
@@ -313,7 +296,8 @@ esp_err_t provisioning_init()
          *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
          *     - device name when scheme is wifi_prov_scheme_ble
          */
-        char service_name[12];
+        // CLOCK_XXXXXX
+        char service_name[16];
         get_device_service_name(service_name, sizeof(service_name));
 
         wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
@@ -403,8 +387,10 @@ esp_err_t provisioning_init()
         wifi_prov_mgr_deinit();
 
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
+
         /* Start Wi-Fi station */
-        wifi_init_sta();
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_start());
     }
 
     /* Wait for Wi-Fi connection */

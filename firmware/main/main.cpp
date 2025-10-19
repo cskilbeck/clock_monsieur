@@ -18,13 +18,14 @@ LOG_CONTEXT("main");
 
 namespace
 {
-    // approximate pow(2.2) for 11 bit fixed point
+    // approximate pow(2.2) for 11 bit fixed point: x^2 - (x^2 - x^3) / 4
     // and convert endianness for display buffer
     uint16_t gamma_get(uint16_t x)
     {
         int x2 = (x * x) >> 11;
         int x3 = (x * x2) >> 11;
-        return __builtin_bswap16(x2 - ((x2 - x3) >> 2));
+        int x2_2 = x2 - ((x2 - x3) >> 2);
+        return __builtin_bswap16(x2_2);
     }
 
     int16_t a[256];
@@ -100,12 +101,12 @@ extern "C" void app_main()
         uint16_t *backbuffer = dd.grayscale_buffer;
 #if 1
         if(buttons[0].held & ((frames & 1) == 0)) {
-            scroll -= 1;
+            scroll += 1;
         }
         memset(backbuffer, 0, 512);
         for(int i = 0; i < 16; ++i) {
-            int x = gamma_get(((scroll + i) & 15) * 2047 / 15);
-            backbuffer[i] = x;
+            int x = 15 - ((scroll + i) & 15);
+            backbuffer[i] = gamma_get(x * 2047 / 15);
         }
 #else
         for(int i = 0; i < 16; ++i) {
