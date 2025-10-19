@@ -8,7 +8,7 @@
 
 #include "util.h"
 #include "display.h"
-#include "app_blufi.h"
+#include "provisioning.h"
 #include "lux.h"
 #include "button.h"
 
@@ -16,16 +16,7 @@
 
 LOG_CONTEXT("main");
 
-#define PWM_MAX 2048
-#define GAMMA_VALUE 2.2f    // Standard display gamma
-
-
-#if UC_BT_BLUFI_ENABLE
-sd;
-lkjf sdlkfhj lksdfjklsd jfk
-#endif
-
-    namespace
+namespace
 {
     // approximate pow(2.2) for 11 bit fixed point
     // and convert endianness for display buffer
@@ -46,7 +37,7 @@ lkjf sdlkfhj lksdfjklsd jfk
 
     float lux = 0.0f;
 
-    void update_ambient(display_data_t & display)
+    void update_ambient(display_data_t &display)
     {
         // ambient light response
         float target = (float)lux_get();
@@ -79,8 +70,7 @@ extern "C" void app_main()
     // REG_CLR_BIT(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_BOD_RST);
     // REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ANA_RST_EN);
 
-    // start the wifi connecting
-
+    ESP_LOG_ERR(nvs_flash_erase());
     esp_err_t ret = nvs_flash_init();
     if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOG_ERR(nvs_flash_erase());
@@ -88,8 +78,7 @@ extern "C" void app_main()
     }
     ESP_LOG_ERR(ret);
 
-    app_blufi_init();
-
+    provisioning_init();
     lux_init();
     display_init();
     button_init();

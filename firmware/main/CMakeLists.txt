@@ -4,12 +4,13 @@ idf_component_register(
         display.cpp
         lux.cpp
         button.cpp
-        app_blufi.cpp
+        provisioning.cpp
     PRIV_REQUIRES
         driver
         bt
         nvs_flash
         mbedtls
+        wifi_provisioning
     INCLUDE_DIRS
         .
 )
