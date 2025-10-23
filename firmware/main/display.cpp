@@ -306,12 +306,12 @@ namespace
             // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
 
+            // switch on current column so it actually lights up
+            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
+
             // next column
             prev_column = current_column;
             current_column = (current_column + 1) & 15;
-
-            // switch on current column so it actually lights up
-            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
 
             // start sending fcntl data
             spi_kick((uint32_t const *)&front_buffer->fcontrol, 0xffff);
