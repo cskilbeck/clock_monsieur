@@ -6,6 +6,8 @@
 enum button_id
 {
     BUTTON_0,
+    BUTTON_1,
+    BUTTON_2,
     NUM_BUTTONS
 };
 

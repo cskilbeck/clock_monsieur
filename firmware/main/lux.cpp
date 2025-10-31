@@ -29,10 +29,12 @@
 
 #define LTR303_I2C_ADDR 0x29
 #define LTR303_CONF_ADDR 0x80
+#define LTR303_RATE_ADDR 0x85
 #define LTR303_DATA_CH1 0x88
 #define LTR303_DATA_CH0 0x8A
 
-#define LTR303_SETUP_CONF 0x01
+#define LTR303_SETUP_CONF 0b00001101
+#define LTR303_SETUP_RATE 0b00010010
 
 #if USE_DEVICE == VEML3235_DEVICE
 #define INIT_DEVICE veml3235_init
@@ -64,6 +66,14 @@ namespace
 
         value = (data[1] << 8) | data[0];
         return ESP_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    esp_err_t write_register(uint8_t reg_addr, uint8_t value)
+    {
+        uint8_t reg[2] = { reg_addr, value };
+        return i2c_master_transmit(i2c_device_handle, reg, sizeof(reg), I2C_TIMEOUT_MS);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -115,11 +125,11 @@ namespace
         };
         ESP_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &handle));
 
-        // Register address + 1 data byte
-        uint8_t write_data[2] = { LTR303_CONF_ADDR, LTR303_SETUP_CONF };
-
-        ESP_CHECK(i2c_master_transmit(handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS));
         i2c_device_handle = handle;
+
+        ESP_CHECK(write_register(LTR303_CONF_ADDR, LTR303_SETUP_CONF));
+        ESP_CHECK(write_register(LTR303_RATE_ADDR, LTR303_SETUP_RATE));
+
         return ESP_OK;
     }
 

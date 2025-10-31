@@ -1,0 +1,18 @@
+
+- bigger less ridiculous buttons
+- add reset button
+- use GPIO0 for one of the buttons
+
+- fix usb/jtag
+- diagnose esp-prog boot / reset problem
+- fix esp-prog header pinout
+
+- half-bridge driver for anodes + n channel level shifter
+- measure/tweak cc drain capacitors
+
+- 4 layers
+- shrink clock face radius
+- flip clock leds, anode on the outside
+- A15/A14 at the top (the long ones)
+- test points everywhere
+- tweak TLC5948 footprint

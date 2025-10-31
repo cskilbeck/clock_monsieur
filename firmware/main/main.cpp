@@ -55,9 +55,13 @@ namespace
         int max = 255;
         int range = max - base;
         int b = (int)(t * range) + base;
+        b = 255;
         uint8_t c = (uint8_t)(b / 2);
         display.fcontrol.global_bc = c;
         uint8_t d = (uint8_t)((b + 1) / 2);
+        if(d > 127) {
+            d = 127;
+        }
         for(int i = 0; i < 16; ++i) {
             display.fcontrol.set_dc(i, d);
         }
@@ -68,8 +72,8 @@ namespace
 extern "C" void app_main()
 {
     // disable brownout detector
-    // REG_CLR_BIT(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_BOD_RST);
-    // REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ANA_RST_EN);
+    REG_CLR_BIT(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_BOD_RST);
+    REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ANA_RST_EN);
 
     esp_err_t ret = nvs_flash_init();
     if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -100,16 +104,14 @@ extern "C" void app_main()
 
         uint16_t *backbuffer = dd.grayscale_buffer;
 #if 1
-        if(buttons[0].held & ((frames & 1) == 0)) {
+        if(buttons[0].pressed) {
             scroll += 1;
+            LOG_INFO("%d", scroll);
         }
         memset(backbuffer, 0, 512);
-        for(int i = 0; i < 16; ++i) {
-            int x = 15 - ((scroll + i) & 15);
-            backbuffer[i] = gamma_get(x * 2047 / 15);
-        }
+        backbuffer[scroll & 0xff] = 2047;
 #else
-        for(int i = 0; i < 16; ++i) {
+        for(int i = 0; i < 256; ++i) {
             int x = a[i] + b[i];
             if(x < 0) {
                 x = b[i] = v();

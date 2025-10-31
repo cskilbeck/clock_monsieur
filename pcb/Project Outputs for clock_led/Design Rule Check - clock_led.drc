@@ -1,0 +1,136 @@
+Protel Design System Design Rule Check
+PCB File : E:\dev\clock_monsieur\pcb\clock_led.PcbDoc
+Date     : 31 Oct 2025
+Time     : 18:14:59
+
+Processing Rule : Clearance Constraint (Gap=4mil) (All),(All)
+   Violation between Clearance Constraint: (2.689mil < 4mil) Between Track (374.992mil,1728.508mil)(397.257mil,1706.243mil) on TL And Via (413.661mil,1714.728mil) from TL to BL 
+   Violation between Clearance Constraint: (0.705mil < 4mil) Between Track (377.284mil,1698.243mil)(426.726mil,1698.243mil) on TL And Via (413.661mil,1714.728mil) from TL to BL 
+   Violation between Clearance Constraint: (Collision < 4mil) Between Track (397.257mil,1706.243mil)(430.04mil,1706.243mil) on TL And Via (413.661mil,1714.728mil) from TL to BL 
+   Violation between Clearance Constraint: (2.667mil < 4mil) Between Track (430.04mil,1706.243mil)(758.225mil,1378.058mil) on TL And Via (413.661mil,1714.728mil) from TL to BL 
+Rule Violations :4
+
+Processing Rule : Clearance Constraint (Gap=4mil) (InNetClass('K[0..15]')),(InNetClass('K[0..15]'))
+Rule Violations :0
+
+Processing Rule : Short-Circuit Constraint (Allowed=No) (All),(All)
+   Violation between Short-Circuit Constraint: Between Track (397.257mil,1706.243mil)(430.04mil,1706.243mil) on TL And Via (413.661mil,1714.728mil) from TL to BL Location : [X = 39783.74mil][Y = 40879.472mil]
+Rule Violations :1
+
+Processing Rule : Un-Routed Net Constraint ( (All) )
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint:  
+   Violation between Un-Routed Net Constraint: Pad S1__1-1(413.661mil,2305.59mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__1-2(413.661mil,2285.905mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__1-4(413.661mil,2246.535mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__1-7(338.858mil,2285.905mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__2-1(413.661mil,2135.496mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__2-2(413.661mil,2115.811mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__2-4(413.661mil,2076.441mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__2-7(338.858mil,2115.811mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__3-1(413.661mil,1962.085mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__3-2(413.661mil,1942.4mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__3-3(413.661mil,1922.715mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__3-4(413.661mil,1903.03mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__3-7(338.858mil,1942.4mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__4-1(413.661mil,1793.468mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__4-3(413.661mil,1754.098mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__4-4(413.661mil,1734.413mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__4-7(338.858mil,1773.783mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__5-2(1982.984mil,1708.792mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__5-3(1982.984mil,1728.477mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__5-4(1982.984mil,1748.162mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__5-6(2057.788mil,1728.477mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__5-7(2057.788mil,1708.792mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__6-2(1982.984mil,1877.409mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__6-3(1982.984mil,1897.094mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__6-4(1982.984mil,1916.779mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__6-7(2057.788mil,1877.409mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__7-1(1982.984mil,2031.134mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__7-2(1982.984mil,2050.819mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__7-3(1982.984mil,2070.504mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__7-4(1982.984mil,2090.189mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__7-7(2057.788mil,2050.819mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__8-1(1982.984mil,2201.229mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__8-2(1982.984mil,2220.914mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__8-3(1982.984mil,2240.599mil) on BL 
+   Violation between Un-Routed Net Constraint: Pad S1__8-4(1982.984mil,2260.284mil) on BL 
+   Violation between Un-Routed Net Constraint: Net +5 Between Track (1982.984mil,1857.724mil)(2019.729mil,1857.724mil) on BL And Via (2019.729mil,1857.724mil) from TL to BL 
+   Violation between Un-Routed Net Constraint: Net +5 Between Via (2019.729mil,2201.229mil) from TL to BL And Track (2019.729mil,2201.229mil)(2057.788mil,2201.229mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2043.966mil,1922.684mil)(2049.872mil,1916.779mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2043.966mil,2096.094mil)(2049.872mil,2090.189mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2043.966mil,2266.189mil)(2049.872mil,2260.284mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2045.633mil,2065.917mil)(2050.221mil,2070.504mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2045.633mil,2236.011mil)(2050.221mil,2240.599mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2050.221mil,1897.094mil)(2057.788mil,1897.094mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (2050.748mil,1748.162mil)(2057.788mil,1748.162mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,1734.413mil)(346.635mil,1734.413mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,1754.098mil)(345.807mil,1754.098mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,1903.03mil)(346.635mil,1903.03mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,1922.715mil)(345.807mil,1922.715mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,2076.441mil)(346.635mil,2076.441mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,2096.126mil)(345.807mil,2096.126mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (338.858mil,2266.22mil)(345.807mil,2266.22mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (346.635mil,2246.535mil)(351.012mil,2242.158mil) on BL 
+   Violation between Un-Routed Net Constraint: Net A10 Between Track (413.661mil,1773.783mil)(413.853mil,1773.975mil) on BL And Track (413.853mil,1773.975mil)(427.518mil,1773.975mil) on BL 
+   Violation between Un-Routed Net Constraint: Net A4 Between Track (413.661mil,2096.126mil)(421.089mil,2096.126mil) on BL And Track (421.089mil,2096.126mil)(447.029mil,2070.185mil) on BL 
+   Violation between Un-Routed Net Constraint: Track (413.661mil,2266.22mil)(421.026mil,2266.22mil) on BL 
+   Violation between Un-Routed Net Constraint: Via (1919.291mil,1659.579mil) from TL to BL 
+Rule Violations :64
+
+Processing Rule : Modified Polygon (Allow modified: No), (Allow shelved: No)
+Rule Violations :0
+
+Processing Rule : Width Constraint (Min=3mil) (Max=39.37mil) (Preferred=4mil) (All)
+Rule Violations :0
+
+Processing Rule : Routing Layers(All)
+Rule Violations :0
+
+Processing Rule : Routing Via (Templates Used To Check Via: GND_VIA, LED_ROUTING, v70h30m0) (All)
+Rule Violations :0
+
+Processing Rule : Differential Pairs Uncoupled Length using the Gap Constraints (Min=10mil) (Max=10mil) (Prefered=10mil)  and Width Constraints (Min=15mil) (Max=15mil) (Prefered=15mil) (All)
+Rule Violations :0
+
+Processing Rule : Power Plane Connect Rule(Relief Connect )(Expansion=20mil) (Conductor Width=10mil) (Air Gap=10mil) (Entries=4) (All)
+Rule Violations :0
+
+Processing Rule : Hole Size Constraint (Min=1mil) (Max=236.22mil) (All)
+Rule Violations :0
+
+Processing Rule : Pads and Vias to follow the Drill pairs settings
+Rule Violations :0
+
+Processing Rule : Hole To Hole Clearance (Gap=10mil) (All),(All)
+Rule Violations :0
+
+Processing Rule : Minimum Solder Mask Sliver (Gap=3.937mil) (All),(All)
+Rule Violations :0
+
+Processing Rule : Silk To Solder Mask (Clearance=0mil) (False),(All)
+Rule Violations :0
+
+Processing Rule : Silk to Silk (Clearance=0mil) (All),(All)
+Rule Violations :0
+
+Processing Rule : Net Antennae (Tolerance=0mil) (All)
+   Violation between Net Antennae: Via (151.054mil,2232.365mil) from TL to BL 
+Rule Violations :1
+
+Processing Rule : Component Clearance Constraint ( Horizontal Gap = 4.921mil, Vertical Gap = 10mil ) (All),(All) 
+Rule Violations :0
+
+Processing Rule : Height Constraint (Min=0mil) (Max=1000mil) (Prefered=500mil) (All)
+Rule Violations :0
+
+
+Violations Detected : 70
+Waived Violations : 0
+Time Elapsed        : 00:00:00

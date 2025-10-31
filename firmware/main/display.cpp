@@ -189,7 +189,8 @@ namespace
         // 2560 would be correct value for 64uS @ 40MHz gptimer clock
         // But 2600 gives a tiny bit of headroom...
         gptimer_alarm_config_t alarm_config{};
-        alarm_config.alarm_count = 2600;
+        alarm_config.alarm_count = 12600;
+        // alarm_config.alarm_count = 2600;
         alarm_config.reload_count = 0;
         alarm_config.flags.auto_reload_on_alarm = true;
 
