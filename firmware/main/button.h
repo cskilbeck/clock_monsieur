@@ -8,6 +8,8 @@ enum button_id
     BUTTON_0,
     BUTTON_1,
     BUTTON_2,
+    BUTTON_3,
+    BUTTON_4,
     NUM_BUTTONS
 };
 

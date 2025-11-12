@@ -189,8 +189,8 @@ namespace
         // 2560 would be correct value for 64uS @ 40MHz gptimer clock
         // But 2600 gives a tiny bit of headroom...
         gptimer_alarm_config_t alarm_config{};
-        alarm_config.alarm_count = 12600;
-        // alarm_config.alarm_count = 2600;
+        // alarm_config.alarm_count = 12600;
+        alarm_config.alarm_count = 2600;
         alarm_config.reload_count = 0;
         alarm_config.flags.auto_reload_on_alarm = true;
 
@@ -302,13 +302,13 @@ namespace
             }
 
             // switch off previous column
-            gpio_ll_set_level(&GPIO, high_side_gpios[prev_column], 0);
+            gpio_ll_set_level(&GPIO, high_side_gpios[prev_column], 1);
 
             // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
 
             // switch on current column so it actually lights up
-            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
+            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 0);
 
             // next column
             prev_column = current_column;

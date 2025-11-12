@@ -18,7 +18,11 @@ LOG_CONTEXT("button");
 
 namespace
 {
-    button_t buttons[NUM_BUTTONS] = { { .gpio_num = BUTTON_0_GPIO }, { .gpio_num = BUTTON_1_GPIO }, { .gpio_num = BUTTON_2_GPIO } };
+    button_t buttons[NUM_BUTTONS] = { { .gpio_num = BUTTON_0_GPIO },
+                                      { .gpio_num = BUTTON_1_GPIO },
+                                      { .gpio_num = BUTTON_2_GPIO },
+                                      { .gpio_num = BUTTON_3_GPIO },
+                                      { .gpio_num = BUTTON_4_GPIO } };
 
     TaskHandle_t button_task_handle;
 

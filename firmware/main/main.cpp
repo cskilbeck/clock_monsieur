@@ -103,10 +103,9 @@ extern "C" void app_main()
         update_ambient(dd);
 
         uint16_t *backbuffer = dd.grayscale_buffer;
-#if 1
-        if(buttons[0].pressed) {
+#if 0
+        if(!buttons[0].pressed) {
             scroll += 1;
-            LOG_INFO("%d", scroll);
         }
         memset(backbuffer, 0, 512);
         backbuffer[scroll & 0xff] = 2047;
