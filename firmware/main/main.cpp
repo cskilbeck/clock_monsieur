@@ -1,6 +1,8 @@
 //////////////////////////////////////////////////////////////////////
 
 #include <cmath>
+#include <sys/time.h>
+#include <freertos/FreeRTOS.h>
 
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -11,6 +13,7 @@
 #include "provisioning.h"
 #include "lux.h"
 #include "button.h"
+#include "clock_time.h"
 
 #include "sdkconfig.h"
 
@@ -18,6 +21,8 @@ LOG_CONTEXT("main");
 
 namespace
 {
+    char const boot_msg[] = "     CLOCK MONSIEUR!      ";
+
     // approximate pow(2.2) for 11 bit fixed point: x^2 - (x^2 - x^3) / 4
     // and convert endianness for display buffer
     uint16_t gamma_get(uint16_t x)
@@ -28,42 +33,58 @@ namespace
         return __builtin_bswap16(x2_2);
     }
 
-    int16_t a[256];
-    int16_t b[256];
-
-    int v()
+    uint16_t gamma_getf(float x)
     {
-        return (rand() & 31) + 5;
+        float x2 = x * x;
+        float x3 = x2 * x;
+        float x2_2 = x2 - ((x2 - x3) * 0.25f);
+        return __builtin_bswap16(x2_2 * 2047.9f);
     }
 
-    float lux = 0.0f;
+    float smoothed_ambient = 0.0f;
+    float smooth_factor = 0.01f;
 
-    void update_ambient(display_data_t &display)
+    int update_ambient()
     {
         // ambient light response
-        float target = (float)lux_get();
-        lux += (target - lux) * .01f;
+        float ambient = (float)lux_get() * (1.0f / 65535);
+
+        smoothed_ambient = smooth_factor * ambient + (1.0f - smooth_factor) * smoothed_ambient;
 
         // ghetto inverse gamma ramp
-        float constexpr recip = 1.0f / 65535.0f;
-        float t = lux * recip;
-        t = 1.0f - t;
+        float t = 1.0f - smoothed_ambient;
         t = 1.0f - t * t * t;
 
         // scale lux to two 7 bit numbers
-        int base = 1;
+        int base = 2;
         int max = 255;
         int range = max - base;
-        int b = (int)(t * range) + base;
-        b = 255;
-        uint8_t c = (uint8_t)(b / 2);
-        display.fcontrol.global_bc = c;
-        uint8_t d = (uint8_t)((b + 1) / 2);
-        if(d > 127) {
-            d = 127;
-        }
-        for(int i = 0; i < 16; ++i) {
-            display.fcontrol.set_dc(i, d);
+        return (int)(t * range) + base;
+    }
+
+    int constexpr TAIL_LENGTH = 59;
+    int constexpr NUM_LEDS = 60;
+
+    void seconds_tail(display_t &display, int current_second, int current_microseconds)
+    {
+        float T = (float)current_microseconds / 1000000.0f;
+
+        for(int i = 0; i < NUM_LEDS; i++) {
+            int D = (current_second - i + NUM_LEDS) % NUM_LEDS;
+            float intensity = 0.0f;
+            if(D == 0) {
+                intensity = T;
+
+            } else if(D >= 1 && D <= TAIL_LENGTH) {
+                float x = (float)D - 1.0f + T;
+                intensity = 1.0f - (x / TAIL_LENGTH);
+                // if(intensity < 0.0f) {
+                //     intensity = 0.0f;
+                // }
+            } else {
+                intensity = 0.0f;
+            }
+            display.set_second(gamma_getf(intensity), i);
         }
     }
 
@@ -83,44 +104,49 @@ extern "C" void app_main()
     ESP_LOG_ERR(ret);
 
     provisioning_init();
+
+    xTaskCreate(clock_time_task, "clock_time", 4096, NULL, 5, NULL);
+
     lux_init();
     display_init();
     button_init();
 
     button_t buttons[NUM_BUTTONS] = {};
 
-    for(int i = 0; i < 256; ++i) {
-        a[i] = 0;
-        b[i] = v();
-    }
-
     int frames = 0;
-    int scroll = 0;
     while(true) {
-        display_data_t &dd = display_update();
+        display_t &display = display_update();
         button_get(buttons);
 
-        update_ambient(dd);
+        int b;
+        if(frames < sizeof(boot_msg) * 6) {
+            b = 255;
+        } else {
+            b = update_ambient();
+            // if((frames & 63) == 0) {
+            //     LOG_INFO("%d", b);
+            // }
+        }
+        if(buttons[2].held) {
+            b = 255;
+        }
+        display.set_ambient(b);
 
-        uint16_t *backbuffer = dd.grayscale_buffer;
-#if 0
-        if(!buttons[0].pressed) {
-            scroll += 1;
+        display.cls(0);
+
+        if(frames < sizeof(boot_msg) * 6 + 30) {
+            display.draw_string(boot_msg, 30 - frames, 0, 2047);
+        } else {
+            struct timeval tv_now;
+            gettimeofday(&tv_now, NULL);
+            int hours = tv_now.tv_sec / 3600;
+            int hour = tv_now.tv_sec % 3600;
+            int minutes = hour / 60;
+            int seconds = hour % 60;
+            display.cls(0);
+            display.draw_time(hours, minutes, gamma_get(2000), gamma_get(2000));
+            seconds_tail(display, seconds, tv_now.tv_usec);
         }
-        memset(backbuffer, 0, 512);
-        backbuffer[scroll & 0xff] = 2047;
-#else
-        for(int i = 0; i < 256; ++i) {
-            int x = a[i] + b[i];
-            if(x < 0) {
-                x = b[i] = v();
-            } else if(x > 2040) {
-                x = 2040 + (b[i] = -v());
-            }
-            a[i] = (int16_t)x;
-            backbuffer[i] = gamma_get((int16_t)x);
-        }
-#endif
         frames += 1;
     }
 }

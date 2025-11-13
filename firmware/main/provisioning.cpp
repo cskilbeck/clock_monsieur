@@ -3,7 +3,6 @@
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/event_groups.h>
 
 #include <esp_log.h>
 #include <esp_err.h>
@@ -14,6 +13,8 @@
 #include <wifi_provisioning/manager.h>
 
 #include <wifi_provisioning/scheme_ble.h>
+
+#include "provisioning.h"
 
 #define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 1
 #define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 0
@@ -27,10 +28,9 @@
 #define EXAMPLE_PROV_SEC2_PWD "abcd1234"
 #endif
 
-const int WIFI_CONNECTED_EVENT = BIT0;
-
 static char const *TAG = "provisioning";
-static EventGroupHandle_t wifi_event_group;
+
+EventGroupHandle_t wifi_event_group;
 
 /* This salt,verifier has been generated for username = "wifiprov" and password = "abcd1234"
  * IMPORTANT NOTE: Forses, this m production caust be unique to every device

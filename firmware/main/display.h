@@ -33,11 +33,28 @@ struct fcontrol_data_t
 
 static_assert(sizeof(fcontrol_data_t) == 256 / 8);
 
-struct display_data_t
+extern uint16_t const matrix_lookup[7][26];
+
+struct display_t
 {
     fcontrol_data_t fcontrol;
     uint16_t grayscale_buffer[256];
+
+    inline uint16_t *matrix(int x, int y)
+    {
+        return &grayscale_buffer[matrix_lookup[y][x]];
+    }
+
+    void set_ambient(int b);
+    void cls(int color);
+    void set_pixel(uint16_t color, uint8_t n);
+    void set_second(uint16_t color, uint8_t second);
+    void draw_char(int c, int x, int y, int color);
+    void draw_string(const char *str, int x, int y, int color);
+    void draw_time(int hours, int minutes, int color, int colon_color);
 };
+
+//////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////
 
@@ -45,4 +62,4 @@ struct display_data_t
 void display_init();
 
 // wait for display refresh, returns current backbuffer (256 pixels)
-display_data_t &display_update();
+display_t &display_update();

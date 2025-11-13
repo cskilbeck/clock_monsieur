@@ -5,12 +5,15 @@ idf_component_register(
         lux.cpp
         button.cpp
         provisioning.cpp
+        clock_time.cpp
     PRIV_REQUIRES
         driver
         bt
         nvs_flash
         mbedtls
         wifi_provisioning
+        json
+        esp_http_client
     INCLUDE_DIRS
         .
 )

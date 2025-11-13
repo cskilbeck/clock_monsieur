@@ -33,8 +33,8 @@
 #define LTR303_DATA_CH1 0x88
 #define LTR303_DATA_CH0 0x8A
 
-#define LTR303_SETUP_CONF 0b00001101
-#define LTR303_SETUP_RATE 0b00010010
+#define LTR303_SETUP_CONF 0b00011101
+#define LTR303_SETUP_RATE 0b00011011
 
 #if USE_DEVICE == VEML3235_DEVICE
 #define INIT_DEVICE veml3235_init
@@ -169,7 +169,10 @@ namespace
 
             uint16_t lux_value[2];
             if(READ_LUX(lux_value) == ESP_OK) {
-                brightness = lux_value[1];
+                if(lux_value[1] > lux_value[0]) {
+                    lux_value[0] = lux_value[1];
+                }
+                brightness = lux_value[0];
             }
             vTaskDelay(pdMS_TO_TICKS(100));
         }
