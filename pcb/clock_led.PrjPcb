@@ -696,6 +696,36 @@ OutputName12=Web Review Data
 OutputDocumentPath12=
 OutputVariantName12=
 OutputDefault12=0
+OutputType13=Ansoft Neutral
+OutputName13=Ansoft Neutral (AutoPCB)
+OutputDocumentPath13=
+OutputVariantName13=
+OutputDefault13=0
+OutputType14=HyperLynx
+OutputName14=HyperLynx (AutoPCB)
+OutputDocumentPath14=
+OutputVariantName14=
+OutputDefault14=0
+OutputType15=MathWorks
+OutputName15=MathWorks (AutoPCB)
+OutputDocumentPath15=
+OutputVariantName15=
+OutputDefault15=0
+OutputType16=Orcad v7 Capture Design
+OutputName16=Orcad v7 Capture Design (AutoSCH)
+OutputDocumentPath16=
+OutputVariantName16=
+OutputDefault16=0
+OutputType17=P-CAD ASCII
+OutputName17=P-CAD ASCII (AutoPCB)
+OutputDocumentPath17=
+OutputVariantName17=
+OutputDefault17=0
+OutputType18=P-CAD V16 Schematic Design
+OutputName18=P-CAD V16 Schematic Design (AutoSCH)
+OutputDocumentPath18=
+OutputVariantName18=
+OutputDefault18=0
 
 [OutputGroup10]
 Name=PostProcess Outputs
@@ -1215,22 +1245,22 @@ Net17=NetName=A8|NetColor=$00E915EB
 Net18=NetName=A9|NetColor=$00E915EB
 Net19=NetName=GND|NetColor=$0000BE00
 Net20=NetName=K[0..15]|NetColor=clYellow
-Net21=NetName=K0|NetColor=$0015E6ED
-Net22=NetName=K1|NetColor=$0015E6ED
-Net23=NetName=K10|NetColor=$0015E6ED
-Net24=NetName=K11|NetColor=$0015E6ED
-Net25=NetName=K12|NetColor=$0015E6ED
-Net26=NetName=K13|NetColor=$0015E6ED
-Net27=NetName=K14|NetColor=$0015E6ED
-Net28=NetName=K15|NetColor=$0015E6ED
-Net29=NetName=K2|NetColor=$0015E6ED
-Net30=NetName=K3|NetColor=$0015E6ED
-Net31=NetName=K4|NetColor=$0015E6ED
-Net32=NetName=K5|NetColor=$0015E6ED
-Net33=NetName=K6|NetColor=$0015E6ED
-Net34=NetName=K7|NetColor=$0015E6ED
-Net35=NetName=K8|NetColor=$0015E6ED
-Net36=NetName=K9|NetColor=$0015E6ED
+Net21=NetName=K0|NetColor=$003495CC
+Net22=NetName=K1|NetColor=$003495CC
+Net23=NetName=K10|NetColor=$003495CC
+Net24=NetName=K11|NetColor=$003495CC
+Net25=NetName=K12|NetColor=$003495CC
+Net26=NetName=K13|NetColor=$003495CC
+Net27=NetName=K14|NetColor=$003495CC
+Net28=NetName=K15|NetColor=$003495CC
+Net29=NetName=K2|NetColor=$003495CC
+Net30=NetName=K3|NetColor=$003495CC
+Net31=NetName=K4|NetColor=$003495CC
+Net32=NetName=K5|NetColor=$003495CC
+Net33=NetName=K6|NetColor=$003495CC
+Net34=NetName=K7|NetColor=$003495CC
+Net35=NetName=K8|NetColor=$003495CC
+Net36=NetName=K9|NetColor=$003495CC
 Net37=NetName=NetS_2|NetColor=$00E915EB
 Net38=NetName=NetS_3|NetColor=$00E915EB
 Net39=NetName=NetS_D1_2|NetColor=$00E915EB
