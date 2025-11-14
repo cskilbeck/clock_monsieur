@@ -74,13 +74,9 @@ namespace
             float intensity = 0.0f;
             if(D == 0) {
                 intensity = T;
-
             } else if(D >= 1 && D <= TAIL_LENGTH) {
                 float x = (float)D - 1.0f + T;
                 intensity = 1.0f - (x / TAIL_LENGTH);
-                // if(intensity < 0.0f) {
-                //     intensity = 0.0f;
-                // }
             } else {
                 intensity = 0.0f;
             }
