@@ -29,7 +29,7 @@
 #include "gpio_defs.h"
 #include "util.h"
 
-#include "../../font/font_data_2.h"
+#include "../../font/font_data.h"
 
 //////////////////////////////////////////////////////////////////////
 
@@ -104,7 +104,7 @@ void display_t::set_second(uint16_t color, uint8_t second)
 
 //////////////////////////////////////////////////////////////////////
 
-void display_t::draw_char(int c, int x, int y, int color)
+int display_t::draw_char(int c, int x, int y, int color)
 {
     constexpr int glyph_height = 7;
     constexpr int glyph_width = 6;
@@ -117,16 +117,21 @@ void display_t::draw_char(int c, int x, int y, int color)
         c = 95;
     }
 
-    // 8 bytes per char
+    glyph_t &glyph = font_6x7[c];
+
+    int shift_bits = glyph.shift;
+    int width_bits = glyph.width;
+
     c *= glyph_height;
-    uint8_t const *char_data = FONT_6X7 + c;
+    uint8_t const *char_data = glyph.data;
 
     // fully clipped?
     if(y <= -glyph_height) {
-        return;
+        return width_bits;
     }
-    if(x <= -glyph_width) {
-        return;
+
+    if(x <= -width_bits) {
+        return width_bits;
     }
 
     // y clip
@@ -142,11 +147,11 @@ void display_t::draw_char(int c, int x, int y, int color)
     }
 
     // x clip
-    int shift = 2;
-    int x_end = x + glyph_width;
+    int shift = shift_bits;
+    int x_end = x + width_bits;
     if(x < 0) {
         int clip = -x;
-        shift = clip + 2;
+        shift += clip;
         x_end = glyph_width - clip;
         x = 0;
     }
@@ -165,17 +170,36 @@ void display_t::draw_char(int c, int x, int y, int color)
             row >>= 1;
         }
     }
+    return width_bits;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void display_t::draw_string(const char *str, int x, int y, int color)
+int display_t::draw_string(const char *str, int x, int y, int color)
 {
+    int width = 0;
     while(*str) {
-        draw_char(*str, x, y, color);
+        int w = draw_char(*str, x, y, color) + 1;
         ++str;
-        x += 6;
+        x += w;
+        width += w;
     }
+    return width;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int measure_string(const char *str)
+{
+    int width = 0;
+    while(int c = *str++) {
+        c -= 32;
+        if(c < 0 || c > 95) {
+            c = 95;
+        }
+        width += font_6x7[c].width + 1;
+    }
+    return width;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -188,14 +212,13 @@ void display_t::draw_time(int hours, int minutes, int color, int colon_color)
         hours = 12;
     }
     minutes %= 60;
-    sprintf(buffer, "%2d", hours);
-    draw_string(buffer, 0, 0, color);
-    sprintf(buffer, "%02d", minutes);
-    draw_string(buffer, 25 - 10, 0, color);
+    sprintf(buffer, "%2d%02d", hours, minutes);
+    draw_char(buffer[0], 0, 0, color);
+    draw_char(buffer[1], 6, 0, color);
+    draw_char(buffer[2], 14, 0, color);
+    draw_char(buffer[3], 20, 0, color);
     grayscale_buffer[matrix_lookup[2][12]] = colon_color;
-    grayscale_buffer[matrix_lookup[2][13]] = colon_color;
     grayscale_buffer[matrix_lookup[4][12]] = colon_color;
-    grayscale_buffer[matrix_lookup[4][13]] = colon_color;
 }
 
 //////////////////////////////////////////////////////////////////////

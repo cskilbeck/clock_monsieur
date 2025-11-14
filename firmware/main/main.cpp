@@ -21,7 +21,7 @@ LOG_CONTEXT("main");
 
 namespace
 {
-    char const boot_msg[] = "     CLOCK MONSIEUR!      ";
+    char const boot_msg[] = "Clock Monsieur!";
 
     // approximate pow(2.2) for 11 bit fixed point: x^2 - (x^2 - x^3) / 4
     // and convert endianness for display buffer
@@ -70,7 +70,7 @@ namespace
         float T = (float)current_microseconds / 1000000.0f;
 
         for(int i = 0; i < NUM_LEDS; i++) {
-            int D = (current_second - i + NUM_LEDS) % NUM_LEDS;
+            int D = (current_second - i + NUM_LEDS + 1) % NUM_LEDS;
             float intensity = 0.0f;
             if(D == 0) {
                 intensity = T;
@@ -109,13 +109,21 @@ extern "C" void app_main()
 
     button_t buttons[NUM_BUTTONS] = {};
 
+    int boot_msg_width = measure_string(boot_msg);
+
     int frames = 0;
     while(true) {
         display_t &display = display_update();
         button_get(buttons);
 
+        int x = 30 - frames / 2;
+
+        if(buttons[0].held) {
+            x = 0;
+        }
+
         int b;
-        if(frames < sizeof(boot_msg) * 6) {
+        if(x >= -boot_msg_width) {
             b = 255;
         } else {
             b = update_ambient();
@@ -130,8 +138,8 @@ extern "C" void app_main()
 
         display.cls(0);
 
-        if(frames < sizeof(boot_msg) * 6 + 30) {
-            display.draw_string(boot_msg, 30 - frames, 0, 2047);
+        if(x >= -boot_msg_width) {
+            display.draw_string(boot_msg, x, 0, 2047);
         } else {
             struct timeval tv_now;
             gettimeofday(&tv_now, NULL);

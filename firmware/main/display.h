@@ -35,6 +35,8 @@ static_assert(sizeof(fcontrol_data_t) == 256 / 8);
 
 extern uint16_t const matrix_lookup[7][26];
 
+int measure_string(const char *str);
+
 struct display_t
 {
     fcontrol_data_t fcontrol;
@@ -49,8 +51,8 @@ struct display_t
     void cls(int color);
     void set_pixel(uint16_t color, uint8_t n);
     void set_second(uint16_t color, uint8_t second);
-    void draw_char(int c, int x, int y, int color);
-    void draw_string(const char *str, int x, int y, int color);
+    int draw_char(int c, int x, int y, int color);
+    int draw_string(const char *str, int x, int y, int color);
     void draw_time(int hours, int minutes, int color, int colon_color);
 };
 
