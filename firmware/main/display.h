@@ -42,21 +42,8 @@ struct display_t
     fcontrol_data_t fcontrol;
     uint16_t grayscale_buffer[256];
 
-    inline uint16_t *matrix(int x, int y)
-    {
-        return &grayscale_buffer[matrix_lookup[y][x]];
-    }
-
     void set_ambient(int b);
-    void cls(int color);
-    void set_pixel(uint16_t color, uint8_t n);
-    void set_second(uint16_t color, uint8_t second);
-    int draw_char(int c, int x, int y, int color);
-    int draw_string(const char *str, int x, int y, int color);
-    void draw_time(int hours, int minutes, int color, int colon_color);
 };
-
-//////////////////////////////////////////////////////////////////////
 
 //////////////////////////////////////////////////////////////////////
 

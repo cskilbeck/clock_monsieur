@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         main.cpp
         display.cpp
+        graphics.cpp
         lux.cpp
         button.cpp
         provisioning.cpp

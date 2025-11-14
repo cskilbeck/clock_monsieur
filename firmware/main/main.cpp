@@ -10,6 +10,7 @@
 
 #include "util.h"
 #include "display.h"
+#include "graphics.h"
 #include "provisioning.h"
 #include "lux.h"
 #include "button.h"
@@ -22,24 +23,6 @@ LOG_CONTEXT("main");
 namespace
 {
     char const boot_msg[] = "Clock Monsieur!";
-
-    // approximate pow(2.2) for 11 bit fixed point: x^2 - (x^2 - x^3) / 4
-    // and convert endianness for display buffer
-    uint16_t gamma_get(uint16_t x)
-    {
-        int x2 = (x * x) >> 11;
-        int x3 = (x * x2) >> 11;
-        int x2_2 = x2 - ((x2 - x3) >> 2);
-        return __builtin_bswap16(x2_2);
-    }
-
-    uint16_t gamma_getf(float x)
-    {
-        float x2 = x * x;
-        float x3 = x2 * x;
-        float x2_2 = x2 - ((x2 - x3) * 0.25f);
-        return __builtin_bswap16(x2_2 * 2047.9f);
-    }
 
     float smoothed_ambient = 0.0f;
     float smooth_factor = 0.01f;
@@ -56,32 +39,10 @@ namespace
         t = 1.0f - t * t * t;
 
         // scale lux to two 7 bit numbers
-        int base = 2;
+        int base = 3;
         int max = 255;
         int range = max - base;
         return (int)(t * range) + base;
-    }
-
-    int constexpr TAIL_LENGTH = 59;
-    int constexpr NUM_LEDS = 60;
-
-    void seconds_tail(display_t &display, int current_second, int current_microseconds)
-    {
-        float T = (float)current_microseconds / 1000000.0f;
-
-        for(int i = 0; i < NUM_LEDS; i++) {
-            int D = (current_second - i + NUM_LEDS + 1) % NUM_LEDS;
-            float intensity = 0.0f;
-            if(D == 0) {
-                intensity = T;
-            } else if(D >= 1 && D <= TAIL_LENGTH) {
-                float x = (float)D - 1.0f + T;
-                intensity = 1.0f - (x / TAIL_LENGTH);
-            } else {
-                intensity = 0.0f;
-            }
-            display.set_second(gamma_getf(intensity), i);
-        }
     }
 
 }    // namespace
@@ -116,11 +77,11 @@ extern "C" void app_main()
         display_t &display = display_update();
         button_get(buttons);
 
-        int x = 30 - frames / 2;
-
-        if(buttons[0].held) {
-            x = 0;
+        if(buttons[0].pressed) {
+            frames = 0;
         }
+
+        int x = 30 - frames / 2;
 
         int b;
         if(x >= -boot_msg_width) {
@@ -136,10 +97,12 @@ extern "C" void app_main()
         }
         display.set_ambient(b);
 
-        display.cls(0);
+        graphics_t gfx(display);
 
-        if(x >= -boot_msg_width) {
-            display.draw_string(boot_msg, x, 0, 2047);
+        gfx.cls(0);
+
+        if(x >= -(boot_msg_width + 20)) {
+            gfx.draw_string(boot_msg, x, 0, 2047);
         } else {
             struct timeval tv_now;
             gettimeofday(&tv_now, NULL);
@@ -147,9 +110,9 @@ extern "C" void app_main()
             int hour = tv_now.tv_sec % 3600;
             int minutes = hour / 60;
             int seconds = hour % 60;
-            display.cls(0);
-            display.draw_time(hours, minutes, gamma_get(2000), gamma_get(2000));
-            seconds_tail(display, seconds, tv_now.tv_usec);
+            gfx.cls(0);
+            gfx.draw_time(hours, minutes, gamma_get(2000), gamma_get(2000));
+            gfx.seconds_tail(seconds, tv_now.tv_usec);
         }
         frames += 1;
     }
