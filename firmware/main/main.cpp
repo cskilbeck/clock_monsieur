@@ -83,19 +83,12 @@ extern "C" void app_main()
 
         int x = 30 - frames / 2;
 
-        int b;
-        if(x >= -boot_msg_width) {
-            b = 255;
-        } else {
-            b = update_ambient();
-            // if((frames & 63) == 0) {
-            //     LOG_INFO("%d", b);
-            // }
+        int ambient = update_ambient();
+
+        if(x >= -boot_msg_width || buttons[2].held) {
+            ambient = 255;
         }
-        if(buttons[2].held) {
-            b = 255;
-        }
-        display.set_ambient(b);
+        display.set_ambient(ambient);
 
         graphics_t gfx(display);
 
@@ -105,7 +98,7 @@ extern "C" void app_main()
             gfx.draw_string(boot_msg, x, 0, 2047);
         } else {
             struct timeval tv_now;
-            gettimeofday(&tv_now, NULL);
+            get_time(&tv_now);
             int hours = tv_now.tv_sec / 3600;
             int hour = tv_now.tv_sec % 3600;
             int minutes = hour / 60;

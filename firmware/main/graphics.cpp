@@ -66,7 +66,7 @@ uint16_t gamma_getf(float x)
     float x2 = x * x;
     float x3 = x2 * x;
     float x2_2 = x2 - ((x2 - x3) * 0.25f);
-    return __builtin_bswap16(x2_2 * 2047.9f);
+    return __builtin_bswap16(x2_2 * 2047.5f);
 }
 
 //////////////////////////////////////////////////////////////////////

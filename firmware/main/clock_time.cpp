@@ -1,6 +1,8 @@
 //////////////////////////////////////////////////////////////////////
 
-#include <string.h>
+#include <cstring>
+#include <cmath>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -10,6 +12,12 @@
 #include "provisioning.h"
 #include "time.h"
 #include "util.h"
+
+
+namespace
+{
+    int timezone_offset_seconds = 0;
+}
 
 //////////////////////////////////////////////////////////////////////
 
@@ -40,6 +48,14 @@ static const char *TAG = "clock_time";
 double current_lat = 0.0;
 double current_lon = 0.0;
 char posix_tz_string[128] = "";
+
+//////////////////////////////////////////////////////////////////////
+
+void get_time(struct timeval *tv_now)
+{
+    gettimeofday(tv_now, NULL);
+    tv_now->tv_sec += timezone_offset_seconds;
+}
 
 //////////////////////////////////////////////////////////////////////
 // Context structure to hold response data for an HTTP request
@@ -161,18 +177,26 @@ esp_err_t get_location_data()
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-#define LOCATION_TESTING
+    // #define LOCATION_TESTING
 
 #if defined(LOCATION_TESTING)
     ESP_LOGI(TAG, "!!!!!!!!!!!!! LOCATION TESTING !!!!!!!!!!!!!!!!");
 
-    double const sydney_lat = -33.978364;
-    double const sydney_lon = 151.164000;
-    double const tokyo_lat = 35.691048;
-    double const tokyo_lon = 139.781079;
+    // double const sydney_lat = -33.978364;
+    // double const sydney_lon = 151.164000;
+    // current_lat = sydney_lat;
+    // current_lon = sydney_lon;
 
-    current_lat = sydney_lat;
-    current_lon = sydney_lon;
+    // double const tokyo_lat = 35.691048;
+    // double const tokyo_lon = 139.781079;
+    // current_lat = tokyo_lat;
+    // current_lon = tokyo_lon;
+
+    double const sao_paulo_lat = -23.671787;
+    double const sao_paulo_lon = -46.666755;
+    current_lat = sao_paulo_lat;
+    current_lon = sao_paulo_lon;
+
 #else
     current_lat = lat_item->valuedouble;
     current_lon = lon_item->valuedouble;
@@ -225,27 +249,22 @@ esp_err_t get_timezone_data()
         ESP_LOGE(TAG, "Error getting timezone: status = %s", status->valuestring);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    cJSON *offset_item = cJSON_GetObjectItemCaseSensitive(root, "gmtOffset");
-    cJSON *zone_name_item = cJSON_GetObjectItemCaseSensitive(root, "zoneName");
-    cJSON *abbreviation_item = cJSON_GetObjectItemCaseSensitive(root, "abbreviation");
+    // cJSON *zone_name_item = cJSON_GetObjectItemCaseSensitive(root, "zoneName");
+    // cJSON *abbreviation_item = cJSON_GetObjectItemCaseSensitive(root, "abbreviation");
+    // cJSON *next_abbreviation_item = cJSON_GetObjectItemCaseSensitive(root, "nextAbbreviation");
+    // const char *abbr = cJSON_IsString(abbreviation_item) ? abbreviation_item->valuestring : "GMT";
+    // const char *nxt_abbr = cJSON_IsString(next_abbreviation_item) ? next_abbreviation_item->valuestring : "GMT";
 
-    if(!(cJSON_IsNumber(offset_item) && cJSON_IsString(zone_name_item))) {
+    cJSON *dst_item = cJSON_GetObjectItemCaseSensitive(root, "dst");
+    int dst = cJSON_IsString(dst_item) ? atoi(dst_item->valuestring) : 0;
+
+    cJSON *offset_item = cJSON_GetObjectItemCaseSensitive(root, "gmtOffset");
+    if(!(cJSON_IsNumber(offset_item))) {
         ESP_LOGE(TAG, "Bad JSON!?");
         return ESP_ERR_INVALID_RESPONSE;
     }
-    int gmtOffset_sec = offset_item->valueint;
-    const char *zoneName = zone_name_item->valuestring;
-    const char *abbr = cJSON_IsString(abbreviation_item) ? abbreviation_item->valuestring : "XXX";
+    timezone_offset_seconds = offset_item->valueint;
 
-    // The standard POSIX TZ format is "STDOFFSET[DST[DSOFFSET][,rule]]"
-    // ESP-IDF uses a simpler format: setenv("TZ", <TZ_STRING>); tzset();
-    // Example: "EST5EDT,M3.2.0/2:00:00,M11.1.0/2:00:00"
-
-    // TimeZoneDB's response contains the zone name (e.g., "America/New_York"),
-    // which is the simplest string to use for automatic TZ/DST setting.
-    snprintf(posix_tz_string, sizeof(posix_tz_string), "%s", zoneName);
-
-    ESP_LOGI(TAG, "Time Zone: %s (Offset: %d seconds)", zoneName, gmtOffset_sec);
     return ESP_OK;
 }
 
@@ -309,17 +328,7 @@ void clock_time_task(void *pvParameter)
 
         // get timezone from current location
         if(get_location_data() == ESP_OK) {
-            if(get_timezone_data() == ESP_OK) {
-                if(strlen(posix_tz_string) > 0) {
-                    ESP_LOGI(TAG, "Setting Timezone to: %s", posix_tz_string);
-                    setenv("TZ", posix_tz_string, 1);
-                } else {
-                    // Fallback to UTC if automatic detection fails
-                    ESP_LOGW(TAG, "No timezone set. Defaulting to UTC/GMT.");
-                    setenv("TZ", "GMT0", 1);
-                }
-                tzset();
-            }
+            get_timezone_data();
         }
 
         // wait one minute
