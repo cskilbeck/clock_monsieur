@@ -1,18 +1,35 @@
+X add reset button
+X use GPIO0 for one of the buttons
+X fix usb/jtag
+X half-bridge driver for anodes + n channel level shifter
+X 4 layers
+X shrink clock face radius
+X flip clock leds, anode on the outside
+X A15/A14 at the top (the long ones)
+X test points everywhere
+X tweak TLC5948 footprint
+X fix esp-prog header pinout
+
+- provisioning stuff in factory partition
+- OTA firmware update
 
 - bigger less ridiculous buttons
-- add reset button
-- use GPIO0 for one of the buttons
-
-- fix usb/jtag
 - diagnose esp-prog boot / reset problem
-- fix esp-prog header pinout
-
-- half-bridge driver for anodes + n channel level shifter
 - measure/tweak cc drain capacitors
-
-- 4 layers
-- shrink clock face radius
-- flip clock leds, anode on the outside
-- A15/A14 at the top (the long ones)
-- test points everywhere
-- tweak TLC5948 footprint
+- frosted glass/gel problem
+- tweak Ambient light sensor gamma ramp
+- small font for menus
+- menus
+    - 12/24
+    - Seconds mode
+        - Tail 60
+        - Tail 30
+        - Single
+        - Fixed
+    - Seconds brightness
+    - Time brightness
+    - Auto brightness on/off
+    - Brightness 1..10
+    - Set timezone (!)
+        - Hard code DST ranges
+        - If DST ranges change, update OTA!

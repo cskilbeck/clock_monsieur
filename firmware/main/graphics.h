@@ -23,5 +23,7 @@ struct graphics_t
     void draw_time(int hours, int minutes, int color, int colon_color);
     void seconds_tail(int current_second, int current_microseconds);
 
+    void fade_matrix(graphics_t &a, graphics_t &b, int scale);    // 0 .. 2048
+
     display_t &display;
 };

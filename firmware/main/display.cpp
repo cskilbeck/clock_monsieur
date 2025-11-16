@@ -375,7 +375,7 @@ namespace
             toggle_latch();
 
             // start sending grayscale data
-            spi_kick((uint32_t const *)(front_buffer->grayscale_buffer + current_column * 16), 0);
+            spi_kick((uint32_t const *)(front_buffer->led + current_column * 16), 0);
         }
     }
 }    // namespace

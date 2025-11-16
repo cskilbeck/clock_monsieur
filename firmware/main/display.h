@@ -40,7 +40,7 @@ int measure_string(const char *str);
 struct display_t
 {
     fcontrol_data_t fcontrol;
-    uint16_t grayscale_buffer[256];
+    uint16_t led[256];
 
     void set_ambient(int b);
 };

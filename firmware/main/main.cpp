@@ -45,6 +45,9 @@ namespace
         return (int)(t * range) + base;
     }
 
+    display_t display_temp1;
+    display_t display_temp2;
+
 }    // namespace
 
 extern "C" void app_main()
@@ -97,15 +100,42 @@ extern "C" void app_main()
         if(x >= -(boot_msg_width + 20)) {
             gfx.draw_string(boot_msg, x, 0, 2047);
         } else {
+            // To make the minutes fade from one to the next:
+            // Create a fake time, one second behind
+            // So we have minutes_was, and minutes_now
+            // Draw minutes_was into temp buffer
+            // Draw minutes_now into current buffer
+            // Both WITHOUT gamma correction
+            // Then fade between them based on fraction of current second
+            // Then gamma correct into current buffer
             struct timeval tv_now;
             get_time(&tv_now);
             int hours = tv_now.tv_sec / 3600;
-            int hour = tv_now.tv_sec % 3600;
-            int minutes = hour / 60;
-            int seconds = hour % 60;
-            gfx.cls(0);
-            gfx.draw_time(hours, minutes, gamma_get(2000), gamma_get(2000));
+            int hour_seconds = tv_now.tv_sec % 3600;
+            int minutes = hour_seconds / 60;
+
+            int seconds = hour_seconds % 60;
             gfx.seconds_tail(seconds, tv_now.tv_usec);
+
+            int hours2 = (tv_now.tv_sec + 1) / 3600;
+            int hour_seconds2 = (tv_now.tv_sec + 1) % 3600;
+            int minutes2 = hour_seconds2 / 60;
+
+            graphics_t gfx_temp1(display_temp1);
+            graphics_t gfx_temp2(display_temp2);
+
+            gfx_temp1.cls(0);
+            gfx_temp2.cls(0);
+
+            gfx_temp1.draw_time(hours, minutes, 2047, 2047);
+            gfx_temp2.draw_time(hours2, minutes2, 2047, 2047);
+
+            // Now fade between current and next time
+            int scale = tv_now.tv_usec / (1000000 / 3200);
+            if(scale > 2048) {
+                scale = 2048;
+            }
+            gfx.fade_matrix(gfx_temp1, gfx_temp2, scale);
         }
         frames += 1;
     }

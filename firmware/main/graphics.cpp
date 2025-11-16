@@ -85,7 +85,7 @@ glyph_t const &get_glyph(int c)
 void graphics_t::cls(uint16_t color)
 {
     for(int i = 0; i < 256; ++i) {
-        display.grayscale_buffer[i] = color;
+        display.led[i] = color;
     }
 }
 
@@ -93,7 +93,7 @@ void graphics_t::cls(uint16_t color)
 
 void graphics_t::set_pixel(uint16_t color, uint8_t pixel)
 {
-    display.grayscale_buffer[pixel] = color;
+    display.led[pixel] = color;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -101,8 +101,8 @@ void graphics_t::set_pixel(uint16_t color, uint8_t pixel)
 void graphics_t::set_second(uint16_t color, uint8_t second)
 {
     uint16_t const *s = seconds_hours_lookup + second * 2;
-    display.grayscale_buffer[s[0]] = color;
-    display.grayscale_buffer[s[1]] = color;
+    display.led[s[0]] = color;
+    display.led[s[1]] = color;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -158,7 +158,7 @@ int graphics_t::draw_char(int c, int x, int y, int color)
         row >>= shift;
         for(int sx = x; sx < x_end; ++sx) {
             if((row & 1) != 0) {
-                display.grayscale_buffer[matrix_lookup[y][sx]] = color;
+                display.led[matrix_lookup[y][sx]] = color;
             }
             row >>= 1;
         }
@@ -224,8 +224,8 @@ void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
     draw_char_centered(buffer[1], 8, 0, color);
     draw_char_centered(buffer[2], 16, 0, color);
     draw_char_centered(buffer[3], 22, 0, color);
-    display.grayscale_buffer[matrix_lookup[2][12]] = colon_color;
-    display.grayscale_buffer[matrix_lookup[4][12]] = colon_color;
+    display.led[matrix_lookup[2][12]] = colon_color;
+    display.led[matrix_lookup[4][12]] = colon_color;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -249,5 +249,20 @@ void graphics_t::seconds_tail(int current_second, int current_microseconds)
             intensity = 0.0f;
         }
         set_second(gamma_getf(intensity), i);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::fade_matrix(graphics_t &a, graphics_t &b, int scale)
+{
+    int other = 2048 - scale;
+    for(auto const &row : matrix_lookup) {
+        for(auto const index : row) {
+            int src = a.display.led[index] * other;
+            int dst = b.display.led[index] * scale;
+            display.led[index] = gamma_get((src + dst) >> 11);
+            // display.led[index] = gamma_get(b.display.led[index]);
+        }
     }
 }
