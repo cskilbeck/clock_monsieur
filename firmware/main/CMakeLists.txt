@@ -7,6 +7,7 @@ idf_component_register(
         button.cpp
         provisioning.cpp
         clock_time.cpp
+        settings.cpp
     PRIV_REQUIRES
         driver
         bt

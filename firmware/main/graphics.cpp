@@ -1,8 +1,9 @@
 //////////////////////////////////////////////////////////////////////
 
-#include "graphics.h"
 #include "stdio.h"
-#include "../../font/font_data.h"
+#include "graphics.h"
+#include "settings.h"
+#include "font_6x7.h"
 
 //////////////////////////////////////////////////////////////////////
 
@@ -107,14 +108,12 @@ void graphics_t::set_second(uint16_t color, uint8_t second)
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_char(int c, int x, int y, int color)
+int graphics_t::draw_char(glyph_t const &glyph, int x, int y, int color)
 {
     constexpr int glyph_height = 7;
     constexpr int glyph_width = 6;
     constexpr int screen_height = 7;
     constexpr int screen_width = 26;
-
-    glyph_t const &glyph = get_glyph(c);
 
     // fully clipped?
     if(y <= -glyph_height) {
@@ -170,16 +169,18 @@ int graphics_t::draw_char(int c, int x, int y, int color)
 
 int graphics_t::draw_char_centered(int c, int x, int y, int color)
 {
-    return draw_char(c, x - (get_glyph(c).width) / 2, y, color);
+    glyph_t const &glyph = get_glyph(c);
+    return draw_char(glyph, x - glyph.width / 2, y, color);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_string(const char *str, int x, int y, int color)
+int graphics_t::draw_string(char const *str, int x, int y, int color)
 {
     int width = 0;
     while(*str) {
-        int w = draw_char(*str, x, y, color) + 1;
+        glyph_t const &c = get_glyph(*str);
+        int w = draw_char(c, x, y, color) + 1;
         ++str;
         x += w;
         width += w;
@@ -208,9 +209,8 @@ void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
 {
     char buffer[16];
     minutes %= 60;
-    bool show_24_hours = true;
-    char const *fmt = "%2d%02d";
-    if(show_24_hours) {
+    char const *fmt;
+    if(settings.clock_mode == clock_mode_t::clock_mode_24_hour) {
         hours %= 24;
         fmt = "%02d%02d";
     } else {
@@ -218,6 +218,7 @@ void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
         if(hours == 0) {
             hours = 12;
         }
+        fmt = "%2d%02d";
     }
     sprintf(buffer, fmt, hours, minutes);
     draw_char_centered(buffer[0], 2, 0, color);
@@ -230,25 +231,48 @@ void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::seconds_tail(int current_second, int current_microseconds)
+void graphics_t::draw_seconds(int current_second, int current_microseconds)
 {
-    int constexpr TAIL_LENGTH = 59;
-    int constexpr NUM_LEDS = 60;
+    int TAIL_LENGTH = 59;
 
     float T = (float)current_microseconds / 1000000.0f;
 
-    for(int i = 0; i < NUM_LEDS; i++) {
-        int D = (current_second - i + NUM_LEDS + 1) % NUM_LEDS;
-        float intensity = 0.0f;
-        if(D == 0) {
-            intensity = T;
-        } else if(D >= 1 && D <= TAIL_LENGTH) {
-            float x = (float)D - 1.0f + T;
-            intensity = 1.0f - (x / TAIL_LENGTH);
-        } else {
-            intensity = 0.0f;
+    auto draw_tail = [this, current_second, T](int TAIL_LENGTH) {
+        int constexpr NUM_LEDS = 60;
+        for(int i = 0; i < NUM_LEDS; i++) {
+            int D = (current_second - i + NUM_LEDS + 1) % NUM_LEDS;
+            float intensity = 0.0f;
+            if(D == 0) {
+                intensity = T;
+            } else if(D >= 1 && D <= TAIL_LENGTH) {
+                float x = (float)D - 1.0f + T;
+                intensity = 1.0f - (x / TAIL_LENGTH);
+            } else {
+                intensity = 0.0f;
+            }
+            set_second(gamma_getf(intensity), i);
         }
-        set_second(gamma_getf(intensity), i);
+    };
+
+    switch(settings.seconds_mode) {
+    case seconds_mode_t::seconds_mode_fixed:
+        for(int i = 0; i < current_second; ++i) {
+            set_second(gamma_get(2047), i);
+        }
+        set_second(gamma_getf(T), current_second);
+        break;
+    case seconds_mode_t::seconds_mode_single:
+        set_second(gamma_get(2047), current_second);
+        break;
+    case seconds_mode_t::seconds_mode_tail_short:
+        draw_tail(10);
+        break;
+    case seconds_mode_t::seconds_mode_tail_medium:
+        draw_tail(30);
+        break;
+    case seconds_mode_t::seconds_mode_tail_long:
+        draw_tail(59);
+        break;
     }
 }
 

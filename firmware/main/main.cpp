@@ -1,7 +1,11 @@
 //////////////////////////////////////////////////////////////////////
 
 #include <cmath>
+#include <cstdio>
+#include <cerrno>
 #include <sys/time.h>
+#include <unistd.h>
+#include <sys/select.h>
 #include <freertos/FreeRTOS.h>
 
 #include "esp_log.h"
@@ -75,6 +79,8 @@ extern "C" void app_main()
 
     int boot_msg_width = measure_string(boot_msg);
 
+    bool full_brightness = false;
+
     int frames = 0;
     while(true) {
         display_t &display = display_update();
@@ -84,11 +90,15 @@ extern "C" void app_main()
             frames = 0;
         }
 
+        if(buttons[2].pressed) {
+            full_brightness = !full_brightness;
+        }
+
         int x = 30 - frames / 2;
 
         int ambient = update_ambient();
 
-        if(x >= -boot_msg_width || buttons[2].held) {
+        if(x >= -boot_msg_width || full_brightness) {
             ambient = 255;
         }
         display.set_ambient(ambient);
@@ -101,11 +111,8 @@ extern "C" void app_main()
             gfx.draw_string(boot_msg, x, 0, 2047);
         } else {
             // To make the minutes fade from one to the next:
-            // Create a fake time, one second behind
-            // So we have minutes_was, and minutes_now
-            // Draw minutes_was into temp buffer
-            // Draw minutes_now into current buffer
-            // Both WITHOUT gamma correction
+            // Create a fake time, one second ahead
+            // Draw both WITHOUT gamma correction
             // Then fade between them based on fraction of current second
             // Then gamma correct into current buffer
             struct timeval tv_now;
@@ -115,7 +122,7 @@ extern "C" void app_main()
             int minutes = hour_seconds / 60;
 
             int seconds = hour_seconds % 60;
-            gfx.seconds_tail(seconds, tv_now.tv_usec);
+            gfx.draw_seconds(seconds, tv_now.tv_usec);
 
             int hours2 = (tv_now.tv_sec + 1) / 3600;
             int hour_seconds2 = (tv_now.tv_sec + 1) % 3600;
@@ -130,7 +137,7 @@ extern "C" void app_main()
             gfx_temp1.draw_time(hours, minutes, 2047, 2047);
             gfx_temp2.draw_time(hours2, minutes2, 2047, 2047);
 
-            // Now fade between current and next time
+            // fade between current and next time
             int scale = tv_now.tv_usec / (1000000 / 3200);
             if(scale > 2048) {
                 scale = 2048;
