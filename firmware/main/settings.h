@@ -27,8 +27,7 @@ enum class seconds_mode_t : uint8_t
 struct settings_t
 {
     clock_mode_t clock_mode{ clock_mode_t::clock_mode_12_hour };
-    brightness_mode_t seconds_brightness_mode{ brightness_mode_t::brightness_mode_medium };
-    brightness_mode_t clock_brightness_mode{ brightness_mode_t::brightness_mode_medium };
+    brightness_mode_t brightness_mode{ brightness_mode_t::brightness_mode_high };
     seconds_mode_t seconds_mode{ seconds_mode_t::seconds_mode_tail_long };
 };
 

@@ -2,3 +2,4 @@
 .idea/
 .vscode/
 *.blend1
+build/

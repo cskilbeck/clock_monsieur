@@ -11,26 +11,29 @@
 #include <nvs_flash.h>
 
 #include <wifi_provisioning/manager.h>
-
 #include <wifi_provisioning/scheme_ble.h>
 
 #include "provisioning.h"
 
-#define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 1
-#define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 0
+static char const *TAG = "provisioning";
+
+#define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 0
+#define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 1
 
 #define PROV_QR_VERSION "v1"
 #define PROV_TRANSPORT_BLE "ble"
-#define QRCODE_BASE_URL "https://espressif.github.io/esp-jumpstart/qrcode.html"
+// #define QRCODE_BASE_URL "https://espressif.github.io/esp-jumpstart/qrcode.html"
 
-#if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
-#define EXAMPLE_PROV_SEC2_USERNAME "wifiprov"
-#define EXAMPLE_PROV_SEC2_PWD "abcd1234"
-#endif
-
-static char const *TAG = "provisioning";
+// Name, subtype of partition containing security info
+#define SEC_PARTITION_LABEL "prov_dat"
+#define SEC_PARTITION_SUBTYPE ((esp_partition_subtype_t)0x40)
 
 EventGroupHandle_t wifi_event_group;
+
+#if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
+
+#define EXAMPLE_PROV_SEC2_USERNAME "wifiprov"
+#define EXAMPLE_PROV_SEC2_PWD "abcd1234"
 
 /* This salt,verifier has been generated for username = "wifiprov" and password = "abcd1234"
  * IMPORTANT NOTE: Forses, this m production caust be unique to every device
@@ -60,30 +63,100 @@ static const char sec2_verifier[] = {
 
 static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
 {
-#if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
     ESP_LOGI(TAG, "Development mode: using hard coded salt");
     *salt = sec2_salt;
     *salt_len = sizeof(sec2_salt);
     return ESP_OK;
-#elif CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
-    ESP_LOGE(TAG, "Not implemented!");
-    return ESP_FAIL;
-#endif
 }
 
 static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 {
-#if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
     ESP_LOGI(TAG, "Development mode: using hard coded verifier");
     *verifier = sec2_verifier;
     *verifier_len = sizeof(sec2_verifier);
     return ESP_OK;
-#elif CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
-    /* This code needs to be updated with appropriate implementation to provide verifier */
-    ESP_LOGE(TAG, "Not implemented!");
-    return ESP_FAIL;
-#endif
 }
+
+#else
+
+// PROD MODE - get sec_info from 'prov_dat' partition
+
+// NOTE: This struct must line up with gen_sec.py
+struct sec_info_t
+{
+    uint8_t password_len;
+    char password[15];
+    char salt[16];
+    char verifier[384];
+};
+
+static sec_info_t sec_info{};
+
+void dump_hex(char *data, size_t len)
+{
+    char const *sep = "";
+    for(int i = 0; i < len; ++i) {
+        printf("%s%02x", sep, data[i]);
+        if(((i + 1) & 15) == 0) {
+            sep = "\n";
+        } else {
+            sep = " ";
+        }
+    }
+    printf("\n");
+}
+
+// Load the sec_info_t from the 'prov_dat' partition
+// This should have been written by gen_sec.py
+esp_err_t read_security_info()
+{
+    char const *TAG = "sec_info";
+
+    const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SEC_PARTITION_SUBTYPE, SEC_PARTITION_LABEL);
+
+    if(!partition) {
+        ESP_LOGE(TAG, "Partition '%s' not found!", SEC_PARTITION_LABEL);
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    if(sizeof(struct sec_info_t) > partition->size) {
+        ESP_LOGE(TAG, "Struct size (%zu) exceeds partition size (%zu)!", sizeof(struct sec_info_t), partition->size);
+        return ESP_ERR_INVALID_SIZE;
+    }
+    esp_err_t err = esp_partition_read(partition, 0, &sec_info, sizeof(struct sec_info_t));
+
+    if(err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read data from partition (0x%x)!", err);
+    }
+    ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
+    ESP_LOGI(TAG, "SALT:");
+    dump_hex(sec_info.salt, sizeof(sec_info.salt));
+    ESP_LOGI(TAG, "VERIFIER:");
+    dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
+    return err;
+}
+
+char const *provisioning_pop()
+{
+    return sec_info.password;
+}
+
+static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
+{
+    *salt = sec_info.salt;
+    *salt_len = sizeof(sec_info.salt);
+    return ESP_OK;
+}
+
+static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
+{
+    *verifier = sec_info.verifier;
+    *verifier_len = sizeof(sec_info.verifier);
+    return ESP_OK;
+}
+
+#endif    // CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
+
 
 /* Event handler for catching system events */
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -178,55 +251,8 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
 static void get_device_service_name(char *service_name, size_t max)
 {
     snprintf(service_name, max, "Clock Monsieur");
-    // uint8_t eth_mac[6];
-    // const char *ssid_prefix = "CLOCK_";
-    // esp_wifi_get_mac(WIFI_IF_STA, eth_mac);
-    // snprintf(service_name, max, "%s%02X%02X%02X", ssid_prefix, eth_mac[3], eth_mac[4], eth_mac[5]);
 }
 
-
-/* Handler for the optional provisioning endpoint registered by the application.
- * The data format can be chosen by applications. Here, we are using plain ascii text.
- * Applications can choose to use other formats like protobuf, JSON, XML, etc.
- * Note that memory for the response buffer must be allocated using heap as this buffer
- * gets freed by the protocomm layer once it has been sent by the transport layer.
- */
-esp_err_t custom_prov_data_handler(uint32_t session_id, const uint8_t *inbuf, ssize_t inlen, uint8_t **outbuf, ssize_t *outlen,
-                                   void *priv_data)
-{
-    if(inbuf) {
-        ESP_LOGI(TAG, "Received data: %.*s", inlen, (char *)inbuf);
-    }
-    char response[] = "SUCCESS";
-    *outbuf = (uint8_t *)strdup(response);
-    if(*outbuf == NULL) {
-        ESP_LOGE(TAG, "System out of memory");
-        return ESP_ERR_NO_MEM;
-    }
-    *outlen = strlen(response) + 1; /* +1 for NULL terminating byte */
-
-    return ESP_OK;
-}
-
-static void wifi_prov_print_qr(const char *name, const char *username, const char *pop, const char *transport)
-{
-    if(!name || !transport) {
-        ESP_LOGW(TAG, "Cannot generate QR code payload. Data missing.");
-        return;
-    }
-    char payload[150] = { 0 };
-    if(pop) {
-        snprintf(payload, sizeof(payload),
-                 "{\"ver\":\"%s\",\"name\":\"%s\""
-                 ",\"username\":\"%s\",\"pop\":\"%s\",\"transport\":\"%s\"}",
-                 PROV_QR_VERSION, name, username, pop, transport);
-    } else {
-        snprintf(payload, sizeof(payload),
-                 "{\"ver\":\"%s\",\"name\":\"%s\""
-                 ",\"transport\":\"%s\"}",
-                 PROV_QR_VERSION, name, transport);
-    }
-}
 
 void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *event_data)
 {
@@ -256,6 +282,10 @@ const wifi_prov_event_handler_t wifi_prov_event_handler = {
 
 esp_err_t provisioning_init()
 {
+#if CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
+    ESP_ERROR_CHECK(read_security_info());
+#endif
+
     /* Initialize TCP/IP */
     ESP_ERROR_CHECK(esp_netif_init());
 
@@ -281,8 +311,7 @@ esp_err_t provisioning_init()
     config.app_event_handler = wifi_prov_event_handler;
     config.scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
 
-    /* Initialize provisioning manager with the
-     * configuration parameters set above */
+    /* Initialize provisioning manager with the configuration parameters set above */
     ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
 
     bool provisioned = false;
@@ -297,26 +326,12 @@ esp_err_t provisioning_init()
          *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
          *     - device name when scheme is wifi_prov_scheme_ble
          */
-        // CLOCK_XXXXXX
         char service_name[16];
         get_device_service_name(service_name, sizeof(service_name));
 
         wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
         /* The username must be the same one, which has been used in the generation of salt and verifier */
 
-#if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
-        /* This pop field represents the password that will be used to generate salt and verifier.
-         * The field is present here in order to generate the QR code containing password.
-         * In production this password field shall not be stored on the device */
-        const char *username = EXAMPLE_PROV_SEC2_USERNAME;
-        const char *pop = EXAMPLE_PROV_SEC2_PWD;
-#elif CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
-        /* The username and password shall not be embedded in the firmware,
-         * they should be provided to the user by other means.
-         * e.g. QR code sticker */
-        const char *username = NULL;
-        const char *pop = NULL;
-#endif
         /* This is the structure for passing security parameters
          * for the protocomm security 2.
          * If dynamically allocated, sec2_params pointer and its content
@@ -355,36 +370,14 @@ esp_err_t provisioning_init()
          * the sdkconfig.defaults in the example project) */
         wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
 
-        /* An optional endpoint that applications can create if they expect to
-         * get some additional custom data during provisioning workflow.
-         * The endpoint name can be anything of your choice.
-         * This call must be made before starting the provisioning.
-         */
-        wifi_prov_mgr_endpoint_create("custom-data");
-
-        /* Do not stop and de-init provisioning even after success,
-         * so that we can restart it later. */
+        /* Do not stop and de-init provisioning even after success, so that we can restart it later. */
         /* Start provisioning service */
         ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, service_name, service_key));
 
-        /* The handler for the optional endpoint created above.
-         * This call must be made after starting the provisioning, and only if the endpoint
-         * has already been created above.
-         */
-        wifi_prov_mgr_endpoint_register("custom-data", custom_prov_data_handler, NULL);
-
-        /* Uncomment the following to wait for the provisioning to finish and then release
-         * the resources of the manager. Since in this case de-initialization is triggered
-         * by the default event loop handler, we don't need to call the following */
-        // wifi_prov_mgr_wait();
-        // wifi_prov_mgr_deinit();
-        /* Print QR code for provisioning */
-        wifi_prov_print_qr(service_name, username, pop, PROV_TRANSPORT_BLE);
     } else {
         ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
-        /* We don't need the manager as device is already provisioned,
-         * so let's release it's resources */
+        /* We don't need the manager as device is already provisioned, so let's release it's resources */
         wifi_prov_mgr_deinit();
 
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
@@ -393,8 +386,5 @@ esp_err_t provisioning_init()
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_start());
     }
-
-    /* Wait for Wi-Fi connection */
-    // xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, true, true, portMAX_DELAY);
     return ESP_OK;
 }

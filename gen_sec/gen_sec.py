@@ -13,28 +13,33 @@ import re
 import subprocess
 import sys
 import argparse
+import time
 from pathlib import Path
 from io import StringIO
+import qrcode
+from qrcode.constants import ERROR_CORRECT_L
 
 # --- CONFIGURATION & CONSTANTS ---
 PASSWORD_CHAR_SET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 PASSWORD_LENGTH = 4
 DEFAULT_USERNAME = "Clock_Monsieur"
 DEFAULT_PARTITION_NAME = "prov_dat"
+DEFAULT_SERVICE_NAME = "Clock Monsieur"
 TEMP_BINARY_FILENAME = "prov_creds.bin"
 PARTITION_TABLE_REL_PATH = Path("partition_table") / "partition-table.bin"
 PARTITION_TOOL_REL_PATH = Path("components") / "partition_table" / "gen_esp32part.py"
 
 # Storage sizes (must match C structure)
-PASSWORD_STORAGE_SIZE = 16
+PASSWORD_STORAGE_SIZE = 15
 SRP6A_SALT_LEN = 16
-SRP6A_VERIFIER_LEN = 96
+SRP6A_VERIFIER_LEN = 384
 
 """
 struct sec_info_t {
-    char password[16];
+    uint8_t password_len;
+    char password[15];
     char salt[16];
-    char verifier[96];
+    char verifier[384];
 };
 """
 
@@ -44,10 +49,11 @@ build_dir = Path("")
 
 def esp_tool(arguments):
     """Executes the esptool.py command, returns stdout"""
-    tool = idf_path / "components" / "esptool_py" / "esptool.py"
-    command = ["python", tool, "--port", args.port] + arguments
+    tool = idf_path / "components" / "esptool_py" / "esptool" / "esptool.py"
+    command = ["python", str(tool), "--port", args.port, "--chip", args.chip] + arguments
     try:
         result = subprocess.run(command, check=True, text=True, capture_output=True)
+        time.sleep(1)
         return result.stdout
     except subprocess.CalledProcessError as err:
         print(f"ERROR: esptool failed with exit code {err.returncode}.")
@@ -109,7 +115,7 @@ def get_sec_output(username, actual_password):
 
     command = [
         "python",
-        script_path,
+        str(script_path),
         "--transport",
         "softap",
         "--sec_ver",
@@ -121,10 +127,11 @@ def get_sec_output(username, actual_password):
         actual_password,
     ]
 
+    env = os.environ.copy()
+    env['IDF_PATH'] = str(idf_path)
+
     try:
-        return subprocess.run(
-            command, capture_output=True, text=True, check=True, encoding="utf-8"
-        ).stdout
+        return subprocess.run(command, capture_output=True, text=True, check=True, encoding="utf-8", env=env).stdout
     except subprocess.CalledProcessError as err:
         print(f"Error: esp_prov.py failed with return code {err.returncode}")
         print(f"Stdout:\n{err.stdout}")
@@ -150,10 +157,15 @@ def parse_sec_output(output):
             .replace("0x", "")
             .replace(",", "")
             .replace(" ", "")
+            .replace('\r', '')
+            .replace('\n', '')
             .strip()
         )
 
-    return clean_hex(salt_match), clean_hex(verifier_match)
+    salt = clean_hex(salt_match)
+    verifier = clean_hex(verifier_match)
+
+    return salt, verifier
 
 
 def create_unified_binary(actual_password, salt, verifier, output_path):
@@ -200,7 +212,7 @@ def create_unified_binary(actual_password, salt, verifier, output_path):
 # --- FLASHING FUNCTIONS ---
 
 
-def find_partition_offset(partition_name):
+def find_partition_offset_and_size(partition_name):
     """
     Reads the partition-table.bin file and uses gen_esp32part.py to dump its contents
     for parsing the starting offset of the specified partition.
@@ -211,13 +223,13 @@ def find_partition_offset(partition_name):
     if not bin_path.exists():
         print(f"Error: Partition table binary not found at {bin_path}.")
         print("Please ensure your project has been built (idf.py build).")
-        return None
+        return None, None
 
     if not tool_path.exists():
         print(f"Error: Partition generation tool not found at {tool_path}.")
-        return None
+        return None, None
 
-    print(f"Dumping partition table from binary using: {tool_path.name}")
+    # print(f"Dumping partition table from binary using: {tool_path.name}")
 
     # CORRECTED COMMAND: Pass the binary file path directly without the '--dump' flag
     command = ["python", tool_path, bin_path]
@@ -230,7 +242,7 @@ def find_partition_offset(partition_name):
         csv_data = result.stdout
     except subprocess.CalledProcessError as err:
         print(f"Error executing gen_esp32part.py: {err.stderr}")
-        return None
+        return None, None
 
     # Use StringIO to treat the output string as a file object for line parsing
     csv_file = StringIO(csv_data)
@@ -238,10 +250,10 @@ def find_partition_offset(partition_name):
     for line in csv_file:
         # Skip header/comment lines (which start with # or 'Parsing'/'Verifying')
         if (
-            line.startswith("#")
-            or line.startswith("Parsing")
-            or line.startswith("Verifying")
-            or not line.strip()
+                line.startswith("#")
+                or line.startswith("Parsing")
+                or line.startswith("Verifying")
+                or not line.strip()
         ):
             continue
 
@@ -253,24 +265,116 @@ def find_partition_offset(partition_name):
             # The fourth element (index 3) is the Offset
             offset_hex = parts[3].strip()
 
+            # decode size
+            # it can be
+            # just an int
+            # a hex number 0x.....
+            # 24K
+            # 2M
+
+            multiplier = 1
+            size = parts[4].strip()
+            if size.endswith("K"):
+                multiplier = 1024
+                size = size[:-1]
+            elif size.endswith("M"):
+                multiplier = 1024 * 1024
+                size = size[:-1]
+            if size.startswith("0x"):
+                base = 16
+                size = size[2:]
+            else:
+                base = 10
+            byte_size = int(size, base) * multiplier
+
             # Since the output is consistently '0x...', we can rely on that format.
             if re.match(r"0x[0-9a-fA-F]+$", offset_hex):
                 print(f"Found partition '{partition_name}' at offset: {offset_hex}")
-                return offset_hex
+                return offset_hex, byte_size
 
             # Catch case where size (5th element) might be mistaken for offset if parsing goes wrong
             # Your specific output showed the correct offset: '0x11000'
             print(f"Error parsing offset for '{partition_name}': {offset_hex}")
-            return None
+            return None, None
 
     print(f"Error: Partition '{partition_name}' not found in the dumped table data.")
-    return None
+    return None, None
 
 
-def execute_flash_command(chip, port, offset_hex, binary_file):
+def execute_flash_command(offset_hex, binary_file):
     """flash the binary file"""
-    print(f"Flashing {binary_file.name} to {chip} on {port} at offset {offset_hex}...")
-    return esp_tool(["--chip", chip, "write_flash", offset_hex, str(binary_file)])
+    print(f"Flashing {binary_file.name} to {args.chip} on {args.port} at offset {offset_hex}...")
+    return esp_tool(["write_flash", offset_hex, str(binary_file)])
+
+
+def clear_partition(name):
+    partition_offset, partition_size = find_partition_offset_and_size(name)
+    print(f'Erasing partition {name} at offset {partition_offset}, size = {partition_size}')
+    return esp_tool(['erase_region', partition_offset, str(partition_size)])
+
+
+def create_qr_code(data: str, filename: Path, box_size: int = 10, border: int = 4,
+                   error_correction_level=ERROR_CORRECT_L):
+    """
+    Encodes a string as a QR code and saves it as a PNG file.
+
+    Args:
+        data (str): The string content to encode in the QR code.
+        filename (str): The name of the output file (e.g., 'my_qrcode.png').
+        box_size (int): Controls the size of each box (pixel) in the QR code.
+                        A higher number means a larger image. (Default: 10)
+        border (int): Controls the width of the white border around the code.
+                      (Default: 4 is the spec minimum)
+        error_correction_level (int): The level of error correction.
+                                      L (Low, 7%), M (Medium, 15%), Q (Quartile, 25%), H (High, 30%).
+                                      Uses L by default.
+    """
+    try:
+        # Create a QR code object
+        qr = qrcode.QRCode(
+            version=1,  # 1 is the smallest version, higher for more data
+            error_correction=error_correction_level,
+            box_size=box_size,
+            border=border,
+        )
+
+        # Add the data and compile the QR code matrix
+        qr.add_data(data)
+        qr.make(fit=True)
+
+        # Create an image from the QR code matrix
+        # 'fill_color' and 'back_color' can be customized
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # Save the image as a PNG file
+        img.save(filename)
+        print(f"QR code saved to {filename}")
+
+    except Exception as e:
+        print(f"Error creating QR code: {e}")
+
+
+def make_qr_code():
+    """
+    ver = v1
+    name = service_name
+    username = username
+    pop = password
+    transport = ble
+            snprintf(payload, sizeof(payload), "{\"ver\":\"%s\",\"name\":\"%s\"" \
+                        ",\"username\":\"%s\",\"pop\":\"%s\",\"transport\":\"%s\"}",
+                        PROV_QR_VERSION, name, username, pop, transport);
+
+    """
+    ver = 'v1'
+    name = args.service_name
+    username = args.username
+    pop = password
+    transport = 'ble'
+    payload = f'{{"ver":"{ver}","name":"{name}","username":"{username}","pop":"{pop}","transport":"{transport}"}}'
+    filename = Path(build_dir / "qr_code.png")
+    print(f'Create QR code at {filename}, payload {payload}')
+    create_qr_code(payload, filename, box_size=8, border=2)
 
 
 # --- MAIN EXECUTION ---
@@ -298,6 +402,8 @@ if __name__ == "__main__":
         "--password", help="Optional custom password (4 chars, A-Z/0-9) for testing."
     )
 
+    parser.add_argument('--service_name', default=DEFAULT_SERVICE_NAME, help='BLE service name')
+
     parser.add_argument(
         "--flash", action="store_true", help="Flash partition with security data."
     )
@@ -315,6 +421,9 @@ if __name__ == "__main__":
         help="The target ESP chip type (e.g., esp32, esp32s3).",
     )
 
+    parser.add_argument('--clear_nvs', action="store_true", help="Clear NVS partition.")
+    parser.add_argument('--clear_sec_info', action="store_true", help="Clear SecInfo partition.")
+
     args = parser.parse_args()
 
     try:
@@ -326,10 +435,13 @@ if __name__ == "__main__":
                 raise Exception("IDF_PATH environment variable not set.")
             idf_path = Path(idf_path_env)
 
-        if args.flash and not (args.port and args.chip):
-            raise Exception(
-                "Need --port and --chip and --partition_name if --flash specified"
-            )
+        need_port_etc = args.flash or args.clear_nvs or args.clear_sec_info
+
+        if need_port_etc and not args.partition_name:
+            raise ValueError('Need partition name to flash')
+
+        if need_port_etc and not (args.port and args.chip):
+            raise Exception("Need --port and --chip to flash")
 
         build_dir = Path(args.build_dir)
 
@@ -338,8 +450,6 @@ if __name__ == "__main__":
             password = validate_custom_password(args.password)
             print("--- USING CUSTOM PASSWORD FOR TESTING ---")
         else:
-            if not args.port:
-                raise Exception("--port required if passsord not specified")
             password = generate_mac_based_password()
             print("--- USING MAC ADDRESS PASSWORD (PRODUCTION MODE) ---")
 
@@ -350,10 +460,17 @@ if __name__ == "__main__":
         if not sec_output:
             raise Exception("Failed to get sec output")
 
-        # If they don't want to flash it, just print it and quit
-        # so they can copy it into source for development
+        print(sec_output)
+
+        make_qr_code()
+
+        if args.clear_nvs:
+            clear_partition('nvs')
+
+        if args.clear_sec_info:
+            clear_partition(args.partition_name)
+
         if not args.flash:
-            print(sec_output)
             sys.exit(0)
 
         # Parse into binary
@@ -377,13 +494,13 @@ if __name__ == "__main__":
             raise Exception("Failed to create provisioning binary.")
 
         # Find partition offset for flashing
-        offset = find_partition_offset(args.partition_name)
+        offset, size = find_partition_offset_and_size(args.partition_name)
 
         if not offset:
             raise Exception("Could not determine flash offset from build directory.")
 
         # Flash partition
-        if not execute_flash_command(args.chip, args.port, offset, final_binary_path):
+        if not execute_flash_command(offset, final_binary_path):
             raise Exception("PROVISIONING FAILED!")
 
         print("Flashed successfully")

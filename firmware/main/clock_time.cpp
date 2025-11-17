@@ -16,8 +16,9 @@
 
 namespace
 {
+    LOG_CONTEXT("http");
     int timezone_offset_seconds = 0;
-}
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 
@@ -64,6 +65,7 @@ struct http_data_context_t
 {
     char buffer[MAX_HTTP_OUTPUT_BUFFER];
     int len;
+    int response_code;
 
     void reset()
     {
@@ -114,30 +116,41 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
     return ESP_OK;
 }
 
-//////////////////////////////////////////////////////////////////////
-// request to ip-api.com to get lat/lon.
-
-esp_err_t get_location_data()
+esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries, int retry_delay_ms)
 {
-    context.reset();
-
-    esp_http_client_config_t config = {
-        .url = "http://ip-api.com/json",
-        .event_handler = http_event_handler,
-        .user_data = &context,
-    };
+    esp_http_client_config_t config = { .url = url, .event_handler = http_event_handler, .user_data = ctx };
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if(client == NULL) {
         return ESP_ERR_NO_MEM;
     }
-
-    esp_err_t err = esp_http_client_perform(client);
-    if(err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP Error %d (%s)", err, esp_err_to_name(err));
-        return err;
-    }
     DEFER(esp_http_client_cleanup(client));
+
+    while(retries != 0) {
+        ctx->reset();
+
+        esp_err_t err = esp_http_client_perform(client);
+        if(err != ESP_OK) {
+            ESP_LOGE(TAG, "HTTP Error %d (%s)", err, esp_err_to_name(err));
+            return err;
+        }
+        int status_code = esp_http_client_get_status_code(client);
+        LOG_INFO("STATUS_CODE: %d", status_code);
+        if(status_code < 400) {
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+        retries -= 1;
+    }
+    return ESP_ERR_INVALID_RESPONSE;
+}
+
+//////////////////////////////////////////////////////////////////////
+// request to ip-api.com to get lat/lon.
+
+esp_err_t get_location_data()
+{
+    esp_err_t err = do_http_request("http://ip-api.com/json", &context, 10, 1000);
 
     char *json_response = (char *)context.buffer;
 
@@ -215,23 +228,12 @@ esp_err_t get_timezone_data()
     char url_buffer[256];
     sprintf(url_buffer, "http://api.timezonedb.com/v2.1/get-time-zone?key=%s&format=json&by=position&lat=%.4f&lng=%.4f", TIMEZONEDB_API_KEY,
             current_lat, current_lon);
-    ESP_LOGI(TAG, "%s", url_buffer);
 
-    context.reset();
-
-    esp_http_client_config_t config = { .url = url_buffer, .event_handler = http_event_handler, .user_data = &context };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-    if(client == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    DEFER(esp_http_client_cleanup(client));
-
-    esp_err_t err = esp_http_client_perform(client);
+    esp_err_t err = do_http_request(url_buffer, &context, 10, 3000);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG, "HTTP Error %d (%s)", err, esp_err_to_name(err));
         return err;
     }
+
     char *json_response = (char *)context.buffer;
     cJSON *root = cJSON_Parse(json_response);
     if(root == NULL) {
