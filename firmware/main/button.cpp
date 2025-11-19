@@ -69,6 +69,7 @@ esp_err_t button_init()
     };
     ESP_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
     ESP_CHECK(esp_timer_start_periodic(periodic_timer, 5000));    // 5 mS
+    vTaskDelay(pdMS_TO_TICKS(200));
     return ESP_OK;
 }
 

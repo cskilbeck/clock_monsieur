@@ -49,10 +49,12 @@ build_dir = Path("")
 
 def esp_tool(arguments):
     """Executes the esptool.py command, returns stdout"""
+    environment = os.environ.copy()
+    environment['IDF_PATH'] = str(idf_path)
     tool = idf_path / "components" / "esptool_py" / "esptool" / "esptool.py"
-    command = ["python", str(tool), "--port", args.port, "--chip", args.chip] + arguments
+    command = [sys.executable, str(tool), "--port", args.port, "--chip", args.chip] + arguments
     try:
-        result = subprocess.run(command, check=True, text=True, capture_output=True)
+        result = subprocess.run(command, check=True, text=True, capture_output=True, env=environment)
         time.sleep(1)
         return result.stdout
     except subprocess.CalledProcessError as err:
@@ -71,7 +73,10 @@ def get_mac_address_24():
     lines = StringIO(x)
     for line in lines:
         if line.strip().startswith("MAC:"):
-            return int("".join(line[4:].strip().split(":")[3:]), base=16)
+            print(f'MAC address: {line.strip()}')
+            mac_address = int("".join(line[4:].strip().split(":")[3:]), base=16)
+            print(f'MA21: {mac_address:06x}')
+            return mac_address
     return 0
 
 
@@ -114,7 +119,7 @@ def get_sec_output(username, actual_password):
     script_path = idf_path / "tools" / "esp_prov" / "esp_prov.py"
 
     command = [
-        "python",
+        sys.executable,
         str(script_path),
         "--transport",
         "softap",
@@ -232,7 +237,7 @@ def find_partition_offset_and_size(partition_name):
     # print(f"Dumping partition table from binary using: {tool_path.name}")
 
     # CORRECTED COMMAND: Pass the binary file path directly without the '--dump' flag
-    command = ["python", tool_path, bin_path]
+    command = [sys.executable, tool_path, bin_path]
 
     try:
         # Execute the dump command
@@ -273,19 +278,19 @@ def find_partition_offset_and_size(partition_name):
             # 2M
 
             multiplier = 1
-            size = parts[4].strip()
-            if size.endswith("K"):
+            line_size = parts[4].strip()
+            if line_size.endswith("K"):
                 multiplier = 1024
-                size = size[:-1]
-            elif size.endswith("M"):
+                line_size = line_size[:-1]
+            elif line_size.endswith("M"):
                 multiplier = 1024 * 1024
-                size = size[:-1]
-            if size.startswith("0x"):
+                line_size = line_size[:-1]
+            if line_size.startswith("0x"):
                 base = 16
-                size = size[2:]
+                line_size = line_size[2:]
             else:
                 base = 10
-            byte_size = int(size, base) * multiplier
+            byte_size = int(line_size, base) * multiplier
 
             # Since the output is consistently '0x...', we can rely on that format.
             if re.match(r"0x[0-9a-fA-F]+$", offset_hex):
@@ -330,28 +335,20 @@ def create_qr_code(data: str, filename: Path, box_size: int = 10, border: int = 
                                       Uses L by default.
     """
     try:
-        # Create a QR code object
         qr = qrcode.QRCode(
             version=1,  # 1 is the smallest version, higher for more data
             error_correction=error_correction_level,
             box_size=box_size,
             border=border,
         )
-
-        # Add the data and compile the QR code matrix
         qr.add_data(data)
         qr.make(fit=True)
-
-        # Create an image from the QR code matrix
-        # 'fill_color' and 'back_color' can be customized
         img = qr.make_image(fill_color="black", back_color="white")
-
-        # Save the image as a PNG file
         img.save(filename)
         print(f"QR code saved to {filename}")
 
-    except Exception as e:
-        print(f"Error creating QR code: {e}")
+    except Exception as ex:
+        print(f"Error creating QR code: {ex}")
 
 
 def make_qr_code():
@@ -361,10 +358,6 @@ def make_qr_code():
     username = username
     pop = password
     transport = ble
-            snprintf(payload, sizeof(payload), "{\"ver\":\"%s\",\"name\":\"%s\"" \
-                        ",\"username\":\"%s\",\"pop\":\"%s\",\"transport\":\"%s\"}",
-                        PROV_QR_VERSION, name, username, pop, transport);
-
     """
     ver = 'v1'
     name = args.service_name
@@ -372,7 +365,7 @@ def make_qr_code():
     pop = password
     transport = 'ble'
     payload = f'{{"ver":"{ver}","name":"{name}","username":"{username}","pop":"{pop}","transport":"{transport}"}}'
-    filename = Path(build_dir / "qr_code.png")
+    filename = build_dir / "qr_code.png"
     print(f'Create QR code at {filename}, payload {payload}')
     create_qr_code(payload, filename, box_size=8, border=2)
 

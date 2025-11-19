@@ -2,7 +2,7 @@
 
 #include <freertos/event_groups.h>
 
-esp_err_t provisioning_init();
+esp_err_t provisioning_init(bool factory_reset);
 char const *provisioning_pop();
 
 const int WIFI_CONNECTED_EVENT = BIT0;

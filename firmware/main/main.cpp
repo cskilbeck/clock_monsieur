@@ -113,16 +113,18 @@ extern "C" void app_main()
     }
     ESP_LOG_ERR(ret);
 
-    provisioning_init();
-
-    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 4096, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(console_read_task, "console", 4096, NULL, 1, NULL, 0);
 
     lux_init();
     display_init();
     button_init();
 
     button_t buttons[NUM_BUTTONS] = {};
+
+    button_get(buttons);
+    provisioning_init(buttons[2].held);
+
+    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(console_read_task, "console", 4096, NULL, 1, NULL, 0);
 
     int boot_msg_width = measure_string(boot_msg);
 
