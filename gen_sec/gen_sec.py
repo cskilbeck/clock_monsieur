@@ -4,7 +4,7 @@ gen_sec.py
 Create salt, verifier datablocks for given username/password
 Default username is Clock_Monsieur
 Default password is 4 chars based on (epoch time / 10)
-Specify partition_name to flash data into that partition
+Specify partition to flash data into that partition
     else it just prints the data
 """
 
@@ -374,48 +374,20 @@ def make_qr_code():
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(
-        description="Generate SRP6a credentials and flash to the custom partition."
-    )
+    parser = argparse.ArgumentParser(description="Generate SRP6a credentials and flash to the custom partition.",
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument(
-        "--build_dir",
-        required=True,
-        help="Project build directory (e.g., C:/project/build).",
-    )
-
-    parser.add_argument("--idf_path", help="Path to IDF")
-
-    parser.add_argument(
-        "--username",
-        default=DEFAULT_USERNAME,
-        help=f"Username (default = {DEFAULT_USERNAME})",
-    )
-    parser.add_argument(
-        "--password", help="Optional custom password (4 chars, A-Z/0-9) for testing."
-    )
-
-    parser.add_argument('--service_name', default=DEFAULT_SERVICE_NAME, help='BLE service name')
-
-    parser.add_argument(
-        "--flash", action="store_true", help="Flash partition with security data."
-    )
-    parser.add_argument(
-        "--partition_name",
-        default=DEFAULT_PARTITION_NAME,
-        help="Partition to flash with security data.",
-    )
-    parser.add_argument(
-        "--port",
-        help="The serial port of the device (e.g., COM3 or /dev/ttyUSB0).",
-    )
-    parser.add_argument(
-        "--chip",
-        help="The target ESP chip type (e.g., esp32, esp32s3).",
-    )
-
-    parser.add_argument('--clear_nvs', action="store_true", help="Clear NVS partition.")
-    parser.add_argument('--clear_sec_info', action="store_true", help="Clear SecInfo partition.")
+    parser.add_argument("--build_dir", help="Project build directory", required=True, type=str, metavar='dir')
+    parser.add_argument("--idf_path", help="Override env $IDF_PATH", metavar='dir')
+    parser.add_argument("--username", help=f'Username', default=DEFAULT_USERNAME, metavar='name')
+    parser.add_argument("--password", help="Optional custom password (4 chars, A-Z/0-9) for testing.", metavar='password')
+    parser.add_argument('--service_name', help=f'BLE service name', default=DEFAULT_SERVICE_NAME, metavar='name')
+    parser.add_argument("--flash", help="Flash partition with security data.", action="store_true")
+    parser.add_argument("--partition", help=f'SecInfo partition', default=DEFAULT_PARTITION_NAME, metavar='name')
+    parser.add_argument("--port", help="Serial port of the device (e.g., COM3 or /dev/ttyUSB0).", metavar='port')
+    parser.add_argument("--chip", help="Target ESP chip type (e.g., esp32, esp32s3).", metavar='chip')
+    parser.add_argument('--clear_nvs', help="Clear NVS partition.", action="store_true")
+    parser.add_argument('--clear_sec_info', help="Clear SecInfo partition.", action="store_true")
 
     args = parser.parse_args()
 
@@ -430,7 +402,7 @@ if __name__ == "__main__":
 
         need_port_etc = args.flash or args.clear_nvs or args.clear_sec_info
 
-        if need_port_etc and not args.partition_name:
+        if need_port_etc and not args.partition:
             raise ValueError('Need partition name to flash')
 
         if need_port_etc and not (args.port and args.chip):
@@ -461,7 +433,7 @@ if __name__ == "__main__":
             clear_partition('nvs')
 
         if args.clear_sec_info:
-            clear_partition(args.partition_name)
+            clear_partition(args.partition)
 
         if not args.flash:
             sys.exit(0)
@@ -487,7 +459,7 @@ if __name__ == "__main__":
             raise Exception("Failed to create provisioning binary.")
 
         # Find partition offset for flashing
-        offset, size = find_partition_offset_and_size(args.partition_name)
+        offset, size = find_partition_offset_and_size(args.partition)
 
         if not offset:
             raise Exception("Could not determine flash offset from build directory.")
