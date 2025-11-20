@@ -70,6 +70,8 @@ def esp_tool(arguments):
 def get_mac_address_24():
     # MAC: 10:20:ba:1a:00:f8
     x = esp_tool(["read_mac"])
+    if not x:
+        raise Exception("Failed to get MAC address from esptool.py")
     lines = StringIO(x)
     for line in lines:
         if line.strip().startswith("MAC:"):
@@ -378,16 +380,18 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--build_dir", help="Project build directory", required=True, type=str, metavar='dir')
+    parser.add_argument("--port", help="Serial port of the device (e.g., COM3 or /dev/ttyUSB0).", metavar='port')
+    parser.add_argument("--chip", help="Target ESP chip type (e.g., esp32, esp32s3).", metavar='chip')
     parser.add_argument("--idf_path", help="Override env $IDF_PATH", metavar='dir')
     parser.add_argument("--username", help=f'Username', default=DEFAULT_USERNAME, metavar='name')
     parser.add_argument("--password", help="Optional custom password (4 chars, A-Z/0-9) for testing.", metavar='password')
     parser.add_argument('--service_name', help=f'BLE service name', default=DEFAULT_SERVICE_NAME, metavar='name')
     parser.add_argument("--flash", help="Flash partition with security data.", action="store_true")
     parser.add_argument("--partition", help=f'SecInfo partition', default=DEFAULT_PARTITION_NAME, metavar='name')
-    parser.add_argument("--port", help="Serial port of the device (e.g., COM3 or /dev/ttyUSB0).", metavar='port')
-    parser.add_argument("--chip", help="Target ESP chip type (e.g., esp32, esp32s3).", metavar='chip')
     parser.add_argument('--clear_nvs', help="Clear NVS partition.", action="store_true")
     parser.add_argument('--clear_sec_info', help="Clear SecInfo partition.", action="store_true")
+
+    # --build_dir ../firmware/build --port COM4 --chip esp32s3 --clear_nvs --flash
 
     args = parser.parse_args()
 
@@ -401,9 +405,6 @@ if __name__ == "__main__":
             idf_path = Path(idf_path_env)
 
         need_port_etc = args.flash or args.clear_nvs or args.clear_sec_info
-
-        if need_port_etc and not args.partition:
-            raise ValueError('Need partition name to flash')
 
         if need_port_etc and not (args.port and args.chip):
             raise Exception("Need --port and --chip to flash")
