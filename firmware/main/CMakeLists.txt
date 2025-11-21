@@ -8,6 +8,8 @@ idf_component_register(
         provisioning.cpp
         clock_time.cpp
         settings.cpp
+        ota.cpp
+        util.cpp
     PRIV_REQUIRES
         driver
         bt
@@ -15,6 +17,7 @@ idf_component_register(
         mbedtls
         wifi_provisioning
         json
+        app_update
         esp_http_client
     INCLUDE_DIRS
         .

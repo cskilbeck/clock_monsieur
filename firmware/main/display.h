@@ -35,8 +35,6 @@ static_assert(sizeof(fcontrol_data_t) == 256 / 8);
 
 extern uint16_t const matrix_lookup[7][26];
 
-int measure_string(const char *str);
-
 struct display_t
 {
     fcontrol_data_t fcontrol;

@@ -121,6 +121,13 @@ extern "C" {
 
 #include <utility>
 
+extern bool gDumpStacks;
+
+namespace util
+{
+    void stack_stat();
+}
+
 namespace
 {
     //////////////////////////////////////////////////////////////////////

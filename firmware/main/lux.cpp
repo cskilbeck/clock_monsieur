@@ -184,7 +184,7 @@ namespace
 
 void lux_init()
 {
-    xTaskCreatePinnedToCore(i2c_task, "i2c_task", 4096, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(i2c_task, "i2c_task", 2560, NULL, 5, NULL, 0);
 }
 
 //////////////////////////////////////////////////////////////////////

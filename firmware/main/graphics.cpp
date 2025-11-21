@@ -1,5 +1,8 @@
 //////////////////////////////////////////////////////////////////////
 
+#include <cstdio>
+#include <cstring>
+
 #include "stdio.h"
 #include "graphics.h"
 #include "settings.h"
@@ -49,7 +52,7 @@ uint16_t const seconds_hours_lookup[120] = {
 };
 
 //////////////////////////////////////////////////////////////////////
-// approximate pow(2.2) for 11 bit fixed point: x^2 - (x^2 - x^3) / 4
+// approximate pow(2.2) as x^2 - (x^2 - x^3) / 4
 // and convert endianness for display buffer
 
 uint16_t gamma_get(uint16_t x)
@@ -62,7 +65,7 @@ uint16_t gamma_get(uint16_t x)
 
 //////////////////////////////////////////////////////////////////////
 
-uint16_t gamma_getf(float x)
+uint16_t gamma_get(float x)
 {
     float x2 = x * x;
     float x3 = x2 * x;
@@ -83,32 +86,33 @@ glyph_t const &get_glyph(int c)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::cls(uint16_t color)
+void graphics_t::clear()
 {
-    for(int i = 0; i < 256; ++i) {
-        display.led[i] = color;
+    memset(buffer, 0, sizeof(buffer));
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::set_pixel(float color, uint8_t pixel)
+{
+    buffer[pixel] = color;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::set_second(float color, uint8_t second)
+{
+    if(second > 59) {
+        second = 59;
     }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void graphics_t::set_pixel(uint16_t color, uint8_t pixel)
-{
-    display.led[pixel] = color;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void graphics_t::set_second(uint16_t color, uint8_t second)
-{
     uint16_t const *s = seconds_hours_lookup + second * 2;
-    display.led[s[0]] = color;
-    display.led[s[1]] = color;
+    buffer[s[0]] = color;
+    buffer[s[1]] = color;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_char(glyph_t const &glyph, int x, int y, int color)
+int graphics_t::draw_char(glyph_t const &glyph, int x, int y, float color)
 {
     constexpr int glyph_height = 7;
     constexpr int glyph_width = 6;
@@ -157,7 +161,7 @@ int graphics_t::draw_char(glyph_t const &glyph, int x, int y, int color)
         row >>= shift;
         for(int sx = x; sx < x_end; ++sx) {
             if((row & 1) != 0) {
-                display.led[matrix_lookup[y][sx]] = color;
+                buffer[matrix_lookup[y][sx]] = color;
             }
             row >>= 1;
         }
@@ -167,7 +171,7 @@ int graphics_t::draw_char(glyph_t const &glyph, int x, int y, int color)
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_char_centered(int c, int x, int y, int color)
+int graphics_t::draw_char_centered(int c, int x, int y, float color)
 {
     glyph_t const &glyph = get_glyph(c);
     return draw_char(glyph, x - glyph.width / 2, y, color);
@@ -175,7 +179,7 @@ int graphics_t::draw_char_centered(int c, int x, int y, int color)
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_string(char const *str, int x, int y, int color)
+int graphics_t::draw_string(char const *str, int x, int y, float color)
 {
     int width = 0;
     while(*str) {
@@ -190,7 +194,7 @@ int graphics_t::draw_string(char const *str, int x, int y, int color)
 
 //////////////////////////////////////////////////////////////////////
 
-int measure_string(const char *str)
+int measure_string(char const *str)
 {
     int width = 0;
     while(int c = *str++) {
@@ -205,12 +209,11 @@ int measure_string(const char *str)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
+void graphics_t::draw_time(int hours, int minutes, float color)
 {
-    char buffer[16];
     minutes %= 60;
     char const *fmt;
-    if(settings.clock_mode == clock_mode_t::clock_mode_24_hour) {
+    if(settings.clock_mode == clock_mode_t::clock_24_hour) {
         hours %= 24;
         fmt = "%02d%02d";
     } else {
@@ -220,57 +223,73 @@ void graphics_t::draw_time(int hours, int minutes, int color, int colon_color)
         }
         fmt = "%2d%02d";
     }
-    sprintf(buffer, fmt, hours, minutes);
-    draw_char_centered(buffer[0], 2, 0, color);
-    draw_char_centered(buffer[1], 8, 0, color);
-    draw_char_centered(buffer[2], 16, 0, color);
-    draw_char_centered(buffer[3], 22, 0, color);
-    display.led[matrix_lookup[2][12]] = colon_color;
-    display.led[matrix_lookup[4][12]] = colon_color;
+    char time_buffer[16];
+    sprintf(time_buffer, fmt, hours, minutes);
+    draw_char_centered(time_buffer[0], 2, 0, color);
+    draw_char_centered(time_buffer[1], 8, 0, color);
+    draw_char_centered(time_buffer[2], 16, 0, color);
+    draw_char_centered(time_buffer[3], 22, 0, color);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_seconds(int current_second, int current_microseconds)
+void graphics_t::draw_colon(int seconds)
 {
-    int TAIL_LENGTH = 59;
+    float colon_color{};
+    switch(settings.colon_mode) {
+    case colon_mode_t::off:
+        colon_color = 0.0f;
+        break;
+    case colon_mode_t::on:
+        colon_color = 1.0f;
+        break;
+    case colon_mode_t::dim:
+        colon_color = 0.5f;
+        break;
+    case colon_mode_t::pulse:
+        colon_color = (seconds & 1) == 0 ? 0 : 0.75f;
+        break;
+    }
+    buffer[matrix_lookup[2][12]] = colon_color;
+    buffer[matrix_lookup[4][12]] = colon_color;
+}
 
-    float T = (float)current_microseconds / 1000000.0f;
+//////////////////////////////////////////////////////////////////////
 
-    auto draw_tail = [this, current_second, T](int TAIL_LENGTH) {
-        int constexpr NUM_LEDS = 60;
-        for(int i = 0; i < NUM_LEDS; i++) {
-            int D = (current_second - i + NUM_LEDS + 1) % NUM_LEDS;
-            float intensity = 0.0f;
-            if(D == 0) {
-                intensity = T;
-            } else if(D >= 1 && D <= TAIL_LENGTH) {
-                float x = (float)D - 1.0f + T;
-                intensity = 1.0f - (x / TAIL_LENGTH);
-            } else {
-                intensity = 0.0f;
+void graphics_t::draw_seconds(int current_second)
+{
+    auto draw_tail = [this, current_second](int TAIL_LENGTH) {
+        float delta = 1.0f / TAIL_LENGTH;
+        float intensity = 1.0f;
+        float s = current_second;
+        for(int i = 0; i < TAIL_LENGTH; ++i) {
+            set_second(1.0f - i * delta, s);
+            s -= 1;
+            if(s < 0) {
+                s += 60;
             }
-            set_second(gamma_getf(intensity), i);
         }
     };
 
     switch(settings.seconds_mode) {
-    case seconds_mode_t::seconds_mode_fixed:
-        for(int i = 0; i < current_second; ++i) {
-            set_second(gamma_get(2047), i);
+    case seconds_mode_t::fixed:
+        for(int i = 0; i <= current_second; ++i) {
+            set_second(1.0f, i);
         }
-        set_second(gamma_getf(T), current_second);
+        for(int i = current_second + 1; i < 60; ++i) {
+            set_second(0.25f, i);
+        }
         break;
-    case seconds_mode_t::seconds_mode_single:
-        set_second(gamma_get(2047), current_second);
+    case seconds_mode_t::single:
+        set_second(1.0f, current_second);
         break;
-    case seconds_mode_t::seconds_mode_tail_short:
+    case seconds_mode_t::tail_short:
         draw_tail(10);
         break;
-    case seconds_mode_t::seconds_mode_tail_medium:
+    case seconds_mode_t::tail_medium:
         draw_tail(30);
         break;
-    case seconds_mode_t::seconds_mode_tail_long:
+    case seconds_mode_t::tail_long:
         draw_tail(59);
         break;
     }
@@ -278,15 +297,35 @@ void graphics_t::draw_seconds(int current_second, int current_microseconds)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::fade_matrix(graphics_t &a, graphics_t &b, int scale)
+void graphics_t::fade_to(display_t &display, graphics_t &other, float scale)
 {
-    int other = 2048 - scale;
-    for(auto const &row : matrix_lookup) {
-        for(auto const index : row) {
-            int src = a.display.led[index] * other;
-            int dst = b.display.led[index] * scale;
-            display.led[index] = gamma_get((src + dst) >> 11);
-            // display.led[index] = gamma_get(b.display.led[index]);
-        }
+    float o = 1.0f - scale;
+    for(int i = 0; i < 256; ++i) {
+        float src = buffer[i] * o;
+        float dst = other.buffer[i] * scale;
+        display.led[i] = gamma_get(src + dst);
     }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::display(display_t &display)
+{
+    for(int i = 0; i < 256; ++i) {
+        display.led[i] = gamma_get(buffer[i]);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::draw_clock(long seconds)
+{
+    int hours = seconds / 3600;
+    int hour_seconds = seconds % 3600;
+    int minutes = hour_seconds / 60;
+    int secs = hour_seconds % 60;
+    clear();
+    draw_seconds(secs);
+    draw_time(hours, minutes, 1);
+    draw_colon(secs);
 }

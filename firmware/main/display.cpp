@@ -198,7 +198,7 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // Per-column timer ISR
 
-    bool timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
+    IRAM_ATTR bool timer_isr(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_ctx)
     {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         vTaskNotifyGiveFromISR(display_task_handle, &xHigherPriorityTaskWoken);
@@ -420,13 +420,13 @@ void display_init(void)
     }
 
     // core 1, priority 15
-    xTaskCreatePinnedToCore(display_task, "display_task", 4096, nullptr, 15, &display_task_handle, 1);
+    xTaskCreatePinnedToCore(display_task, "display_task", 3584, nullptr, 15, &display_task_handle, 1);
 }
 
 //////////////////////////////////////////////////////////////////////
 // Wait for display to refresh 8 times
 
-display_t &display_update()
+IRAM_ATTR display_t &display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
     return *back_buffer;

@@ -22,12 +22,14 @@
 #include "clock_time.h"
 #include "settings.h"
 #include "sdkconfig.h"
+#include "version.h"
+#include "ota.h"
 
 LOG_CONTEXT("main");
 
 namespace
 {
-    char const boot_msg[] = "Clock Monsieur!";
+    char const constexpr boot_msg[] = "Clock Monsieur!";
 
     float smoothed_ambient = 0.0f;
     float smooth_factor = 0.01f;
@@ -48,15 +50,15 @@ namespace
         int base, max;
         switch(settings.brightness_mode) {
         default:
-        case brightness_mode_t::brightness_mode_high:
+        case brightness_mode_t::high:
             base = 6;
             max = 255;
             break;
-        case brightness_mode_t::brightness_mode_medium:
+        case brightness_mode_t::medium:
             base = 3;
             max = 192;
             break;
-        case brightness_mode_t::brightness_mode_low:
+        case brightness_mode_t::low:
             base = 1;
             max = 128;
             break;
@@ -65,8 +67,8 @@ namespace
         return (int)(t * range) + base;
     }
 
-    display_t display_temp1;
-    display_t display_temp2;
+    graphics_t gfx;
+    graphics_t gfx_other;
 
     void console_read_task(void *pvParameter)
     {
@@ -98,13 +100,18 @@ namespace
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
+
+    int boot_msg_width = measure_string(boot_msg);
+
 }    // namespace
 
 extern "C" void app_main()
 {
     // disable brownout detector
-    REG_CLR_BIT(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_BOD_RST);
-    REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ANA_RST_EN);
+    // REG_CLR_BIT(RTC_CNTL_FIB_SEL_REG, RTC_CNTL_FIB_BOD_RST);
+    // REG_CLR_BIT(RTC_CNTL_BROWN_OUT_REG, RTC_CNTL_BROWN_OUT_ANA_RST_EN);
+
+    LOG_INFO("----- CLOCK MONSIEUR, FIRMWARE VERSION: %s -----", VERSION_STR);
 
     esp_err_t ret = nvs_flash_init();
     if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -123,10 +130,11 @@ extern "C" void app_main()
     button_get(buttons);
     provisioning_init(buttons[2].held);
 
-    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 4096, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(console_read_task, "console", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 3072, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(console_read_task, "console", 2048, NULL, 1, NULL, 0);
 
-    int boot_msg_width = measure_string(boot_msg);
+    // got this far, probably fine...
+    ota_mark_app_valid();
 
     bool full_brightness = false;
 
@@ -143,6 +151,10 @@ extern "C" void app_main()
             full_brightness = !full_brightness;
         }
 
+        if(buttons[3].pressed) {
+            xTaskCreatePinnedToCore(ota_task, "ota", 1024 * 6, NULL, 1, NULL, 0);
+        }
+
         int x = 30 - frames / 2;
 
         int ambient = update_ambient();
@@ -152,47 +164,25 @@ extern "C" void app_main()
         }
         display.set_ambient(ambient);
 
-        graphics_t gfx(display);
-
-        gfx.cls(0);
-
         if(x >= -(boot_msg_width + 20)) {
-            gfx.draw_string(boot_msg, x, 0, 2047);
+            gfx.clear();
+            gfx.draw_string(boot_msg, x, 0, 1);
+            gfx.display(display);
         } else {
-            // To make the minutes fade from one to the next:
-            // Create a fake time, one second ahead
-            // Draw both WITHOUT gamma correction
-            // Then fade between them based on fraction of current second
-            // Then gamma correct into current buffer
             struct timeval tv_now;
             get_time(&tv_now);
-            int hours = tv_now.tv_sec / 3600;
-            int hour_seconds = tv_now.tv_sec % 3600;
-            int minutes = hour_seconds / 60;
-
-            int seconds = hour_seconds % 60;
-            gfx.draw_seconds(seconds, tv_now.tv_usec);
-
-            int hours2 = (tv_now.tv_sec + 1) / 3600;
-            int hour_seconds2 = (tv_now.tv_sec + 1) % 3600;
-            int minutes2 = hour_seconds2 / 60;
-
-            graphics_t gfx_temp1(display_temp1);
-            graphics_t gfx_temp2(display_temp2);
-
-            gfx_temp1.cls(0);
-            gfx_temp2.cls(0);
-
-            gfx_temp1.draw_time(hours, minutes, 2047, 2047);
-            gfx_temp2.draw_time(hours2, minutes2, 2047, 2047);
-
-            // fade between current and next time
-            int scale = tv_now.tv_usec / (1000000 / 3200);
-            if(scale > 2048) {
-                scale = 2048;
-            }
-            gfx.fade_matrix(gfx_temp1, gfx_temp2, scale);
+            gfx.draw_clock(tv_now.tv_sec);
+            gfx_other.draw_clock(tv_now.tv_sec + 1);
+            gfx.fade_to(display, gfx_other, tv_now.tv_usec / 1000000.0f);
         }
         frames += 1;
+
+        if(buttons[4].pressed) {
+            char buffer[512];
+            vTaskList(buffer);
+            printf("%s\n", buffer);
+            auto x = esp_get_minimum_free_heap_size();
+            printf("HEAP: %lu\n", x);
+        }
     }
 }

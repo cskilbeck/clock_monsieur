@@ -46,9 +46,12 @@ static const char *TAG = "clock_time";
 
 #define TIMEZONEDB_API_KEY "VV0F65261GPD"
 
+bool got_location{ false };
+bool got_timezone{ false };
+bool got_sntp{ false };
+
 double current_lat = 0.0;
 double current_lon = 0.0;
-char posix_tz_string[128] = "";
 
 //////////////////////////////////////////////////////////////////////
 
@@ -130,16 +133,26 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
         ctx->reset();
 
         esp_err_t err = esp_http_client_perform(client);
-        if(err != ESP_OK) {
-            ESP_LOGE(TAG, "HTTP Error %d (%s)", err, esp_err_to_name(err));
+        if(err == ESP_OK) {
+            int status_code = esp_http_client_get_status_code(client);
+            LOG_INFO("STATUS_CODE: %d", status_code);
+            if(status_code < 400) {
+                return ESP_OK;
+            }
+            switch(status_code) {
+            case 503:    // SERVER_UNAVAILABLE
+            case 429:    // TOO_MANY_REQUESTS
+                vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+                break;
+            default:
+                return ESP_ERR_INVALID_RESPONSE;
+            }
+        } else if(err == ESP_ERR_HTTP_EAGAIN) {
+            vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+        } else {
+            ESP_LOGE(TAG, "HTTP CLIENT Error %d (%s)", err, esp_err_to_name(err));
             return err;
         }
-        int status_code = esp_http_client_get_status_code(client);
-        LOG_INFO("STATUS_CODE: %d", status_code);
-        if(status_code < 400) {
-            return ESP_OK;
-        }
-        vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
         retries -= 1;
     }
     return ESP_ERR_INVALID_RESPONSE;
@@ -151,6 +164,10 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
 esp_err_t get_location_data()
 {
     esp_err_t err = do_http_request("http://ip-api.com/json", &context, 10, 1000);
+    if(err != ESP_OK) {
+        ESP_LOGE(TAG, "Can't get location!?");
+        return err;
+    }
 
     char *json_response = (char *)context.buffer;
 
@@ -209,10 +226,12 @@ esp_err_t get_location_data()
     double const sao_paulo_lon = -46.666755;
     current_lat = sao_paulo_lat;
     current_lon = sao_paulo_lon;
+    got_location = true;
 
 #else
     current_lat = lat_item->valuedouble;
     current_lon = lon_item->valuedouble;
+    got_location = true;
 #endif
 
     ESP_LOGI(TAG, "Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
@@ -251,11 +270,8 @@ esp_err_t get_timezone_data()
         ESP_LOGE(TAG, "Error getting timezone: status = %s", status->valuestring);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    // cJSON *zone_name_item = cJSON_GetObjectItemCaseSensitive(root, "zoneName");
-    // cJSON *abbreviation_item = cJSON_GetObjectItemCaseSensitive(root, "abbreviation");
-    // cJSON *next_abbreviation_item = cJSON_GetObjectItemCaseSensitive(root, "nextAbbreviation");
-    // const char *abbr = cJSON_IsString(abbreviation_item) ? abbreviation_item->valuestring : "GMT";
-    // const char *nxt_abbr = cJSON_IsString(next_abbreviation_item) ? next_abbreviation_item->valuestring : "GMT";
+
+    // TODO (chs): look at zoneEnd and check timezone again just after then
 
     cJSON *dst_item = cJSON_GetObjectItemCaseSensitive(root, "dst");
     int dst = cJSON_IsString(dst_item) ? atoi(dst_item->valuestring) : 0;
@@ -266,15 +282,8 @@ esp_err_t get_timezone_data()
         return ESP_ERR_INVALID_RESPONSE;
     }
     timezone_offset_seconds = offset_item->valueint;
-
+    got_timezone = true;
     return ESP_OK;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-bool is_time_synchronized()
-{
-    return sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -307,38 +316,64 @@ void delay_until(long hour, long minute)
 }
 
 //////////////////////////////////////////////////////////////////////
-// start this task AFTER provision_init()
 
-// 1. wait for wifi to be connected
-// 2. get/set timezone
-// 3. start sntp
-// 4. wait until 4am
-// 5. repeat
+void sntp_callback(struct timeval *tv)
+{
+    got_sntp = true;
+    ESP_LOGI(TAG, "SNTP IS UP!");
+}
+
+//////////////////////////////////////////////////////////////////////
+// start this task AFTER provision_init()
 
 void clock_time_task(void *pvParameter)
 {
     ESP_LOGI(TAG, "Initializing SNTP for time sync.");
+    esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_setservername(1, "time.google.com");
-    esp_sntp_init();
+
+    // Sit in a loop
+    // if not got location, try to get location
+    // if got location and not got timezone, try to get timezone
+    // if sntp not up and we haven't reset it for more than N seconds, reset it
+    // wait 10 seconds
+    // loop
+
+    int sntp_reset = 0;
 
     while(true) {
 
         // wait for wifi to be connected
         xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
 
-        // get timezone from current location
-        if(get_location_data() == ESP_OK) {
+        if(!got_location) {
+            get_location_data();
+        }
+
+        if(got_location && !got_timezone) {
             get_timezone_data();
         }
 
-        // wait one minute
-        vTaskDelay(pdMS_TO_TICKS(60000));
+        ESP_LOGI(TAG, "SNTP IS%s Synchronized", got_sntp ? "" : " NOT");
 
         // if sntp is up, wait until 4am to do it again, else try again straight away?
-        if(is_time_synchronized()) {
+        if(!got_sntp) {
+            if(--sntp_reset < 0) {
+                ESP_LOGI(TAG, "RESET SNTP");
+                esp_sntp_stop();
+                esp_sntp_init();
+                sntp_reset = 3;
+            }
+        }
+
+        if(got_sntp && got_location && got_timezone) {
+            ESP_LOGI(TAG, "Clock is good, waiting until 4am to get timezone again...");
             delay_until(4, 0);
+            got_timezone = false;
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(10000));
         }
     }
 }
