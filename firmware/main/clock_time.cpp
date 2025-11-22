@@ -11,6 +11,7 @@
 #include "esp_sntp.h"
 #include "provisioning.h"
 #include "time.h"
+#include "ota.h"
 #include "util.h"
 
 
@@ -48,6 +49,7 @@ static const char *TAG = "clock_time";
 
 bool got_location{ false };
 bool got_timezone{ false };
+bool got_firmware_version{ false };
 bool got_sntp{ false };
 
 double current_lat = 0.0;
@@ -142,13 +144,13 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
             switch(status_code) {
             case 503:    // SERVER_UNAVAILABLE
             case 429:    // TOO_MANY_REQUESTS
-                vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+                delay_ms(retry_delay_ms);
                 break;
             default:
                 return ESP_ERR_INVALID_RESPONSE;
             }
         } else if(err == ESP_ERR_HTTP_EAGAIN) {
-            vTaskDelay(pdMS_TO_TICKS(retry_delay_ms));
+            delay_ms(retry_delay_ms);
         } else {
             ESP_LOGE(TAG, "HTTP CLIENT Error %d (%s)", err, esp_err_to_name(err));
             return err;
@@ -308,10 +310,8 @@ void delay_until(long hour, long minute)
         long day_seconds = 24 * 3600;
         delay_sec = day_seconds - seconds_since_midnight + seconds;
     }
-    TickType_t delay_ticks = (delay_sec * 1000) / portTICK_PERIOD_MS;
-
-    if(delay_ticks > 0) {
-        vTaskDelay(delay_ticks);
+    if(delay_sec > 0) {
+        delay_secs(delay_sec);
     }
 }
 
@@ -348,6 +348,10 @@ void clock_time_task(void *pvParameter)
         // wait for wifi to be connected
         xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
 
+        if(!got_firmware_version) {
+            got_firmware_version = check_firmware_version();
+        }
+
         if(!got_location) {
             get_location_data();
         }
@@ -356,9 +360,8 @@ void clock_time_task(void *pvParameter)
             get_timezone_data();
         }
 
-        ESP_LOGI(TAG, "SNTP IS%s Synchronized", got_sntp ? "" : " NOT");
+        ESP_LOGI(TAG, "SNTP%s synchronized", got_sntp ? "" : " NOT");
 
-        // if sntp is up, wait until 4am to do it again, else try again straight away?
         if(!got_sntp) {
             if(--sntp_reset < 0) {
                 ESP_LOGI(TAG, "RESET SNTP");
@@ -368,12 +371,13 @@ void clock_time_task(void *pvParameter)
             }
         }
 
-        if(got_sntp && got_location && got_timezone) {
-            ESP_LOGI(TAG, "Clock is good, waiting until 4am to get timezone again...");
+        if(got_sntp && got_location && got_timezone && got_firmware_version) {
+            ESP_LOGI(TAG, "Clock is good, waiting until 4am to do it all again...");
             delay_until(4, 0);
             got_timezone = false;
+            got_firmware_version = false;
         } else {
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            delay_secs(10);
         }
     }
 }

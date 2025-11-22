@@ -26,6 +26,18 @@ extern "C" {
 
 //////////////////////////////////////////////////////////////////////
 
+inline void delay_ms(int ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+inline void delay_secs(int seconds)
+{
+    delay_ms(seconds * 1000);
+}
+
+//////////////////////////////////////////////////////////////////////
+
 #define MAYBE_UNUSED __attribute__((unused))
 
 // #define NO_LOGGING
@@ -120,13 +132,6 @@ extern "C" {
 #ifdef __cplusplus
 
 #include <utility>
-
-extern bool gDumpStacks;
-
-namespace util
-{
-    void stack_stat();
-}
 
 namespace
 {

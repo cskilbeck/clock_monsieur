@@ -174,7 +174,7 @@ namespace
                 }
                 brightness = lux_value[0];
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
+            delay_ms(200);
         }
     }
 

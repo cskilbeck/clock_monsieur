@@ -40,13 +40,19 @@ struct display_t
     fcontrol_data_t fcontrol;
     uint16_t led[256];
 
-    void set_ambient(int b);
+    uint8_t ambient;
+
+    void set_ambient(uint8_t b)
+    {
+        ambient = b;
+    }
+
+    void update_ambient();
 };
 
 //////////////////////////////////////////////////////////////////////
 
-// start display_task on core 1, ambient light sensor task on core 0
 void display_init();
+void display_update();
 
-// wait for display refresh, returns current backbuffer (256 pixels)
-display_t &display_update();
+extern display_t *display;

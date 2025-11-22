@@ -43,14 +43,18 @@
 
 //////////////////////////////////////////////////////////////////////
 
-void display_t::set_ambient(int b)
+display_t *display;
+
+//////////////////////////////////////////////////////////////////////
+
+void display_t::update_ambient()
 {
-    uint8_t c = (uint8_t)(b / 2);
-    fcontrol.global_bc = c;
-    uint8_t d = (uint8_t)((b + 1) / 2);
+    uint8_t c = ambient / 2;
+    uint8_t d = (uint8_t)((ambient + 1) / 2);
     if(d > 127) {
         d = 127;
     }
+    fcontrol.global_bc = c;
     for(int i = 0; i < 16; ++i) {
         fcontrol.set_dc(i, d);
     }
@@ -426,8 +430,8 @@ void display_init(void)
 //////////////////////////////////////////////////////////////////////
 // Wait for display to refresh 8 times
 
-IRAM_ATTR display_t &display_update()
+IRAM_ATTR void display_update()
 {
     xEventGroupWaitBits(event_group_handle, VBLANK_BIT, pdTRUE, pdTRUE, portMAX_DELAY);
-    return *back_buffer;
+    display = back_buffer;
 }

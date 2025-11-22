@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "stdio.h"
+#include "display.h"
 #include "graphics.h"
 #include "settings.h"
 #include "font_6x7.h"
@@ -50,6 +51,9 @@ uint16_t const seconds_hours_lookup[120] = {
     103, 103, 121, 121, 122, 122, 120, 120, 154, 153, 152, 152, 137, 137, 138, 138, 136, 136, 170, 169, 168, 168, 185, 185,
     184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
 };
+
+graphics_t gfx;
+graphics_t gfx2;
 
 //////////////////////////////////////////////////////////////////////
 // approximate pow(2.2) as x^2 - (x^2 - x^3) / 4
@@ -297,22 +301,22 @@ void graphics_t::draw_seconds(int current_second)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::fade_to(display_t &display, graphics_t &other, float scale)
+void graphics_t::fade_to(graphics_t &other, float scale)
 {
     float o = 1.0f - scale;
     for(int i = 0; i < 256; ++i) {
         float src = buffer[i] * o;
         float dst = other.buffer[i] * scale;
-        display.led[i] = gamma_get(src + dst);
+        ::display->led[i] = gamma_get(src + dst);
     }
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::display(display_t &display)
+void graphics_t::display()
 {
     for(int i = 0; i < 256; ++i) {
-        display.led[i] = gamma_get(buffer[i]);
+        ::display->led[i] = gamma_get(buffer[i]);
     }
 }
 

@@ -23,15 +23,13 @@ X provisioning stuff in factory partition
 - menus
     - 12/24
     - Seconds mode
-        - Tail 60
-        - Tail 30
-        - Single
-        - Fixed
     - Seconds brightness
     - Time brightness
+    - Colon mode
     - Auto brightness on/off
+    - Clock font
     - Brightness 1..10
-    - Set timezone (!)
-        - Hard code DST ranges
-        - If DST ranges change, update OTA!
+    - Set timezone
     - Setup WiFi
+    - Reset WiFi
+    - Undo last OTA update

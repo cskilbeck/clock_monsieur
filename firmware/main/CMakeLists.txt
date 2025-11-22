@@ -10,6 +10,7 @@ idf_component_register(
         settings.cpp
         ota.cpp
         util.cpp
+        state.cpp
     PRIV_REQUIRES
         driver
         bt

@@ -13,6 +13,15 @@ enum button_id
     NUM_BUTTONS
 };
 
+enum
+{
+    BUTTON_UP = BUTTON_0,
+    BUTTON_SELECT = BUTTON_1,
+    BUTTON_DOWN = BUTTON_2,
+    BUTTON_RIGHT = BUTTON_3,
+    BUTTON_LEFT = BUTTON_4,
+};
+
 struct button_t
 {
     uint8_t gpio_num;    // which GPIO for the button
@@ -22,6 +31,12 @@ struct button_t
 };
 
 esp_err_t button_init();
+void button_update();
 
-// get current state of a button (resets pressed/released values)
-esp_err_t button_get(button_t result[NUM_BUTTONS]);
+extern button_t buttons[NUM_BUTTONS];
+
+extern button_t &button_left;
+extern button_t &button_down;
+extern button_t &button_left;
+extern button_t &button_right;
+extern button_t &button_select;

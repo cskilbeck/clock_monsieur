@@ -30,6 +30,9 @@ struct graphics_t
     void draw_seconds(int current_second);
 
     void draw_clock(long seconds);
-    void display(display_t &display);
-    void fade_to(display_t &display, graphics_t &other, float scale);
+    void display();
+    void fade_to(graphics_t &other, float scale);
 };
+
+extern graphics_t gfx;
+extern graphics_t gfx2;

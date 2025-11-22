@@ -24,6 +24,7 @@
 #include "sdkconfig.h"
 #include "version.h"
 #include "ota.h"
+#include "state.h"
 
 LOG_CONTEXT("main");
 
@@ -67,12 +68,9 @@ namespace
         return (int)(t * range) + base;
     }
 
-    graphics_t gfx;
-    graphics_t gfx_other;
-
     void console_read_task(void *pvParameter)
     {
-        vTaskDelay(pdMS_TO_TICKS(200));
+        delay_ms(200);
 
         char cmd[16];
         int cmdlen = 0;
@@ -97,11 +95,9 @@ namespace
                     cmdlen = 0;
                 }
             }
-            vTaskDelay(pdMS_TO_TICKS(100));
+            delay_ms(100);
         }
     }
-
-    int boot_msg_width = measure_string(boot_msg);
 
 }    // namespace
 
@@ -113,24 +109,23 @@ extern "C" void app_main()
 
     LOG_INFO("----- CLOCK MONSIEUR, FIRMWARE VERSION: %s -----", VERSION_STR);
 
+    button_init();
+
+    bool reset_nvs = buttons[BUTTON_UP].held && buttons[BUTTON_DOWN].held;
+
     esp_err_t ret = nvs_flash_init();
-    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND || reset_nvs) {
         ESP_LOG_ERR(nvs_flash_erase());
         ret = nvs_flash_init();
     }
     ESP_LOG_ERR(ret);
 
-
     lux_init();
     display_init();
-    button_init();
 
-    button_t buttons[NUM_BUTTONS] = {};
-
-    button_get(buttons);
     provisioning_init(buttons[2].held);
 
-    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 3072, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 1024 * 6, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(console_read_task, "console", 2048, NULL, 1, NULL, 0);
 
     // got this far, probably fine...
@@ -138,46 +133,29 @@ extern "C" void app_main()
 
     bool full_brightness = false;
 
-    int frames = 0;
+    state_init();
+    state_set(boot_state);
+
     while(true) {
-        display_t &display = display_update();
-        button_get(buttons);
+        display_update();
+        button_update();
 
-        if(buttons[0].pressed) {
-            frames = 0;
-        }
-
-        if(buttons[2].pressed) {
+        if(button_down.pressed) {
             full_brightness = !full_brightness;
         }
 
-        if(buttons[3].pressed) {
-            xTaskCreatePinnedToCore(ota_task, "ota", 1024 * 6, NULL, 1, NULL, 0);
-        }
-
-        int x = 30 - frames / 2;
-
         int ambient = update_ambient();
 
-        if(x >= -boot_msg_width || full_brightness) {
+        if(full_brightness) {
             ambient = 255;
         }
-        display.set_ambient(ambient);
+        display->set_ambient(ambient);
 
-        if(x >= -(boot_msg_width + 20)) {
-            gfx.clear();
-            gfx.draw_string(boot_msg, x, 0, 1);
-            gfx.display(display);
-        } else {
-            struct timeval tv_now;
-            get_time(&tv_now);
-            gfx.draw_clock(tv_now.tv_sec);
-            gfx_other.draw_clock(tv_now.tv_sec + 1);
-            gfx.fade_to(display, gfx_other, tv_now.tv_usec / 1000000.0f);
-        }
-        frames += 1;
+        state_update();
 
-        if(buttons[4].pressed) {
+        display->update_ambient();
+
+        if(button_left.pressed) {
             char buffer[512];
             vTaskList(buffer);
             printf("%s\n", buffer);

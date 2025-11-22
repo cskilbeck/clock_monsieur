@@ -10,6 +10,9 @@
 #include "esp_crt_bundle.h"
 
 #include "version.h"
+#include "util.h"
+#include "state.h"
+#include "provisioning.h"
 
 static const char *TAG = "CUSTOM_OTA";
 
@@ -43,7 +46,7 @@ void ota_mark_app_valid(void)
  * @param buffer_len Length of the buffer
  * @return esp_err_t ESP_OK on success
  */
-esp_err_t check_firmware_version(char *buffer, size_t buffer_len)
+esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
 {
     esp_http_client_config_t config{};
     config.url = "https://clockmonsieur.com/firmware/latest.txt";
@@ -92,8 +95,11 @@ esp_err_t check_firmware_version(char *buffer, size_t buffer_len)
  * @param url The URL to the .bin file (e.g., https://mysite.com/firmware/app.bin)
  * @return esp_err_t
  */
-esp_err_t do_ota_firmware_update(const char *url)
+esp_err_t do_ota_firmware_update(const char *latest)
 {
+    char url[96];
+    sprintf(url, "https://clockmonsieur.com/firmware/%s.bin", latest);
+
     ESP_LOGI(TAG, "Starting OTA Update from: %s", url);
 
     esp_err_t err = ESP_OK;
@@ -199,6 +205,8 @@ esp_err_t do_ota_firmware_update(const char *url)
     }
 
     ESP_LOGI(TAG, "OTA Complete. Prepare to restart system!");
+    delay_secs(1);
+    esp_restart();
 
 ota_end:
     esp_http_client_cleanup(client);
@@ -206,21 +214,14 @@ ota_end:
     return err;
 }
 
-void ota_task(void *)
+bool check_firmware_version()
 {
     char latest[16];
-    static char url[96];
-    check_firmware_version(latest, sizeof(latest));
+    get_latest_firmware_version(latest, sizeof(latest));
+    ESP_LOGI(TAG, "FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
     if(strcmp(latest, VERSION_STR) != 0) {
-        sprintf(url, "https://clockmonsieur.com/firmware/%s.bin", latest);
-        for(char const *s = url; *s; ++s) {
-            ESP_LOGI(TAG, "CHAR \"%c\" = %02x (%d)", *s, *s, *s);
-        }
-        ESP_LOGI(TAG, "FIRMWARE UPGRADE: %s", url);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        do_ota_firmware_update(url);
-    } else {
-        ESP_LOGI(TAG, "Firmware is up to date");
+        state_set(ota_state);
+        do_ota_firmware_update(latest);
     }
-    vTaskDelete(NULL);
+    return true;
 }

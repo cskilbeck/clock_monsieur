@@ -2,5 +2,5 @@
 
 #include <esp_err.h>
 
-void ota_task(void *);
+bool check_firmware_version();
 void ota_mark_app_valid();
