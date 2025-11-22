@@ -35,7 +35,7 @@ void button_update();
 
 extern button_t buttons[NUM_BUTTONS];
 
-extern button_t &button_left;
+extern button_t &button_up;
 extern button_t &button_down;
 extern button_t &button_left;
 extern button_t &button_right;

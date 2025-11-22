@@ -68,6 +68,7 @@ esp_err_t button_init()
         gpio_cfg.pin_bit_mask |= 1LLU << real_buttons[i].gpio_num;
     }
     ESP_CHECK(gpio_config(&gpio_cfg));
+    read_buttons(nullptr);
 
     // start 5mS timer
     esp_timer_handle_t periodic_timer;
@@ -77,7 +78,6 @@ esp_err_t button_init()
     };
     ESP_CHECK(esp_timer_create(&periodic_timer_args, &periodic_timer));
     ESP_CHECK(esp_timer_start_periodic(periodic_timer, 5000));    // 5 mS
-    read_buttons(nullptr);
     return ESP_OK;
 }
 

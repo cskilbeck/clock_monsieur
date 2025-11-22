@@ -349,7 +349,7 @@ void clock_time_task(void *pvParameter)
         xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
 
         if(!got_firmware_version) {
-            got_firmware_version = check_firmware_version();
+            got_firmware_version = check_firmware_version() == ESP_OK;
         }
 
         if(!got_location) {

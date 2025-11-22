@@ -30,44 +30,6 @@ LOG_CONTEXT("main");
 
 namespace
 {
-    char const constexpr boot_msg[] = "Clock Monsieur!";
-
-    float smoothed_ambient = 0.0f;
-    float smooth_factor = 0.01f;
-
-    int update_ambient()
-    {
-        // ambient light response
-        float ambient = (float)lux_get() * (1.0f / 65535);
-
-        smoothed_ambient = smooth_factor * ambient + (1.0f - smooth_factor) * smoothed_ambient;
-
-        // ghetto inverse gamma ramp
-        // float t = 1.0f - smoothed_ambient;
-        // t = 1.0f - t * t * t;
-        float t = smoothed_ambient;
-
-        // scale lux to two 7 bit numbers
-        int base, max;
-        switch(settings.brightness_mode) {
-        default:
-        case brightness_mode_t::high:
-            base = 6;
-            max = 255;
-            break;
-        case brightness_mode_t::medium:
-            base = 3;
-            max = 192;
-            break;
-        case brightness_mode_t::low:
-            base = 1;
-            max = 128;
-            break;
-        }
-        int range = max - base;
-        return (int)(t * range) + base;
-    }
-
     void console_read_task(void *pvParameter)
     {
         delay_ms(200);
@@ -111,10 +73,8 @@ extern "C" void app_main()
 
     button_init();
 
-    bool reset_nvs = buttons[BUTTON_UP].held && buttons[BUTTON_DOWN].held;
-
     esp_err_t ret = nvs_flash_init();
-    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND || reset_nvs) {
+    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOG_ERR(nvs_flash_erase());
         ret = nvs_flash_init();
     }
@@ -126,7 +86,7 @@ extern "C" void app_main()
     provisioning_init(buttons[2].held);
 
     xTaskCreatePinnedToCore(clock_time_task, "clock_time", 1024 * 6, NULL, 1, NULL, 0);
-    xTaskCreatePinnedToCore(console_read_task, "console", 2048, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(console_read_task, "console", 3072, NULL, 1, NULL, 0);
 
     // got this far, probably fine...
     ota_mark_app_valid();
@@ -144,7 +104,7 @@ extern "C" void app_main()
             full_brightness = !full_brightness;
         }
 
-        int ambient = update_ambient();
+        int ambient = lux_update();
 
         if(full_brightness) {
             ambient = 255;

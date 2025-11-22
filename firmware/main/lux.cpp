@@ -7,6 +7,7 @@
 
 #include "gpio_defs.h"
 #include "lux.h"
+#include "settings.h"
 #include "util.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -178,6 +179,9 @@ namespace
         }
     }
 
+    float smoothed_ambient = 0.0f;
+    float smooth_factor = 0.01f;
+
 }    // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -189,7 +193,35 @@ void lux_init()
 
 //////////////////////////////////////////////////////////////////////
 
-uint16_t lux_get()
+int lux_update()
 {
-    return brightness;
+    // ambient light response
+    float ambient = (float)brightness * (1.0f / 65535);
+
+    smoothed_ambient = smooth_factor * ambient + (1.0f - smooth_factor) * smoothed_ambient;
+
+    // ghetto inverse gamma ramp
+    // float t = 1.0f - smoothed_ambient;
+    // t = 1.0f - t * t * t;
+    float t = smoothed_ambient;
+
+    // scale lux to two 7 bit numbers
+    int base, max;
+    switch(settings.brightness_mode) {
+    default:
+    case brightness_mode_t::high:
+        base = 6;
+        max = 255;
+        break;
+    case brightness_mode_t::medium:
+        base = 3;
+        max = 192;
+        break;
+    case brightness_mode_t::low:
+        base = 1;
+        max = 128;
+        break;
+    }
+    int range = max - base;
+    return (int)(t * range) + base;
 }

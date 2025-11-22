@@ -214,14 +214,17 @@ ota_end:
     return err;
 }
 
-bool check_firmware_version()
+esp_err_t check_firmware_version()
 {
     char latest[16];
-    get_latest_firmware_version(latest, sizeof(latest));
+    esp_err_t err = get_latest_firmware_version(latest, sizeof(latest));
+    if(err != ESP_OK) {
+        return err;
+    }
     ESP_LOGI(TAG, "FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
     if(strcmp(latest, VERSION_STR) != 0) {
         state_set(ota_state);
         do_ota_firmware_update(latest);
     }
-    return true;
+    return ESP_OK;
 }
