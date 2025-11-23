@@ -18,6 +18,9 @@ static const char *TAG = "CUSTOM_OTA";
 
 #define OTA_RECV_BUF_SIZE 1024
 
+#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW "latest.txt";
+#define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW "/%s.bin"
+
 /**
  * @brief Mark the current app as valid.
  * Call this after a successful boot and functionality check (e.g. WiFi connection)
@@ -49,7 +52,7 @@ void ota_mark_app_valid(void)
 esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
 {
     esp_http_client_config_t config{};
-    config.url = "https://clockmonsieur.com/firmware/latest.txt";
+    config.url = LATEST_URL;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.timeout_ms = 5000;
 
@@ -98,7 +101,7 @@ esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
 esp_err_t do_ota_firmware_update(const char *latest)
 {
     char url[96];
-    sprintf(url, "https://clockmonsieur.com/firmware/%s.bin", latest);
+    sprintf(url, FIRMWARE_URL_FORMAT_STR, latest);
 
     ESP_LOGI(TAG, "Starting OTA Update from: %s", url);
 

@@ -1,3 +1,3 @@
-void clock_time_task(void *pvParameter);
+void clock_init();
 bool is_time_synchronized();
 void get_time(struct timeval *tv_now);

@@ -381,3 +381,8 @@ void clock_time_task(void *pvParameter)
         }
     }
 }
+
+void clock_init()
+{
+    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 1024 * 6, NULL, 1, NULL, 0);
+}
