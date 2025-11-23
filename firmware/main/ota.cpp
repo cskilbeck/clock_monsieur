@@ -18,7 +18,7 @@ static const char *TAG = "CUSTOM_OTA";
 
 #define OTA_RECV_BUF_SIZE 1024
 
-#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW "latest.txt";
+#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW "/latest.txt";
 #define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW "/%s.bin"
 
 /**
