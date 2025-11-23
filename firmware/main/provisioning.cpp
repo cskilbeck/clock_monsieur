@@ -280,7 +280,7 @@ const wifi_prov_event_handler_t wifi_prov_event_handler = {
     .user_data = NULL,
 };
 
-esp_err_t provisioning_init(bool factory_reset)
+esp_err_t provisioning_init()
 {
 #if CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
     ESP_ERROR_CHECK(read_security_info());
@@ -318,7 +318,7 @@ esp_err_t provisioning_init(bool factory_reset)
     /* Let's find out if the device is provisioned */
     ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
     /* If device is not yet provisioned start provisioning service */
-    if(!provisioned || factory_reset) {
+    if(!provisioned) {
         ESP_LOGI(TAG, "Starting provisioning");
 
         /* What is the Device Service Name that we want

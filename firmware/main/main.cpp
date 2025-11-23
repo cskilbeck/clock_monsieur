@@ -54,6 +54,19 @@ namespace
                 cmd[cmdlen] = 0;
                 if(enter) {
                     LOG_INFO("CMD: \"%s\" (%d)", cmd, cmdlen);
+                    if(strcmp(cmd, "help") == 0) {
+                        printf("mem - show stack usage and heap free\n");
+                        printf("factory - reset NVS\n");
+                    } else if(strcmp(cmd, "mem") == 0) {
+                        char buffer[512];
+                        vTaskList(buffer);
+                        printf("%s\n", buffer);
+                        auto x = esp_get_minimum_free_heap_size();
+                        printf("HEAP: %lu\n", x);
+                    } else if(strcmp(cmd, "factory") == 0) {
+                        ESP_LOG_ERR(nvs_flash_erase());
+                        ESP_LOG_ERR(nvs_flash_init());
+                    }
                     cmdlen = 0;
                 }
             }
@@ -71,8 +84,6 @@ extern "C" void app_main()
 
     LOG_INFO("----- CLOCK MONSIEUR, FIRMWARE VERSION: %s -----", VERSION_STR);
 
-    button_init();
-
     esp_err_t ret = nvs_flash_init();
     if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOG_ERR(nvs_flash_erase());
@@ -82,8 +93,8 @@ extern "C" void app_main()
 
     lux_init();
     display_init();
-
-    provisioning_init(buttons[2].held);
+    button_init();
+    provisioning_init();
 
     xTaskCreatePinnedToCore(clock_time_task, "clock_time", 1024 * 6, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(console_read_task, "console", 3072, NULL, 1, NULL, 0);
@@ -114,13 +125,5 @@ extern "C" void app_main()
         state_update();
 
         display->update_ambient();
-
-        if(button_left.pressed) {
-            char buffer[512];
-            vTaskList(buffer);
-            printf("%s\n", buffer);
-            auto x = esp_get_minimum_free_heap_size();
-            printf("HEAP: %lu\n", x);
-        }
     }
 }
