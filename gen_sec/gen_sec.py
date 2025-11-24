@@ -18,6 +18,7 @@ from pathlib import Path
 from io import StringIO
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L
+from qr_code_pdf import create_qr_pdf
 
 # --- CONFIGURATION & CONSTANTS ---
 PASSWORD_CHAR_SET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -67,17 +68,18 @@ def esp_tool(arguments):
         return None
 
 
-def get_mac_address_24():
+def get_mac_address():
     # MAC: 10:20:ba:1a:00:f8
     x = esp_tool(["read_mac"])
     if not x:
         raise Exception("Failed to get MAC address from esptool.py")
     lines = StringIO(x)
     for line in lines:
-        if line.strip().startswith("MAC:"):
-            print(f'MAC address: {line.strip()}')
-            mac_address = int("".join(line[4:].strip().split(":")[3:]), base=16)
-            print(f'MA21: {mac_address:06x}')
+        stripped = line.strip()
+        if line.startswith("MAC:"):
+            print(f'MAC Address found : {line.strip()}')
+            mac_address = int("".join(line[4:].split(":")), base=16)
+            print(f'MAC Address parsed: {mac_address:012x}')
             return mac_address
     return 0
 
@@ -86,7 +88,7 @@ def generate_mac_based_password():
     """
     Generate a password from low 21 bits of device mac address
     """
-    mac = get_mac_address_24() & ((1 << 21) - 1)  # get low 21 bits of mac address
+    mac = get_mac_address() & ((1 << 20) - 1)  # get low 20 bits of mac address
     base = len(PASSWORD_CHAR_SET)
     new_password = ""
     while mac > 0:
@@ -370,6 +372,7 @@ def make_qr_code():
     filename = build_dir / "qr_code.png"
     print(f'Create QR code at {filename}, payload {payload}')
     create_qr_code(payload, filename, box_size=8, border=2)
+    create_qr_pdf(filename, build_dir / "qr_code_label.pdf", "APP", '"ESP BLE<br/>Provisioning"', f'PIN:  {password}')
 
 
 # --- MAIN EXECUTION ---
@@ -384,7 +387,8 @@ if __name__ == "__main__":
     parser.add_argument("--chip", help="Target ESP chip type (e.g., esp32, esp32s3).", metavar='chip')
     parser.add_argument("--idf_path", help="Override env $IDF_PATH", metavar='dir')
     parser.add_argument("--username", help=f'Username', default=DEFAULT_USERNAME, metavar='name')
-    parser.add_argument("--password", help="Optional custom password (4 chars, A-Z/0-9) for testing.", metavar='password')
+    parser.add_argument("--password", help="Optional custom password (4 chars, A-Z/0-9) for testing.",
+                        metavar='password')
     parser.add_argument('--service_name', help=f'BLE service name', default=DEFAULT_SERVICE_NAME, metavar='name')
     parser.add_argument("--flash", help="Flash partition with security data.", action="store_true")
     parser.add_argument("--partition", help=f'SecInfo partition', default=DEFAULT_PARTITION_NAME, metavar='name')

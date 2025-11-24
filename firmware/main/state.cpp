@@ -6,6 +6,8 @@
 #include "state.h"
 #include "version.h"
 #include "graphics.h"
+#include "settings.h"
+#include "util.h"
 #include "clock_time.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -106,9 +108,28 @@ void clock_state_t::on_update()
 {
     struct timeval tv_now;
     get_time(&tv_now);
+
     gfx.draw_clock(tv_now.tv_sec);
-    gfx2.draw_clock(tv_now.tv_sec + 1);
-    gfx.fade_to(gfx2, tv_now.tv_usec / 1000000.0f);
+
+    float constexpr microseconds = 1000000.0f;
+    float constexpr one_second = 1.0f;
+    float second_snap{};
+    switch(settings.second_snap_mode) {
+    case second_snap_mode_t::off:
+        gfx.display();
+        return;    // <--- !
+    case second_snap_mode_t::high:
+        second_snap = one_second / microseconds;
+        break;
+    case second_snap_mode_t::medium:
+        second_snap = (one_second / 0.5f) / microseconds;
+        break;
+    case second_snap_mode_t::low:
+        second_snap = (one_second / 0.2f) / microseconds;
+        break;
+    }
+    gfx2.draw_clock(tv_now.tv_sec - 1);
+    gfx2.fade_to(gfx, min(1.0f, tv_now.tv_usec * second_snap));
 }
 
 //////////////////////////////////////////////////////////////////////

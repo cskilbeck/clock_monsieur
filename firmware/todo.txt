@@ -10,15 +10,15 @@ X test points everywhere
 X tweak TLC5948 footprint
 X fix esp-prog header pinout
 X provisioning stuff in factory partition
+X OTA firmware update
+X measure/tweak cc drain capacitors
 
 ? put ambient light sensor on the front
+- tweak Ambient light sensor gamma ramp
 
-- OTA firmware update
 - bigger less ridiculous buttons
 - diagnose esp-prog boot / reset problem
-- measure/tweak cc drain capacitors
 - frosted glass/gel problem
-- tweak Ambient light sensor gamma ramp
 - small font for menus
 - menus
     - 12/24
@@ -32,4 +32,4 @@ X provisioning stuff in factory partition
     - Set timezone
     - Setup WiFi
     - Reset WiFi
-    - Undo last OTA update
+    - Undo last OTA update?

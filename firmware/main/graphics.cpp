@@ -285,6 +285,9 @@ void graphics_t::draw_seconds(int current_second)
         }
         break;
     case seconds_mode_t::single:
+        for(int i = 0; i < 60; ++i) {
+            set_second(0.25f, i);
+        }
         set_second(1.0f, current_second);
         break;
     case seconds_mode_t::tail_short:
