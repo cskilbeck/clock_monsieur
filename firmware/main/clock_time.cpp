@@ -14,12 +14,7 @@
 #include "ota.h"
 #include "util.h"
 
-
-namespace
-{
-    LOG_CONTEXT("http");
-    int timezone_offset_seconds = 0;
-}    // namespace
+LOG_CONTEXT("clock");
 
 //////////////////////////////////////////////////////////////////////
 
@@ -41,19 +36,21 @@ namespace
 //     "query": "92.236.115.196"
 // }
 
-static const char *TAG = "clock_time";
-
 #define MAX_HTTP_OUTPUT_BUFFER 512
 
 #define TIMEZONEDB_API_KEY "VV0F65261GPD"
 
-bool got_location{ false };
-bool got_timezone{ false };
-bool got_firmware_version{ false };
-bool got_sntp{ false };
+namespace
+{
+    int timezone_offset_seconds = 0;
+    bool got_location{ false };
+    bool got_timezone{ false };
+    bool got_firmware_version{ false };
 
-double current_lat = 0.0;
-double current_lon = 0.0;
+    double current_lat = 0.0;
+    double current_lon = 0.0;
+
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 
@@ -99,27 +96,29 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
             memcpy(ctx->buffer + ctx->len, evt->data, evt->data_len);
             ctx->len += evt->data_len;
         } else {
-            ESP_LOGE(TAG, "Buffer overflow! Data truncated.");
+            LOG_ERROR("Buffer overflow! Data truncated.");
         }
         break;
     case HTTP_EVENT_ON_FINISH:
         if(ctx->len < sizeof(ctx->buffer) - 1) {
             ctx->buffer[ctx->len] = '\0';
-            ESP_LOGI(TAG, "Response Size: %d", ctx->len);
-            ESP_LOGI(TAG, "Response: %s", ctx->buffer);
+            LOG_DEBUG("Response Size: %d", ctx->len);
+            LOG_DEBUG("Response: %s", ctx->buffer);
         }
         break;
     case HTTP_EVENT_ERROR:
-        ESP_LOGW(TAG, "HTTP Event Error: %d", evt->event_id);
+        LOG_WARN("HTTP Event Error: %d", evt->event_id);
         break;
     case HTTP_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "Disconnected, OK");
+        LOG_INFO("Disconnected, OK");
         break;
     default:
         break;
     }
     return ESP_OK;
 }
+
+//////////////////////////////////////////////////////////////////////
 
 esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries, int retry_delay_ms)
 {
@@ -152,7 +151,7 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
         } else if(err == ESP_ERR_HTTP_EAGAIN) {
             delay_ms(retry_delay_ms);
         } else {
-            ESP_LOGE(TAG, "HTTP CLIENT Error %d (%s)", err, esp_err_to_name(err));
+            LOG_ERROR("HTTP CLIENT Error %d (%s)", err, esp_err_to_name(err));
             return err;
         }
         retries -= 1;
@@ -163,11 +162,14 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
 //////////////////////////////////////////////////////////////////////
 // request to ip-api.com to get lat/lon.
 
-esp_err_t get_location_data()
+esp_err_t get_location()
 {
+    if(got_location) {
+        return ESP_OK;
+    }
     esp_err_t err = do_http_request("http://ip-api.com/json", &context, 10, 1000);
     if(err != ESP_OK) {
-        ESP_LOGE(TAG, "Can't get location!?");
+        LOG_ERROR("Can't get location!?");
         return err;
     }
 
@@ -175,19 +177,19 @@ esp_err_t get_location_data()
 
     cJSON *root = cJSON_Parse(json_response);
     if(root == NULL) {
-        ESP_LOGE(TAG, "JSON parse error from location data");
+        LOG_ERROR("JSON parse error from location data");
         return ESP_ERR_INVALID_RESPONSE;
     }
     DEFER(cJSON_Delete(root));
 
     cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
     if(status == NULL) {
-        ESP_LOGE(TAG, "No status");
+        LOG_ERROR("No status");
         return ESP_ERR_INVALID_RESPONSE;
     }
 
     if(!cJSON_IsString(status)) {
-        ESP_LOGE(TAG, "Status not a string");
+        LOG_ERROR("Status not a string");
         return ESP_ERR_INVALID_RESPONSE;
     }
 
@@ -197,7 +199,7 @@ esp_err_t get_location_data()
         if(msg && cJSON_IsString(msg)) {
             message = msg->valuestring;
         }
-        ESP_LOGE(TAG, "Failed: %s (%s)", status->string, message);
+        LOG_ERROR("Failed: %s (%s)", status->string, message);
         return ESP_ERR_INVALID_RESPONSE;
     }
 
@@ -205,14 +207,14 @@ esp_err_t get_location_data()
     cJSON *lon_item = cJSON_GetObjectItemCaseSensitive(root, "lon");
 
     if(!(cJSON_IsNumber(lat_item) && cJSON_IsNumber(lon_item))) {
-        ESP_LOGE(TAG, "lat/lon not both numbers!?");
+        LOG_ERROR("lat/lon not both numbers!?");
         return ESP_ERR_INVALID_RESPONSE;
     }
 
     // #define LOCATION_TESTING
 
 #if defined(LOCATION_TESTING)
-    ESP_LOGI(TAG, "!!!!!!!!!!!!! LOCATION TESTING !!!!!!!!!!!!!!!!");
+    LOG_INFO("!!!!!!!!!!!!! LOCATION TESTING !!!!!!!!!!!!!!!!");
 
     // double const sydney_lat = -33.978364;
     // double const sydney_lon = 151.164000;
@@ -236,15 +238,21 @@ esp_err_t get_location_data()
     got_location = true;
 #endif
 
-    ESP_LOGI(TAG, "Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
+    LOG_INFO("Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
     return ESP_OK;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t get_timezone_data()
+esp_err_t get_timezone()
 {
-    ESP_LOGI(TAG, "get_timezone_data");
+    if(got_timezone) {
+        return ESP_OK;
+    }
+    if(!got_location) {
+        return ESP_FAIL;
+    }
+    LOG_INFO("get_timezone_data");
 
     char url_buffer[256];
     sprintf(url_buffer, "http://api.timezonedb.com/v2.1/get-time-zone?key=%s&format=json&by=position&lat=%.4f&lng=%.4f", TIMEZONEDB_API_KEY,
@@ -258,18 +266,18 @@ esp_err_t get_timezone_data()
     char *json_response = (char *)context.buffer;
     cJSON *root = cJSON_Parse(json_response);
     if(root == NULL) {
-        ESP_LOGE(TAG, "Error parsing response: %s", json_response);
+        LOG_ERROR("Error parsing response: %s", json_response);
         return ESP_ERR_INVALID_RESPONSE;
     }
     DEFER(cJSON_Delete(root));
 
     cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
     if(!cJSON_IsString(status)) {
-        ESP_LOGE(TAG, "Error parsing JSON from timezonedb");
+        LOG_ERROR("Error parsing JSON from timezonedb");
         return ESP_ERR_INVALID_RESPONSE;
     }
     if(strcmp(status->valuestring, "OK") != 0) {
-        ESP_LOGE(TAG, "Error getting timezone: status = %s", status->valuestring);
+        LOG_ERROR("Error getting timezone: status = %s", status->valuestring);
         return ESP_ERR_INVALID_RESPONSE;
     }
 
@@ -280,7 +288,7 @@ esp_err_t get_timezone_data()
 
     cJSON *offset_item = cJSON_GetObjectItemCaseSensitive(root, "gmtOffset");
     if(!(cJSON_IsNumber(offset_item))) {
-        ESP_LOGE(TAG, "Bad JSON!?");
+        LOG_ERROR("Bad JSON!?");
         return ESP_ERR_INVALID_RESPONSE;
     }
     timezone_offset_seconds = offset_item->valueint;
@@ -317,10 +325,14 @@ void delay_until(long hour, long minute)
 
 //////////////////////////////////////////////////////////////////////
 
+EventGroupHandle_t sntp_events;
+
+#define SNTP_UP_BIT BIT0
+
 void sntp_callback(struct timeval *tv)
 {
-    got_sntp = true;
-    ESP_LOGI(TAG, "SNTP IS UP!");
+    LOG_INFO("SNTP IS UP!");
+    xEventGroupSetBits(sntp_events, SNTP_UP_BIT);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -328,20 +340,15 @@ void sntp_callback(struct timeval *tv)
 
 void clock_time_task(void *pvParameter)
 {
-    ESP_LOGI(TAG, "Initializing SNTP for time sync.");
+    sntp_events = xEventGroupCreate();
+
+    LOG_INFO("Initializing SNTP for time sync.");
     esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_setservername(1, "time.google.com");
 
-    // Sit in a loop
-    // if not got location, try to get location
-    // if got location and not got timezone, try to get timezone
-    // if sntp not up and we haven't reset it for more than N seconds, reset it
-    // wait 10 seconds
-    // loop
-
-    int sntp_reset = 0;
+    bool got_sntp{ false };
 
     while(true) {
 
@@ -352,37 +359,34 @@ void clock_time_task(void *pvParameter)
             got_firmware_version = check_firmware_version() == ESP_OK;
         }
 
-        if(!got_location) {
-            get_location_data();
-        }
+        get_location();
 
-        if(got_location && !got_timezone) {
-            get_timezone_data();
-        }
+        get_timezone();
 
-        ESP_LOGI(TAG, "SNTP%s synchronized", got_sntp ? "" : " NOT");
+        LOG_INFO("Wait for SNTP...");
 
+        // wait 30 seconds for SNTP to arrive
+        EventBits_t sntp_up = xEventGroupWaitBits(sntp_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
+
+        got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
         if(!got_sntp) {
-            if(--sntp_reset < 0) {
-                ESP_LOGI(TAG, "RESET SNTP");
-                esp_sntp_stop();
-                esp_sntp_init();
-                sntp_reset = 3;
-            }
+            LOG_INFO("RESET SNTP");
+            esp_sntp_stop();
+            esp_sntp_init();
         }
 
         if(got_sntp && got_location && got_timezone && got_firmware_version) {
-            ESP_LOGI(TAG, "Clock is good, waiting until 4am to do it all again...");
+            LOG_INFO("Clock is good, waiting until 4am to do it all again...");
             delay_until(4, 0);
             got_timezone = false;
             got_firmware_version = false;
-        } else {
-            delay_secs(10);
         }
     }
 }
 
+//////////////////////////////////////////////////////////////////////
+
 void clock_init()
 {
-    xTaskCreatePinnedToCore(clock_time_task, "clock_time", 1024 * 6, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(clock_time_task, "clock", 1024 * 6, NULL, 1, NULL, 0);
 }

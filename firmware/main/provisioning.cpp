@@ -1,3 +1,5 @@
+//////////////////////////////////////////////////////////////////////
+
 #include <stdio.h>
 #include <string.h>
 
@@ -17,7 +19,10 @@
 
 static char const *TAG = "provisioning";
 
+//////////////////////////////////////////////////////////////////////
+
 #define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 0
+
 #define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 1
 
 #define PROV_QR_VERSION "v1"
@@ -27,7 +32,13 @@ static char const *TAG = "provisioning";
 #define SEC_PARTITION_LABEL "prov_dat"
 #define SEC_PARTITION_SUBTYPE ((esp_partition_subtype_t)0x40)
 
+esp_err_t start_provisioning();
+
 EventGroupHandle_t wifi_event_group;
+
+int wifi_retries = 0;
+
+//////////////////////////////////////////////////////////////////////
 
 #if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
 
@@ -76,11 +87,15 @@ static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *veri
     return ESP_OK;
 }
 
+//////////////////////////////////////////////////////////////////////
+
 #else
 
 // PROD MODE - get sec_info from 'prov_dat' partition
 
+//////////////////////////////////////////////////////////////////////
 // NOTE: This struct must line up with gen_sec.py
+
 struct sec_info_t
 {
     uint8_t password_len;
@@ -90,6 +105,8 @@ struct sec_info_t
 };
 
 static sec_info_t sec_info{};
+
+//////////////////////////////////////////////////////////////////////
 
 void dump_hex(char *data, size_t len)
 {
@@ -105,8 +122,10 @@ void dump_hex(char *data, size_t len)
     printf("\n");
 }
 
+//////////////////////////////////////////////////////////////////////
 // Load the sec_info_t from the 'prov_dat' partition
 // This should have been written by gen_sec.py
+
 esp_err_t read_security_info()
 {
     char const *TAG = "sec_info";
@@ -135,10 +154,14 @@ esp_err_t read_security_info()
     return err;
 }
 
+//////////////////////////////////////////////////////////////////////
+
 char const *provisioning_pop()
 {
     return sec_info.password;
 }
+
+//////////////////////////////////////////////////////////////////////
 
 static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
 {
@@ -146,6 +169,8 @@ static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
     *salt_len = sizeof(sec_info.salt);
     return ESP_OK;
 }
+
+//////////////////////////////////////////////////////////////////////
 
 static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 {
@@ -156,8 +181,9 @@ static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *veri
 
 #endif    // CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
 
+//////////////////////////////////////////////////////////////////////
+// Event handler for catching system events
 
-/* Event handler for catching system events */
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     if(event_base == WIFI_PROV_EVENT) {
@@ -179,16 +205,14 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
                      "Provisioning failed!\n\tReason : %s"
                      "\n\tPlease reset to factory and retry provisioning",
                      (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi station authentication failed" : "Wi-Fi access-point not found");
-#ifdef CONFIG_EXAMPLE_RESET_PROV_MGR_ON_FAILURE
+
             /* Reset the state machine on provisioning failure.
-             * This is enabled by the CONFIG_EXAMPLE_RESET_PROV_MGR_ON_FAILURE configuration.
              * It allows the provisioning manager to retry the provisioning process
              * based on the number of attempts specified in wifi_conn_attempts. After attempting
              * the maximum number of retries, the provisioning manager will reset the state machine
              * and the provisioning process will be terminated.
              */
             wifi_prov_mgr_reset_sm_state_on_failure();
-#endif
             break;
         }
         case WIFI_PROV_CRED_SUCCESS:
@@ -207,8 +231,15 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             esp_wifi_connect();
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGI(TAG, "Disconnected. Connecting to the AP again...");
-            esp_wifi_connect();
+            wifi_retries += 1;
+            ESP_LOGI(TAG, "Disconnected");
+            if(wifi_retries < 10) {
+                ESP_LOGI(TAG, "Connecting to the AP again for %d time", wifi_retries);
+                esp_wifi_connect();
+            } else {
+                ESP_LOGI(TAG, "Wifi ain't happening - let's try provisioning");
+                wifi_prov_mgr_reset_sm_state_for_reprovision();
+            }
             break;
         default:
             break;
@@ -246,12 +277,14 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     }
 }
 
+//////////////////////////////////////////////////////////////////////
 
 static void get_device_service_name(char *service_name, size_t max)
 {
     snprintf(service_name, max, "Clock Monsieur");
 }
 
+//////////////////////////////////////////////////////////////////////
 
 void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *event_data)
 {
@@ -274,10 +307,75 @@ void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *e
     }
 }
 
+//////////////////////////////////////////////////////////////////////
+
+esp_err_t start_provisioning()
+{
+    ESP_LOGI(TAG, "Starting provisioning");
+
+    /* What is the Device Service Name that we want
+     * This translates to :
+     *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
+     *     - device name when scheme is wifi_prov_scheme_ble
+     */
+    char service_name[16];
+    get_device_service_name(service_name, sizeof(service_name));
+
+    wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
+    /* The username must be the same one, which has been used in the generation of salt and verifier */
+
+    /* This is the structure for passing security parameters
+     * for the protocomm security 2.
+     * If dynamically allocated, sec2_params pointer and its content
+     * must be valid till WIFI_PROV_END event is triggered.
+     */
+    wifi_prov_security2_params_t sec2_params = {};
+
+    ESP_ERROR_CHECK(example_get_sec2_salt(&sec2_params.salt, &sec2_params.salt_len));
+    ESP_ERROR_CHECK(example_get_sec2_verifier(&sec2_params.verifier, &sec2_params.verifier_len));
+
+    wifi_prov_security2_params_t *sec_params = &sec2_params;
+    /* What is the service key (could be NULL)
+     * This translates to :
+     *     - Wi-Fi password when scheme is wifi_prov_scheme_softap
+     *          (Minimum expected length: 8, maximum 64 for WPA2-PSK)
+     *     - simply ignored when scheme is wifi_prov_scheme_ble
+     */
+    const char *service_key = NULL;
+    /* This step is only useful when scheme is wifi_prov_scheme_ble. This will
+     * set a custom 128 bit UUID which will be included in the BLE advertisement
+     * and will correspond to the primary GATT service that provides provisioning
+     * endpoints as GATT characteristics. Each GATT characteristic will be
+     * formed using the primary service UUID as base, with different auto assigned
+     * 12th and 13th bytes (assume counting starts from 0th byte). The client side
+     * applications must identify the endpoints by reading the User Characteristic
+     * Description descriptor (0x2901) for each characteristic, which contains the
+     * endpoint name of the characteristic */
+    uint8_t custom_service_uuid[] = {
+        /* LSB <---------------------------------------
+         * ---------------------------------------> MSB */
+        0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
+    };
+
+    /* If your build fails with linker errors at this point, then you may have
+     * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
+     * the sdkconfig.defaults in the example project) */
+    wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
+
+    /* Do not stop and de-init provisioning even after success, so that we can restart it later. */
+    /* Start provisioning service */
+    ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, service_name, service_key));
+    return ESP_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
 const wifi_prov_event_handler_t wifi_prov_event_handler = {
     .event_cb = wifi_prov_app_callback,
     .user_data = NULL,
 };
+
+//////////////////////////////////////////////////////////////////////
 
 esp_err_t provisioning_init()
 {
@@ -318,61 +416,7 @@ esp_err_t provisioning_init()
     ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
     /* If device is not yet provisioned start provisioning service */
     if(!provisioned) {
-        ESP_LOGI(TAG, "Starting provisioning");
-
-        /* What is the Device Service Name that we want
-         * This translates to :
-         *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
-         *     - device name when scheme is wifi_prov_scheme_ble
-         */
-        char service_name[16];
-        get_device_service_name(service_name, sizeof(service_name));
-
-        wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
-        /* The username must be the same one, which has been used in the generation of salt and verifier */
-
-        /* This is the structure for passing security parameters
-         * for the protocomm security 2.
-         * If dynamically allocated, sec2_params pointer and its content
-         * must be valid till WIFI_PROV_END event is triggered.
-         */
-        wifi_prov_security2_params_t sec2_params = {};
-
-        ESP_ERROR_CHECK(example_get_sec2_salt(&sec2_params.salt, &sec2_params.salt_len));
-        ESP_ERROR_CHECK(example_get_sec2_verifier(&sec2_params.verifier, &sec2_params.verifier_len));
-
-        wifi_prov_security2_params_t *sec_params = &sec2_params;
-        /* What is the service key (could be NULL)
-         * This translates to :
-         *     - Wi-Fi password when scheme is wifi_prov_scheme_softap
-         *          (Minimum expected length: 8, maximum 64 for WPA2-PSK)
-         *     - simply ignored when scheme is wifi_prov_scheme_ble
-         */
-        const char *service_key = NULL;
-        /* This step is only useful when scheme is wifi_prov_scheme_ble. This will
-         * set a custom 128 bit UUID which will be included in the BLE advertisement
-         * and will correspond to the primary GATT service that provides provisioning
-         * endpoints as GATT characteristics. Each GATT characteristic will be
-         * formed using the primary service UUID as base, with different auto assigned
-         * 12th and 13th bytes (assume counting starts from 0th byte). The client side
-         * applications must identify the endpoints by reading the User Characteristic
-         * Description descriptor (0x2901) for each characteristic, which contains the
-         * endpoint name of the characteristic */
-        uint8_t custom_service_uuid[] = {
-            /* LSB <---------------------------------------
-             * ---------------------------------------> MSB */
-            0xb4, 0xdf, 0x5a, 0x1c, 0x3f, 0x6b, 0xf4, 0xbf, 0xea, 0x4a, 0x82, 0x03, 0x04, 0x90, 0x1a, 0x02,
-        };
-
-        /* If your build fails with linker errors at this point, then you may have
-         * forgotten to enable the BT stack or BTDM BLE settings in the SDK (e.g. see
-         * the sdkconfig.defaults in the example project) */
-        wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
-
-        /* Do not stop and de-init provisioning even after success, so that we can restart it later. */
-        /* Start provisioning service */
-        ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, service_name, service_key));
-
+        ESP_ERROR_CHECK(start_provisioning());
     } else {
         ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
