@@ -114,17 +114,17 @@ void clock_state_t::on_update()
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
     float second_snap{};
-    switch(settings.second_snap_mode) {
-    case second_snap_mode_t::off:
+    switch(settings.clock_fade_mode) {
+    case clock_fade_mode_t::off:
         gfx.display();
         return;    // <--- !
-    case second_snap_mode_t::high:
+    case clock_fade_mode_t::high:
         second_snap = one_second / microseconds;
         break;
-    case second_snap_mode_t::medium:
+    case clock_fade_mode_t::medium:
         second_snap = (one_second / 0.5f) / microseconds;
         break;
-    case second_snap_mode_t::low:
+    case clock_fade_mode_t::low:
         second_snap = (one_second / 0.2f) / microseconds;
         break;
     }

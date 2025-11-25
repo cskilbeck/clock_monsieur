@@ -60,7 +60,7 @@ enum class colon_mode_t : uint8_t
 //////////////////////////////////////////////////////////////////////
 // How quickly to transition from one second to the next
 
-enum class second_snap_mode_t : uint8_t
+enum class clock_fade_mode_t : uint8_t
 {
     off = 0,
     low = 1,
@@ -77,7 +77,7 @@ struct settings_t
     brightness_mode_t brightness_mode{ brightness_mode_t::high };
     seconds_mode_t seconds_mode{ seconds_mode_t::tail_long };
     colon_mode_t colon_mode{ colon_mode_t::on };
-    second_snap_mode_t second_snap_mode{ second_snap_mode_t::medium };
+    clock_fade_mode_t clock_fade_mode{ clock_fade_mode_t::medium };
 };
 
 extern settings_t settings;

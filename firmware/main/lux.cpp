@@ -204,24 +204,39 @@ int lux_update()
     // float t = 1.0f - smoothed_ambient;
     // t = 1.0f - t * t * t;
     float t = smoothed_ambient;
-
-    // scale lux to two 7 bit numbers
-    int base, max;
-    switch(settings.brightness_mode) {
-    default:
-    case brightness_mode_t::high:
-        base = 6;
-        max = 255;
-        break;
-    case brightness_mode_t::medium:
-        base = 3;
-        max = 192;
-        break;
-    case brightness_mode_t::low:
-        base = 1;
-        max = 128;
-        break;
+    int brightness = 255;
+    if(settings.auto_brightness == auto_brightness_t::on) {
+        // scale lux to two 7 bit numbers
+        int base, max;
+        switch(settings.brightness_mode) {
+        default:
+        case brightness_mode_t::high:
+            base = 6;
+            max = 255;
+            break;
+        case brightness_mode_t::medium:
+            base = 3;
+            max = 128;
+            break;
+        case brightness_mode_t::low:
+            base = 1;
+            max = 64;
+            break;
+        }
+        int range = max - base;
+        brightness = (int)(t * range) + base;
+    } else {
+        switch(settings.brightness_mode) {
+        case brightness_mode_t::high:
+            brightness = 255;
+            break;
+        case brightness_mode_t::medium:
+            brightness = 64;
+            break;
+        case brightness_mode_t::low:
+            brightness = 16;
+            break;
+        }
     }
-    int range = max - base;
-    return (int)(t * range) + base;
+    return brightness;
 }
