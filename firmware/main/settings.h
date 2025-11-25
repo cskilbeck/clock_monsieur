@@ -78,6 +78,9 @@ struct settings_t
     seconds_mode_t seconds_mode{ seconds_mode_t::tail_long };
     colon_mode_t colon_mode{ colon_mode_t::on };
     clock_fade_mode_t clock_fade_mode{ clock_fade_mode_t::medium };
+
+    esp_err_t load();
+    esp_err_t save();
 };
 
 extern settings_t settings;

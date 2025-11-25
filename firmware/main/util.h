@@ -26,15 +26,8 @@ extern "C" {
 
 //////////////////////////////////////////////////////////////////////
 
-inline void delay_ms(int ms)
-{
-    vTaskDelay(pdMS_TO_TICKS(ms));
-}
-
-inline void delay_secs(int seconds)
-{
-    delay_ms(seconds * 1000);
-}
+void delay_ms(int ms);
+void delay_secs(int seconds);
 
 //////////////////////////////////////////////////////////////////////
 

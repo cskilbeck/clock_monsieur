@@ -2,6 +2,14 @@
 
 #include "util.h"
 
-namespace util
+//////////////////////////////////////////////////////////////////////
+
+void delay_ms(int ms)
 {
-}    // namespace util
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+void delay_secs(int seconds)
+{
+    delay_ms(seconds * 1000);
+}

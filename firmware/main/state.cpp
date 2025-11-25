@@ -3,17 +3,22 @@
 #include <memory>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "nvs_flash.h"
 #include "state.h"
 #include "version.h"
 #include "graphics.h"
 #include "settings.h"
+#include "button.h"
 #include "util.h"
 #include "clock_time.h"
+
+LOG_CONTEXT("state");
 
 //////////////////////////////////////////////////////////////////////
 
 state_handler_t null_state;
 boot_state_t boot_state;
+factory_reset_state_t factory_reset_state;
 clock_state_t clock_state;
 ota_state_t ota_state;
 
@@ -79,12 +84,14 @@ void boot_state_t::on_start()
 {
     boot_msg = (char *)malloc(128);
     sprintf(boot_msg, "Clock Monsieur v %s", VERSION_STR);
+    factory_reset = true;
 }
 
 //////////////////////////////////////////////////////////////////////
 
 void boot_state_t::on_update()
 {
+    factory_reset &= button_left.held && button_right.held;
     int x = 30 - frames / 2;
     display->set_ambient(255);
     gfx.clear();
@@ -100,6 +107,26 @@ void boot_state_t::on_update()
 void boot_state_t::on_stop()
 {
     free(boot_msg);
+    if(factory_reset) {
+        state_set(factory_reset_state);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void factory_reset_state_t::on_update()
+{
+    char const *msg = "Factory Reset!";
+    int x = 30 - frames / 2;
+    display->set_ambient(255);
+    gfx.clear();
+    int width = gfx.draw_string(msg, x, 0, 1);
+    gfx.display();
+    if(x < -width) {
+        ESP_LOG_ERR(nvs_flash_erase());
+        ESP_LOG_ERR(nvs_flash_init());
+        esp_restart();
+    }
 }
 
 //////////////////////////////////////////////////////////////////////

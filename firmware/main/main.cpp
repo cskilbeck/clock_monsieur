@@ -19,6 +19,42 @@
 
 LOG_CONTEXT("main");
 
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"mem", "show stack and heap usage">
+{
+    void on_command(int argc, char **argv) override
+    {
+        char buffer[512];
+        vTaskList(buffer);
+        printf("%s\n", buffer);
+        auto x = esp_get_minimum_free_heap_size();
+        printf("HEAP: %lu\n", x);
+    }
+} cmd_mem;
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"factory", "erase NVS partition">
+{
+    void on_command(int argc, char **argv) override
+    {
+        state_set(factory_reset_state);
+    }
+} cmd_factory;
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"reset", "reset the ESP32">
+{
+    void on_command(int argc, char **argv) override
+    {
+        esp_restart();
+    }
+} cmd_reset;
+
+//////////////////////////////////////////////////////////////////////
+
 extern "C" void app_main()
 {
     LOG_INFO("----- CLOCK MONSIEUR, FIRMWARE VERSION: %s -----", VERSION_STR);
@@ -29,6 +65,8 @@ extern "C" void app_main()
         ret = nvs_flash_init();
     }
     ESP_LOG_ERR(ret);
+
+    settings.load();
 
     lux_init();
     display_init();

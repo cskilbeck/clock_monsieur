@@ -22,7 +22,6 @@ static char const *TAG = "provisioning";
 
 #define PROV_QR_VERSION "v1"
 #define PROV_TRANSPORT_BLE "ble"
-// #define QRCODE_BASE_URL "https://espressif.github.io/esp-jumpstart/qrcode.html"
 
 // Name, subtype of partition containing security info
 #define SEC_PARTITION_LABEL "prov_dat"
@@ -128,11 +127,11 @@ esp_err_t read_security_info()
     if(err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read data from partition (0x%x)!", err);
     }
-    ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
-    ESP_LOGI(TAG, "SALT:");
-    dump_hex(sec_info.salt, sizeof(sec_info.salt));
-    ESP_LOGI(TAG, "VERIFIER:");
-    dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
+    // ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
+    // ESP_LOGI(TAG, "SALT:");
+    // dump_hex(sec_info.salt, sizeof(sec_info.salt));
+    // ESP_LOGI(TAG, "VERIFIER:");
+    // dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
     return err;
 }
 

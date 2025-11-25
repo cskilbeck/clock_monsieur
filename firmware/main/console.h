@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cstring>
+
 //////////////////////////////////////////////////////////////////////
 
 struct console_command_base_t
@@ -13,6 +15,8 @@ struct console_command_base_t
     virtual void on_command(int argc, char **argv){};
 
     console_command_base_t *next;
+
+    static console_command_base_t *command_list;
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -47,7 +51,27 @@ template <string_literal NAME, string_literal HELP> struct console_command_t : c
     }
 };
 
-console_command_base_t *&console_command_list();
+//////////////////////////////////////////////////////////////////////
+
+template <typename S> struct enum_name
+{
+    char const *name;
+    S value;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+template <typename T, size_t N> bool find_enum(char const *what, enum_name<T> const (&values)[N], T &result)
+{
+    for(auto const &f : values) {
+        if(strcmp(f.name, what) == 0) {
+            result = f.value;
+            return true;
+        }
+    }
+    printf("Bad value %s\n", what);
+    return false;
+}
 
 //////////////////////////////////////////////////////////////////////
 

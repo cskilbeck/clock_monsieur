@@ -24,7 +24,14 @@ struct boot_state_t : state_handler_t
     void on_update() override;
     void on_stop() override;
     char *boot_msg;
-    int msg_width;
+    bool factory_reset;
+};
+
+//////////////////////////////////////////////////////////////////////
+
+struct factory_reset_state_t : state_handler_t
+{
+    void on_update() override;
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -46,3 +53,4 @@ struct ota_state_t : state_handler_t
 extern boot_state_t boot_state;
 extern clock_state_t clock_state;
 extern ota_state_t ota_state;
+extern factory_reset_state_t factory_reset_state;

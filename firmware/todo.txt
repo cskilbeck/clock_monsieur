@@ -20,6 +20,7 @@ X measure/tweak cc drain capacitors
 - diagnose esp-prog boot / reset problem
 - frosted glass/gel problem
 - small font for menus
+- save/load settings in NVS
 - menus
     - 12/24
     - Seconds mode

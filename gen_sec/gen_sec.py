@@ -17,7 +17,6 @@ import time
 from pathlib import Path
 from io import StringIO
 import qrcode
-from qrcode.constants import ERROR_CORRECT_L
 from qr_code_pdf import create_qr_pdf
 
 # --- CONFIGURATION & CONSTANTS ---
@@ -323,7 +322,7 @@ def clear_partition(name):
 
 
 def create_qr_code(data: str, filename: Path, box_size: int = 10, border: int = 4,
-                   error_correction_level=ERROR_CORRECT_L):
+                   error_correction_level=qrcode.ERROR_CORRECT_L):
     """
     Encodes a string as a QR code and saves it as a PNG file.
 
