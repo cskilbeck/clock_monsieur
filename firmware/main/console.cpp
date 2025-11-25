@@ -153,7 +153,7 @@ void console_init()
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"help", "show commands">
+struct : console_command_t<"help", "show commands", "">
 {
     void on_command(int argc, char **argv) override
     {

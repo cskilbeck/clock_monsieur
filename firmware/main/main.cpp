@@ -21,7 +21,7 @@ LOG_CONTEXT("main");
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"mem", "show stack and heap usage">
+struct : console_command_t<"mem", "show stack and heap usage", "">
 {
     void on_command(int argc, char **argv) override
     {
@@ -35,7 +35,7 @@ struct : console_command_t<"mem", "show stack and heap usage">
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"factory", "erase NVS partition">
+struct : console_command_t<"factory", "erase NVS partition", "">
 {
     void on_command(int argc, char **argv) override
     {
@@ -45,7 +45,7 @@ struct : console_command_t<"factory", "erase NVS partition">
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"reset", "reset the ESP32">
+struct : console_command_t<"reset", "reset the ESP32", "">
 {
     void on_command(int argc, char **argv) override
     {
