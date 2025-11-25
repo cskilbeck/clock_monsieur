@@ -7,6 +7,18 @@
 #include <cstdint>
 
 //////////////////////////////////////////////////////////////////////
+
+enum class settings_field_t : uint8_t
+{
+    clock_mode = 0,
+    auto_brightness = 1,
+    brightness = 2,
+    seconds_mode = 3,
+    colon_mode = 4,
+    clock_fade_mode = 5,
+};
+
+//////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display
 
 enum class clock_mode_t : uint8_t
@@ -22,16 +34,6 @@ enum class auto_brightness_t : uint8_t
 {
     off = 0,
     on = 1
-};
-
-//////////////////////////////////////////////////////////////////////
-// Brightness of display
-
-enum class brightness_mode_t : uint8_t
-{
-    low = 0,
-    medium = 1,
-    high = 2
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -74,7 +76,7 @@ struct settings_t
 {
     clock_mode_t clock_mode{ clock_mode_t::clock_12_hour };
     auto_brightness_t auto_brightness{ auto_brightness_t::on };
-    brightness_mode_t brightness_mode{ brightness_mode_t::high };
+    uint8_t brightness{ 32 };
     seconds_mode_t seconds_mode{ seconds_mode_t::tail_long };
     colon_mode_t colon_mode{ colon_mode_t::on };
     clock_fade_mode_t clock_fade_mode{ clock_fade_mode_t::medium };

@@ -74,26 +74,27 @@ esp_err_t settings_t::load()
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"brightness", "set brightness: auto|manual low|medium|high">
+struct : console_command_t<"brightness", "set brightness: auto|fixed 0..255">
 {
     void on_command(int argc, char **argv) override
     {
         enum_name<auto_brightness_t> b[] = {
-            "auto", auto_brightness_t::on,      //
-            "manual", auto_brightness_t::off    //
+            "auto", auto_brightness_t::on,     //
+            "fixed", auto_brightness_t::off    //
         };
-        enum_name<brightness_mode_t> c[] = {
-            "low",    brightness_mode_t::low,       //
-            "medium", brightness_mode_t::medium,    //
-            "high",   brightness_mode_t::high       //
-        };
-        auto_brightness_t brightness = auto_brightness_t::on;
-        brightness_mode_t mode = brightness_mode_t::medium;
-        if(argc == 3 && find_enum(argv[1], b, brightness) && find_enum(argv[2], c, mode)) {
-            settings.auto_brightness = brightness;
-            settings.brightness_mode = mode;
+        auto_brightness_t auto_brightness = auto_brightness_t::on;
+        int brightness = -1;
+        if(argc == 3 && find_enum(argv[1], b, auto_brightness)) {
+            brightness = atoi(argv[2]);
+            if(brightness > 255) {
+                brightness = 255;
+            }
+        }
+        if(brightness >= 0) {
+            settings.brightness = (uint8_t)brightness;
+            settings.auto_brightness = auto_brightness;
         } else {
-            printf("Usage: brightness [auto|manual] [low|medium|high]\n");
+            printf("Usage: brightness [auto|fixed] [0|1|2|3|4]\n");
         }
     }
 } cmd_brightness;

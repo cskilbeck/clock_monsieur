@@ -21,6 +21,7 @@ X measure/tweak cc drain capacitors
 - frosted glass/gel problem
 - small font for menus
 - save/load settings in NVS
+- back compatible settings format changes
 - menus
     - 12/24
     - Seconds mode
