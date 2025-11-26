@@ -157,6 +157,22 @@ struct : console_command_t<"fade", "set fade between seconds", "off|low|medium|h
 
 //////////////////////////////////////////////////////////////////////
 
+struct : console_command_t<"clock", "set 12/24 hour clock mode", "12|24">
+{
+    void on_command(int argc, char **argv) override
+    {
+        enum_name<clock_mode_t> names[] = {
+            "12", clock_mode_t::clock_12_hour,    //
+            "24", clock_mode_t::clock_24_hour,    //
+        };
+        if(!(argc == 2 && find_enum(argv[1], names, settings.clock_mode))) {
+            usage();
+        }
+    }
+} cmd_clock;
+
+//////////////////////////////////////////////////////////////////////
+
 struct : console_command_t<"save", "save settings", "">
 {
     void on_command(int argc, char **argv) override

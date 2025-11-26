@@ -12,6 +12,8 @@ idf_component_register(
         util.cpp
         state.cpp
         console.cpp
+        timezone.cpp
+        timezone_data.cpp
     PRIV_REQUIRES
         driver
         bt

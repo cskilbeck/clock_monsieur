@@ -13,7 +13,7 @@
 
 //////////////////////////////////////////////////////////////////////
 
-uint16_t const matrix_lookup[7][26] = {
+uint8_t const matrix_lookup[7][26] = {
     { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
       0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
 
@@ -36,17 +36,17 @@ uint16_t const matrix_lookup[7][26] = {
       0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
 };
 
-uint16_t const hour_lookup[12] = {
+uint8_t const hour_lookup[12] = {
     235, 226, 26, 10, 90, 106, 111, 101, 153, 169, 218, 234,
 };
 
-uint16_t const second_lookup[60] = {
+uint8_t const second_lookup[60] = {
     236, 231, 230, 229, 228, 227, 225, 248, 250, 249, 24,  25,  40,  42,  41,  8,   9,   56,  58,  57,
     88,  89,  72,  74,  104, 105, 107, 108, 109, 110, 96,  97,  98,  99,  100, 102, 103, 121, 122, 120,
     154, 152, 137, 138, 136, 170, 168, 185, 184, 217, 216, 201, 202, 200, 232, 233, 224, 239, 238, 237,
 };
 
-uint16_t const seconds_hours_lookup[120] = {
+uint8_t const seconds_hours_lookup[120] = {
     236, 235, 231, 231, 230, 230, 229, 229, 228, 228, 227, 226, 225, 225, 248, 248, 250, 250, 249, 249, 24,  26,  25,  25,
     40,  40,  42,  42,  41,  41,  8,   10,  9,   9,   56,  56,  58,  58,  57,  57,  88,  90,  89,  89,  72,  72,  74,  74,
     104, 104, 105, 106, 107, 107, 108, 108, 109, 109, 110, 110, 96,  111, 97,  97,  98,  98,  99,  99,  100, 100, 102, 101,
@@ -111,7 +111,7 @@ void graphics_t::set_second(float color, uint8_t second)
     if(second > 59) {
         second = 59;
     }
-    uint16_t const *s = seconds_hours_lookup + second * 2;
+    uint8_t const *s = seconds_hours_lookup + second * 2;
     buffer[s[0]] = color;
     buffer[s[1]] = color;
 }

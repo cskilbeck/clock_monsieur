@@ -138,14 +138,6 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-console_command_base_t::console_command_base_t()
-{
-    next = command_list;
-    command_list = this;
-}
-
-//////////////////////////////////////////////////////////////////////
-
 void console_init()
 {
     xTaskCreatePinnedToCore(console_task, "console", 3072, NULL, 1, NULL, 0);
@@ -153,12 +145,30 @@ void console_init()
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"help", "show commands", "">
+struct : console_command_t<"help", "show commands", "command">
 {
     void on_command(int argc, char **argv) override
     {
-        for(console_command_base_t *c = command_list; c != nullptr; c = c->next) {
-            printf("%-20s %s\n", c->name(), c->help());
+        auto show_commands = []() {
+            for(console_command_base_t *c = console_command_base_t::command_list; c != nullptr; c = c->next) {
+                printf("%-20s %s\n", c->name(), c->help());
+            }
+        };
+        if(argc == 1) {
+            show_commands();
+            return;
+        }
+        if(argc == 2) {
+            for(console_command_base_t *c = console_command_base_t::command_list; c != nullptr; c = c->next) {
+                if(strcmp(argv[1], c->name()) == 0) {
+                    c->usage();
+                    return;
+                }
+            }
+            printf("HELP: Unknown command: %s\n", argv[1]);
+            show_commands();
+        } else {
+            usage();
         }
     }
 } cmd_help;

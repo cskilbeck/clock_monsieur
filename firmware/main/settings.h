@@ -76,7 +76,7 @@ struct settings_t
 {
     clock_mode_t clock_mode{ clock_mode_t::clock_12_hour };
     auto_brightness_t auto_brightness{ auto_brightness_t::on };
-    uint8_t brightness{ 32 };
+    uint8_t brightness{ 128 };
     seconds_mode_t seconds_mode{ seconds_mode_t::tail_long };
     colon_mode_t colon_mode{ colon_mode_t::on };
     clock_fade_mode_t clock_fade_mode{ clock_fade_mode_t::medium };
