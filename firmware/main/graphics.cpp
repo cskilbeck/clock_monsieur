@@ -17,51 +17,51 @@
 
 LOG_CONTEXT("graphics");
 
-constexpr int screen_height = 7;
-constexpr int screen_width = 26;
-
 //////////////////////////////////////////////////////////////////////
 
-uint8_t const matrix_lookup[7][26] = {
-    { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
-      0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
+namespace
+{
+    uint8_t const matrix_lookup[7][26] = {
+        { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
+          0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
 
-    { 0xD7, 0xD6, 0xD5, 0xD4, 0xD3, 0xD2, 0xD1, 0xD0, 0xDF, 0xDE, 0xDD, 0xDC, 0xDB,
-      0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B },
+        { 0xD7, 0xD6, 0xD5, 0xD4, 0xD3, 0xD2, 0xD1, 0xD0, 0xDF, 0xDE, 0xDD, 0xDC, 0xDB,
+          0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B },
 
-    { 0xB7, 0xB6, 0xB5, 0xB4, 0xB3, 0xB2, 0xB1, 0xB0, 0xBF, 0xBE, 0xBD, 0xBC, 0xBB,
-      0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x2F, 0x2E, 0x2D, 0x2C, 0x2B },
+        { 0xB7, 0xB6, 0xB5, 0xB4, 0xB3, 0xB2, 0xB1, 0xB0, 0xBF, 0xBE, 0xBD, 0xBC, 0xBB,
+          0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x2F, 0x2E, 0x2D, 0x2C, 0x2B },
 
-    { 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1, 0xA0, 0xAF, 0xAE, 0xAD, 0xAC, 0xAB,
-      0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B },
+        { 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1, 0xA0, 0xAF, 0xAE, 0xAD, 0xAC, 0xAB,
+          0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B },
 
-    { 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x8F, 0x8E, 0x8D, 0x8C, 0x8B,
-      0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x30, 0x3F, 0x3E, 0x3D, 0x3C, 0x3B },
+        { 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x8F, 0x8E, 0x8D, 0x8C, 0x8B,
+          0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x30, 0x3F, 0x3E, 0x3D, 0x3C, 0x3B },
 
-    { 0x97, 0x96, 0x95, 0x94, 0x93, 0x92, 0x91, 0x90, 0x9F, 0x9E, 0x9D, 0x9C, 0x9B,
-      0x57, 0x56, 0x55, 0x54, 0x53, 0x52, 0x51, 0x50, 0x5F, 0x5E, 0x5D, 0x5C, 0x5B },
+        { 0x97, 0x96, 0x95, 0x94, 0x93, 0x92, 0x91, 0x90, 0x9F, 0x9E, 0x9D, 0x9C, 0x9B,
+          0x57, 0x56, 0x55, 0x54, 0x53, 0x52, 0x51, 0x50, 0x5F, 0x5E, 0x5D, 0x5C, 0x5B },
 
-    { 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70, 0x7F, 0x7E, 0x7D, 0x7C, 0x7B,
-      0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
-};
+        { 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70, 0x7F, 0x7E, 0x7D, 0x7C, 0x7B,
+          0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
+    };
 
-uint8_t const hour_lookup[12] = {
-    235, 226, 26, 10, 90, 106, 111, 101, 153, 169, 218, 234,
-};
+    uint8_t const hour_lookup[12] = {
+        235, 226, 26, 10, 90, 106, 111, 101, 153, 169, 218, 234,
+    };
 
-uint8_t const second_lookup[60] = {
-    236, 231, 230, 229, 228, 227, 225, 248, 250, 249, 24,  25,  40,  42,  41,  8,   9,   56,  58,  57,
-    88,  89,  72,  74,  104, 105, 107, 108, 109, 110, 96,  97,  98,  99,  100, 102, 103, 121, 122, 120,
-    154, 152, 137, 138, 136, 170, 168, 185, 184, 217, 216, 201, 202, 200, 232, 233, 224, 239, 238, 237,
-};
+    uint8_t const second_lookup[60] = {
+        236, 231, 230, 229, 228, 227, 225, 248, 250, 249, 24,  25,  40,  42,  41,  8,   9,   56,  58,  57,
+        88,  89,  72,  74,  104, 105, 107, 108, 109, 110, 96,  97,  98,  99,  100, 102, 103, 121, 122, 120,
+        154, 152, 137, 138, 136, 170, 168, 185, 184, 217, 216, 201, 202, 200, 232, 233, 224, 239, 238, 237,
+    };
 
-uint8_t const seconds_hours_lookup[120] = {
-    236, 235, 231, 231, 230, 230, 229, 229, 228, 228, 227, 226, 225, 225, 248, 248, 250, 250, 249, 249, 24,  26,  25,  25,
-    40,  40,  42,  42,  41,  41,  8,   10,  9,   9,   56,  56,  58,  58,  57,  57,  88,  90,  89,  89,  72,  72,  74,  74,
-    104, 104, 105, 106, 107, 107, 108, 108, 109, 109, 110, 110, 96,  111, 97,  97,  98,  98,  99,  99,  100, 100, 102, 101,
-    103, 103, 121, 121, 122, 122, 120, 120, 154, 153, 152, 152, 137, 137, 138, 138, 136, 136, 170, 169, 168, 168, 185, 185,
-    184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
-};
+    uint8_t const seconds_hours_lookup[120] = {
+        236, 235, 231, 231, 230, 230, 229, 229, 228, 228, 227, 226, 225, 225, 248, 248, 250, 250, 249, 249, 24,  26,  25,  25,
+        40,  40,  42,  42,  41,  41,  8,   10,  9,   9,   56,  56,  58,  58,  57,  57,  88,  90,  89,  89,  72,  72,  74,  74,
+        104, 104, 105, 106, 107, 107, 108, 108, 109, 109, 110, 110, 96,  111, 97,  97,  98,  98,  99,  99,  100, 100, 102, 101,
+        103, 103, 121, 121, 122, 122, 120, 120, 154, 153, 152, 152, 137, 137, 138, 138, 136, 136, 170, 169, 168, 168, 185, 185,
+        184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
+    };
+};    // namespace
 
 // gfx is the primary graphics buffer
 graphics_t gfx;
@@ -94,26 +94,38 @@ uint16_t gamma_get(float x)
 
 //////////////////////////////////////////////////////////////////////
 
-font_t::bounds_t font_t::get_bounds(int c) const
+uint8_t font_t::get_width(int c) const
 {
-    c -= 32;
-    if(c < 0 || c > 95) {
-        c = 95;
+    return widths[get_c(c)];
+}
+
+//////////////////////////////////////////////////////////////////////
+
+uint8_t const *font_t::get_bitmap(int c) const
+{
+    return bitmap + get_c(c) * font_height;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int font_t::measure_string(char const *str) const
+{
+    int width = 0;
+    while(int c = *str++) {
+        int w = get_width(c);
+        width += w == 0 ? font_width / 2 : w;
+        width += 1;    // +1 for single pixel gap between chars
     }
-    return bounds_t{ .bounds = bounds[c] };
+    return width - 1;    // trim the trailing single pixel gap
 }
 
 //////////////////////////////////////////////////////////////////////
 
 int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
 {
-    bounds_t b = get_bounds(c);
-
-    int char_width = b.width() + 1;
-
-    // empty char?
-    if(char_width == 1) {
-        return b.safe_width();
+    uint8_t char_width = get_width(c);
+    if(char_width == 0) {
+        return font_width / 2;
     }
 
     // fully clipped?
@@ -126,12 +138,7 @@ int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
         return char_width;
     }
 
-    c -= 32;
-    if(c < 0) {
-        c = 95;
-    }
-
-    uint8_t const *char_data = bitmap + c * font_height;
+    uint8_t const *char_data = get_bitmap(c);
 
     // y clip
     int y_end = y + font_height;
@@ -146,11 +153,8 @@ int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
     }
 
     // x clip
-    int shift = 7 - b.high();
+    int shift = 0;
     if(x < 0) {
-        if(button_up.pressed) {
-            LOG_INFO("BEFORE x: %d, x_end: %d, shift = %d", x, x_end, shift);
-        }
         shift -= x;
         x = 0;
     }
@@ -158,15 +162,11 @@ int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
         x_end = screen_width - 1;
     }
 
-    if(button_up.pressed) {
-        LOG_INFO(" AFTER x: %d, x_end: %d, shift = %d, CW = %d", x, x_end, shift, char_width);
-    }
-
     // draw it
     for(; y < y_end; ++y) {
         uint8_t row = *char_data++;
         row <<= shift;
-        for(int sx = x; sx < x_end && row != 0; ++sx) {
+        for(int sx = x; sx <= x_end && row != 0; ++sx) {
             if((row & 0x80) != 0) {
                 gfx.buffer[matrix_lookup[y][sx]] = color;
             }
@@ -180,7 +180,7 @@ int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
 
 int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const
 {
-    return draw_char(gfx, c, x - get_bounds(c).width() / 2, y, color);
+    return draw_char(gfx, c, x - get_width(c) / 2, y, color);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -199,21 +199,6 @@ int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float co
 
 //////////////////////////////////////////////////////////////////////
 
-int font_t::measure_string(char const *str) const
-{
-    int width = 0;
-    while(int c = *str++) {
-        int w = get_bounds(c).width();
-        if(w == 0) {
-            w = 2;
-        }
-        width += w + 1;
-    }
-    return width;
-}
-
-//////////////////////////////////////////////////////////////////////
-
 void graphics_t::clear()
 {
     memset(buffer, 0, sizeof(buffer));
@@ -221,9 +206,29 @@ void graphics_t::clear()
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::set_pixel(float color, uint8_t pixel)
+void graphics_t::set_led(float color, uint8_t pixel)
 {
     buffer[pixel] = color;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void graphics_t::set_pixel(float color, int x, int y)
+{
+    if(y < 0 || y >= screen_height || x < 0 || x >= screen_width) {
+        return;
+    }
+    buffer[matrix_lookup[y][x]] = color;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+float graphics_t::get_pixel(int x, int y)
+{
+    if(y < 0 || y >= screen_height || x < 0 || x >= screen_width) {
+        return 0.0f;
+    }
+    return buffer[matrix_lookup[y][x]];
 }
 
 //////////////////////////////////////////////////////////////////////

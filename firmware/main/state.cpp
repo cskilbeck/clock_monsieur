@@ -83,29 +83,73 @@ void state_set(state_handler_t &new_state)
 void boot_state_t::on_start()
 {
     boot_msg = (char *)malloc(128);
-    sprintf(boot_msg, "Clock Monsieur v %s", VERSION_STR);
-    // sprintf(boot_msg, "A");
+    sprintf(boot_msg, "CLOCK MONSIEUR   WELCOME! FIRMWARE VERSION %s   ", VERSION_STR);
+    // sprintf(boot_msg, "!!!European!!!");
+    // sprintf(boot_msg, "the quick brown fox jumps over the lazy dog");
+    // sprintf(boot_msg, "tttttttt");
     factory_reset = true;
+    x = screen_width;
 }
 
 //////////////////////////////////////////////////////////////////////
+// content_width is width of the content to show
+// screen_width is width of the display screen
+// content_pos is the origin X pos where the content was drawn (always either negative or 0)
+
+void calculate_scrollbar(int content_width, int content_pos, int *scrollbar_width_out, int *scrollbar_pos_out)
+{
+    if(content_width <= screen_width) {
+        *scrollbar_width_out = 0;
+        *scrollbar_pos_out = 0;
+        return;
+    }
+    float ratio = (float)screen_width / (float)content_width;
+    float scrollbar_width = (float)(screen_width * ratio + 0.5f);
+    float max_scroll = (float)content_width - (float)screen_width;
+    float current_scroll = (float)-content_pos;
+    float normalized_pos = current_scroll / max_scroll;
+    float scrollbar_track_length = (float)screen_width - scrollbar_width;
+    float scrollbar_pos_float = normalized_pos * scrollbar_track_length;
+    *scrollbar_width_out = (int)scrollbar_width;
+    *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.5f);
+}
 
 void boot_state_t::on_update()
 {
+    const font_t &font = big_caps_font;
     factory_reset &= button_left.held && button_right.held;
-    int x = 30 - (frames >> 4) / 2;
-    // static int x = 0;
-    // if(button_left.pressed) {
-    //     x -= 1;
+    int content_width = font.measure_string(boot_msg);
+    int max_x = content_width - screen_width;
+    // if(button_left.held && ((frames & 1) == 0)) {
+    //     x = min(0, x + 1);
     // }
-    // if(button_right.pressed) {
-    //     x += 1;
+    // if(button_right.held && ((frames & 1) == 0)) {
+    //     x = max(-max_x, x - 1);
     // }
-    display->set_ambient(255);
+    if((frames & 1) == 0) {
+        x -= 1;
+    }
+    int dx = x;
+    display->set_ambient(160);
     gfx.clear();
-    int width = font_5x6_font.draw_string(gfx, boot_msg, x, 0, 1);
+    font.draw_string(gfx, boot_msg, dx, 0, 0.6);
+
+    // int scrollbar_width;
+    // int scrollbar_pos;
+    // calculate_scrollbar(content_width, dx, &scrollbar_width, &scrollbar_pos);
+
+    // if(scrollbar_width < 26) {
+    //     int y = 6;
+    //     for(int i = 0; i < scrollbar_width; ++i) {
+    //         int sx = (int)(i + scrollbar_pos);
+    //         if(gfx.get_pixel(sx, y) == 0) {
+    //             gfx.set_pixel(0.4f, sx, y);
+    //         }
+    //     }
+    // }
+
     gfx.display();
-    if(x < -width) {
+    if(x < -content_width) {
         state_set(clock_state);
     }
 }

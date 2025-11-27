@@ -1,5 +1,5 @@
 
-// Generated C++ Header for Bitmap Font: font_5x6
+// Generated C++ Header for Bitmap Font: big_caps
 // Character Range: ASCII 32 to 127
 #include <stdint.h>
 
@@ -15,5 +15,5 @@ struct font_t {
 };
 */
 
-// Declaration of the font structure instance defined in font_5x6.cpp
-extern const struct font_t font_5x6_font;
+// Declaration of the font structure instance defined in big_caps.cpp
+extern const struct font_t big_caps_font;

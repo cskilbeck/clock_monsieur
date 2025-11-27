@@ -8,10 +8,10 @@
 // Assumed external structure definition (omitted here for modularity):
 /*
 struct font_t {
-    uint8_t font_width;
-    uint8_t font_height;
+    uint8_t width;
+    uint8_t height;
     const uint8_t *bitmap;
-    const uint8_t *bounds;
+    const uint8_t *widths;
 };
 */
 

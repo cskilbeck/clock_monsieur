@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,7 +34,7 @@
             padding: 15px;
             margin-bottom: 15px;
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             gap: 20px;
         }
 
@@ -50,7 +49,6 @@
             font-size: 0.9rem;
             color: #4b5563;
         }
-
         .char-symbol {
             font-size: 2rem;
             font-weight: bold;
@@ -61,8 +59,7 @@
 
         /* The Grid Editor */
         .editor-container {
-            user-select: none;
-            /* Prevent text selection while drawing */
+            user-select: none; /* Prevent text selection while drawing */
         }
 
         .pixel-grid {
@@ -85,10 +82,7 @@
         }
 
         /* Remove borders on edges for cleaner look */
-        .pixel-grid .pixel:nth-child(n) {
-            border-right: 1px solid #eee;
-            border-bottom: 1px solid #eee;
-        }
+        .pixel-grid .pixel:nth-child(n) { border-right: 1px solid #eee; border-bottom: 1px solid #eee; }
 
         /* Preview Area */
         .preview-container {
@@ -96,18 +90,15 @@
             flex-direction: column;
             align-items: center;
             gap: 8px;
-            margin-left: auto;
-            /* Push to right */
-            min-width: 100px;
-            /* Ensure space for scaled preview */
+            margin-left: auto; /* Push to right */
+            min-width: 100px; /* Ensure space for scaled preview */
         }
 
         canvas.preview-canvas {
             border: 1px solid #9ca3af;
-            image-rendering: pixelated;
-            /* Crucial for bitmap look */
+            image-rendering: pixelated; /* Crucial for bitmap look */
             background: white;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
 
         /* Controls Header */
@@ -122,6 +113,31 @@
             flex-wrap: wrap;
         }
 
+        /* String Preview Bar */
+        .preview-bar {
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        #string-preview-canvas {
+            border: 1px solid #e5e7eb;
+            image-rendering: pixelated;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .preview-scroll-container {
+            overflow-x: auto;
+            padding-bottom: 2px;
+            min-height: 20px;
+        }
+
         .control-group {
             display: flex;
             align-items: center;
@@ -130,6 +146,12 @@
 
         input[type="number"] {
             width: 50px;
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+
+        input[type="text"] {
             padding: 4px 8px;
             border: 1px solid #d1d5db;
             border-radius: 4px;
@@ -153,40 +175,19 @@
             font-size: 0.9rem;
             white-space: nowrap;
         }
-
-        button:hover {
-            background-color: #1d4ed8;
-        }
+        button:hover { background-color: #1d4ed8; }
 
         button.secondary {
             background-color: #fff;
             color: #374151;
             border: 1px solid #d1d5db;
         }
+        button.secondary:hover { background-color: #f9fafb; }
+        button.danger { background-color: #dc2626; color: white; border: none; }
+        button.danger:hover { background-color: #b91c1c; }
 
-        button.secondary:hover {
-            background-color: #f9fafb;
-        }
-
-        button.danger {
-            background-color: #dc2626;
-            color: white;
-            border: none;
-        }
-
-        button.danger:hover {
-            background-color: #b91c1c;
-        }
-
-        button.success {
-            background-color: #10b981;
-            color: white;
-            border: none;
-        }
-
-        button.success:hover {
-            background-color: #059669;
-        }
+        button.success { background-color: #10b981; color: white; border: none; }
+        button.success:hover { background-color: #059669; }
 
         .separator {
             width: 1px;
@@ -199,13 +200,19 @@
         #modal-overlay {
             backdrop-filter: blur(2px);
         }
+
     </style>
 </head>
-
 <body>
 
     <header>
         <h1 class="text-xl font-bold text-gray-800 mr-2 hidden md:block">Bitmap Font</h1>
+
+        <div class="control-group">
+            <input type="text" id="font-name" placeholder="Font Name" value="MyFont" class="font-bold text-gray-700" style="width: 140px;">
+        </div>
+
+        <div class="separator"></div>
 
         <div class="control-group">
             <label class="text-sm font-medium text-gray-600">W:</label>
@@ -240,6 +247,17 @@
         <div class="text-xs text-gray-500 ml-auto hidden sm:block">Chars 32-127</div>
     </header>
 
+    <!-- Preview String Bar -->
+    <div class="preview-bar">
+        <div class="flex items-center gap-4">
+            <label class="text-sm font-bold text-gray-500 whitespace-nowrap">TEST STRING:</label>
+            <input type="text" id="preview-text-input" placeholder="Type here to test your font..." value="Hello World! 0123" class="flex-1 p-2 border border-gray-300 rounded text-sm shadow-sm">
+        </div>
+        <div class="preview-scroll-container">
+            <canvas id="string-preview-canvas" height="0"></canvas>
+        </div>
+    </div>
+
     <div id="char-list">
         <!-- Character Rows will be generated here -->
     </div>
@@ -247,11 +265,11 @@
     <!-- Custom Modal -->
     <div id="modal-overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full mx-4">
-            <h3 class="text-lg font-bold mb-2 text-gray-800" id="modal-title">Confirm Reset</h3>
-            <p class="text-gray-600 mb-6" id="modal-message">Changing dimensions will erase all current work. Are you sure you want to continue?</p>
+            <h3 class="text-lg font-bold mb-2 text-gray-800" id="modal-title">Confirm</h3>
+            <p class="text-gray-600 mb-6" id="modal-message">Are you sure?</p>
             <div class="flex justify-end gap-3">
                 <button id="modal-cancel" class="secondary">Cancel</button>
-                <button id="modal-confirm" class="danger">Reset Everything</button>
+                <button id="modal-confirm" class="danger">Confirm</button>
             </div>
         </div>
     </div>
@@ -282,12 +300,21 @@
         const saveBtn = document.getElementById('save-btn');
         const loadBtn = document.getElementById('load-btn');
         const fileInput = document.getElementById('file-input');
+        const fontNameInput = document.getElementById('font-name');
+
+        // Preview String Elements
+        const previewTextInput = document.getElementById('preview-text-input');
+        const stringPreviewCanvas = document.getElementById('string-preview-canvas');
 
         // Modal Elements
         const modalOverlay = document.getElementById('modal-overlay');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
         const modalConfirmBtn = document.getElementById('modal-confirm');
         const modalCancelBtn = document.getElementById('modal-cancel');
-        const modalMessage = document.getElementById('modal-message');
+
+        // Modal Action State
+        let pendingModalAction = null;
 
         // Initialization
         function init() {
@@ -300,11 +327,20 @@
 
             saveBtn.addEventListener('click', saveJSON);
             loadBtn.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', loadJSON);
+
+            // IMPORTANT: use 'change' to detect file selection
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // Text Preview Listener
+            previewTextInput.addEventListener('input', renderStringPreview);
 
             // Modal listeners
             modalCancelBtn.addEventListener('click', closeModal);
-            modalConfirmBtn.addEventListener('click', confirmResize);
+            modalConfirmBtn.addEventListener('click', () => {
+                if (pendingModalAction) pendingModalAction();
+                closeModal();
+            });
+
             // Close on background click
             modalOverlay.addEventListener('click', (e) => {
                 if (e.target === modalOverlay) closeModal();
@@ -313,12 +349,178 @@
             generateEditor();
         }
 
+        // --- Generic Modal Logic ---
+
+        function showConfirmModal(title, message, confirmText, confirmAction) {
+            modalTitle.innerText = title;
+            modalMessage.innerText = message;
+            modalConfirmBtn.innerText = confirmText;
+            modalConfirmBtn.style.display = 'inline-block';
+            modalCancelBtn.innerText = "Cancel";
+            modalCancelBtn.style.display = 'inline-block';
+
+            pendingModalAction = confirmAction;
+            modalOverlay.classList.remove('hidden');
+        }
+
+        function showAlertModal(message) {
+            modalTitle.innerText = "Notice";
+            modalMessage.innerText = message;
+            modalConfirmBtn.style.display = 'none'; // No confirm button
+            modalCancelBtn.innerText = "OK"; // Cancel acts as OK
+            modalCancelBtn.style.display = 'inline-block';
+
+            pendingModalAction = null;
+            modalOverlay.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.add('hidden');
+            pendingModalAction = null;
+        }
+
+        // --- Character Analysis Logic (for proportional rendering) ---
+
+        /**
+         * Analyzes the character bitmap to determine its used width and offset.
+         * Strips blank columns from the left and right.
+         * @param {number} charCode - ASCII code of the character.
+         * @returns {{width: number, startX: number, endX: number}} Proportional metrics.
+         */
+        function analyzeCharacter(charCode) {
+            const data = fontData[charCode];
+            const W = CONFIG.width;
+            const H = CONFIG.height;
+
+            // Default metrics for non-printable or missing chars
+            if (!data || data.length === 0) {
+                return { width: 0, startX: 0, endX: -1 };
+            }
+
+            let minX = W;
+            let maxX = -1;
+
+            // Find bounding box in X direction
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    if (data[y * W + x] === 1) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                    }
+                }
+            }
+
+            if (maxX === -1) {
+                // Character is entirely blank
+                if (charCode === 32) {
+                    // Space character (ASCII 32): give it a default proportional width (e.g., W/2)
+                    const spaceWidth = Math.max(1, Math.floor(W / 2));
+                    return { width: spaceWidth, startX: 0, endX: spaceWidth - 1 };
+                }
+                return { width: 0, startX: 0, endX: -1 };
+            }
+
+            // Width is the number of columns used (including start and end)
+            const proportionalWidth = maxX - minX + 1;
+
+            return {
+                width: proportionalWidth,
+                startX: minX,            // Leftmost occupied column index
+                endX: maxX               // Rightmost occupied column index
+            };
+        }
+
+
+        // --- Preview String Logic ---
+
+        function renderStringPreview() {
+            const text = previewTextInput.value;
+            const canvas = stringPreviewCanvas;
+            const ctx = canvas.getContext('2d');
+
+            if (!text) {
+                canvas.width = 0;
+                return;
+            }
+
+            const scale = CONFIG.scale;
+            const bitmapCharH = CONFIG.height;
+            const bitmapGap = 1; // 1 pixel gap between characters
+
+            let totalRenderWidth = 0;
+            const charMetrics = [];
+
+            // 1. Calculate total width and collect proportional metrics
+            for (let i = 0; i < text.length; i++) {
+                const charCode = text.charCodeAt(i);
+                const metrics = analyzeCharacter(charCode);
+                charMetrics.push(metrics);
+
+                // Add character's proportional width
+                totalRenderWidth += metrics.width;
+
+                // Add gap, except for the last character if it has width
+                if (metrics.width > 0 && i < text.length - 1) {
+                    totalRenderWidth += bitmapGap;
+                }
+            }
+
+            // Adjust total width for scaling
+            const finalRenderW = totalRenderWidth * scale;
+            const finalRenderH = bitmapCharH * scale;
+
+            // Set canvas size (resets context)
+            canvas.width = finalRenderW;
+            canvas.height = finalRenderH;
+
+            // Background
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'black';
+
+            // 2. Draw characters using proportional metrics
+            let currentX = 0;
+
+            for (let i = 0; i < text.length; i++) {
+                const charCode = text.charCodeAt(i);
+                const data = fontData[charCode];
+                const metrics = charMetrics[i];
+
+                if (metrics.width > 0 && data && data.length > 0) {
+                    // Draw the proportional block
+                    for (let y = 0; y < bitmapCharH; y++) {
+                        // Iterate only over the USED columns in the bitmap (from startX to endX)
+                        for (let x = metrics.startX; x <= metrics.endX; x++) {
+                            const pixelIndex = y * CONFIG.width + x;
+                            if (data[pixelIndex] === 1) {
+
+                                // (x - metrics.startX) is the column offset relative to the character's new proportional box (0 to width-1).
+                                const xPos = currentX + (x - metrics.startX) * scale;
+                                const yPos = y * scale;
+
+                                ctx.fillRect(xPos, yPos, scale, scale);
+                            }
+                        }
+                    }
+                }
+
+                // Advance currentX: Proportional Width + Gap
+                // Only add gap if the character had a width
+                const advance = metrics.width > 0
+                    ? metrics.width + bitmapGap
+                    : 0; // If width is 0 (fully blank), don't advance, otherwise it creates a huge gap if a sequence of blank chars follows
+
+                currentX += advance * scale;
+            }
+        }
+
+
         // --- Preview Scaling Logic ---
 
         function updatePreviewScale() {
-            CONFIG.scale = parseInt(scaleSelect.value);
+            CONFIG.scale = parseInt(scaleSelect.value) || 1;
 
-            // Update labels and canvas sizes
+            // Update individual char previews
             const canvases = document.querySelectorAll('.preview-canvas');
             const labels = document.querySelectorAll('.preview-label');
 
@@ -330,13 +532,18 @@
             labels.forEach(label => {
                 label.innerText = `Preview (${CONFIG.scale}x)`;
             });
+
+            // Update main string preview
+            renderStringPreview();
         }
 
         // --- Save / Load Logic ---
 
         function saveJSON() {
+            const name = fontNameInput.value.trim() || 'untitled_font';
             const exportData = {
                 metadata: {
+                    name: name,
                     width: CONFIG.width,
                     height: CONFIG.height,
                     startChar: CONFIG.startChar,
@@ -348,58 +555,82 @@
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "bitmap_font.json");
-            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.setAttribute("download", name + ".json");
+            document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
         }
 
-        function loadJSON(event) {
+        function handleFileSelect(event) {
             const file = event.target.files[0];
             if (!file) return;
 
+            const fileName = file.name.replace(/\.[^/.]+$/, "");
             const reader = new FileReader();
-            reader.onload = function (e) {
+
+            reader.onload = function(e) {
                 try {
                     const json = JSON.parse(e.target.result);
 
-                    // Simple Validation
+                    // Validate
                     if (!json.metadata || !json.characters) {
-                        throw new Error("Invalid font file format.");
+                        throw new Error("Invalid font file structure.");
                     }
 
-                    // Confirm overwrite
-                    if (!confirm("Load font? This will overwrite your current work.")) {
-                        fileInput.value = ''; // Reset
-                        return;
+                    // Prepare data for loading
+                    const loadData = {
+                        width: parseInt(json.metadata.width),
+                        height: parseInt(json.metadata.height),
+                        name: json.metadata.name || fileName,
+                        characters: {}
+                    };
+
+                    // Reconstruct char map
+                    const rawChars = json.characters;
+                    for (const key in rawChars) {
+                        if (rawChars.hasOwnProperty(key)) {
+                            const intKey = parseInt(key);
+                            if (!isNaN(intKey)) {
+                                loadData.characters[intKey] = rawChars[key];
+                            }
+                        }
                     }
 
-                    // Update Config
-                    CONFIG.width = json.metadata.width;
-                    CONFIG.height = json.metadata.height;
-
-                    // Update UI inputs
-                    widthInput.value = CONFIG.width;
-                    heightInput.value = CONFIG.height;
-
-                    // Update Data
-                    fontData = json.characters;
-
-                    // Regenerate UI
-                    generateEditor();
-
-                    // Reset file input so same file can be loaded again if needed
-                    fileInput.value = '';
+                    // Trigger Custom Confirm Modal
+                    // We define the callback here to be executed if user clicks Confirm
+                    showConfirmModal(
+                        "Load Font?",
+                        "Loading this file will overwrite your current work. Continue?",
+                        "Load",
+                        () => applyLoadedData(loadData)
+                    );
 
                 } catch (err) {
-                    alert("Error loading file: " + err.message);
+                    showAlertModal("Error loading file: " + err.message);
+                } finally {
+                    fileInput.value = ''; // Reset so we can load same file again if needed
                 }
             };
+
             reader.readAsText(file);
         }
 
+        function applyLoadedData(data) {
+            CONFIG.width = data.width;
+            CONFIG.height = data.height;
+            fontNameInput.value = data.name;
+            fontData = data.characters;
 
-        // --- Resize Modal Logic ---
+            // Update UI inputs
+            widthInput.value = CONFIG.width;
+            heightInput.value = CONFIG.height;
+
+            generateEditor();
+            setTimeout(renderStringPreview, 50);
+        }
+
+
+        // --- Resize Logic ---
 
         let pendingWidth = 8;
         let pendingHeight = 12;
@@ -409,46 +640,31 @@
             const newH = parseInt(heightInput.value);
 
             if (isNaN(newW) || isNaN(newH) || newW < 1 || newH < 1 || newW > 64 || newH > 64) {
-                // Show error in modal style but just with an OK button
-                modalMessage.innerText = "Please select dimensions between 1 and 64.";
-                modalConfirmBtn.style.display = 'none';
-                modalCancelBtn.innerText = "OK";
-                modalOverlay.classList.remove('hidden');
-
-                // One-time listener to reset modal state after error
-                const resetModalState = () => {
-                    modalConfirmBtn.style.display = 'inline-block';
-                    modalCancelBtn.innerText = "Cancel";
-                    modalMessage.innerText = "Changing dimensions will erase all current work. Are you sure you want to continue?";
-                    modalCancelBtn.removeEventListener('click', resetModalState);
-                };
-                modalCancelBtn.addEventListener('click', resetModalState);
+                showAlertModal("Please select dimensions between 1 and 64.");
                 return;
             }
 
             pendingWidth = newW;
             pendingHeight = newH;
 
-            // Show standard confirmation
-            modalOverlay.classList.remove('hidden');
-        }
-
-        function closeModal() {
-            modalOverlay.classList.add('hidden');
+            showConfirmModal(
+                "Confirm Resize",
+                "Changing dimensions will erase all current work. Are you sure?",
+                "Resize",
+                confirmResize
+            );
         }
 
         function confirmResize() {
             CONFIG.width = pendingWidth;
             CONFIG.height = pendingHeight;
 
-            // Initialize empty data for new size
             fontData = {};
             for (let i = CONFIG.startChar; i <= CONFIG.endChar; i++) {
                 fontData[i] = new Array(CONFIG.width * CONFIG.height).fill(0);
             }
 
             generateEditor();
-            closeModal();
         }
 
         // --- Core Editor Generation ---
@@ -456,28 +672,19 @@
         function generateEditor() {
             container.innerHTML = '';
 
-            // Note: We don't reset fontData here unless explicitly resizing (handled in confirmResize)
-            // If fontData is empty (first run), fill it.
-            const hasData = Object.keys(fontData).length > 0;
-
             for (let i = CONFIG.startChar; i <= CONFIG.endChar; i++) {
-                if (!hasData) {
-                    fontData[i] = new Array(CONFIG.width * CONFIG.height).fill(0);
-                }
-
-                // If loaded data is missing a char, fill it
+                // Ensure array exists for this char
                 if (!fontData[i]) {
-                    fontData[i] = new Array(CONFIG.width * CONFIG.height).fill(0);
+                     fontData[i] = new Array(CONFIG.width * CONFIG.height).fill(0);
                 }
 
                 const charRow = createCharRow(i);
                 container.appendChild(charRow);
 
-                // Initial draw of the preview
                 updatePreview(i);
             }
 
-            // Apply current scale to new elements
+            // Sync previews
             updatePreviewScale();
         }
 
@@ -511,9 +718,9 @@
                     const cell = document.createElement('div');
                     cell.className = 'pixel';
                     cell.dataset.index = index;
-                    cell.dataset.char = asciiCode;
+                    // Note: No need to store dataset.char since we use closure
 
-                    // Set initial state from data
+                    // Apply active class if data is present
                     if (fontData[asciiCode][index] === 1) {
                         cell.classList.add('active');
                     }
@@ -547,7 +754,6 @@
             canvas.width = CONFIG.width;
             canvas.height = CONFIG.height;
             canvas.className = 'preview-canvas';
-            // Initial size set by CSS, updated by JS
 
             const label = document.createElement('span');
             label.className = 'text-xs text-gray-500 preview-label';
@@ -576,6 +782,8 @@
                 }
 
                 updatePreview(asciiCode);
+                // Update string preview on every paint
+                renderStringPreview();
             }
         }
 
@@ -588,11 +796,9 @@
 
             ctx.clearRect(0, 0, CONFIG.width, CONFIG.height);
 
-            // Fill Background (White)
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, CONFIG.width, CONFIG.height);
 
-            // Fill Foreground (Black)
             ctx.fillStyle = 'black';
 
             for (let y = 0; y < CONFIG.height; y++) {
@@ -610,5 +816,4 @@
 
     </script>
 </body>
-
 </html>

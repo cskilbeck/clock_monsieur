@@ -110,7 +110,7 @@ esp_err_t http_event_handler(esp_http_client_event_t *evt)
         LOG_WARN("HTTP Event Error: %d", evt->event_id);
         break;
     case HTTP_EVENT_DISCONNECTED:
-        LOG_INFO("Disconnected, OK");
+        LOG_DEBUG("Disconnected, OK");
         break;
     default:
         break;
@@ -136,7 +136,7 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
         esp_err_t err = esp_http_client_perform(client);
         if(err == ESP_OK) {
             int status_code = esp_http_client_get_status_code(client);
-            LOG_INFO("STATUS_CODE: %d", status_code);
+            LOG_DEBUG("STATUS_CODE: %d", status_code);
             if(status_code < 400) {
                 return ESP_OK;
             }
@@ -342,7 +342,7 @@ void clock_time_task(void *pvParameter)
 {
     sntp_events = xEventGroupCreate();
 
-    LOG_INFO("Initializing SNTP for time sync.");
+    LOG_INFO("Init SNTP");
     esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
@@ -363,23 +363,26 @@ void clock_time_task(void *pvParameter)
 
         get_timezone();
 
-        LOG_INFO("Wait for SNTP...");
+        if(got_location && got_firmware_version && got_timezone) {
 
-        // wait 30 seconds for SNTP to arrive
-        EventBits_t sntp_up = xEventGroupWaitBits(sntp_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
+            LOG_INFO("Wait for SNTP...");
 
-        got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
-        if(!got_sntp) {
-            LOG_INFO("RESET SNTP");
-            esp_sntp_stop();
-            esp_sntp_init();
-        }
+            // wait 30 seconds for SNTP to arrive
+            EventBits_t sntp_up = xEventGroupWaitBits(sntp_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
 
-        if(got_sntp && got_location && got_timezone && got_firmware_version) {
-            LOG_INFO("Clock is good, waiting until 4am to do it all again...");
-            delay_until(4, 0);
-            got_timezone = false;
-            got_firmware_version = false;
+            got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
+            if(!got_sntp) {
+                LOG_INFO("RESET SNTP");
+                esp_sntp_stop();
+                esp_sntp_init();
+            } else {
+                LOG_INFO("Clock is good, waiting until 4am to do it all again...");
+                delay_until(4, 0);
+                got_timezone = false;
+                got_firmware_version = false;
+            }
+        } else {
+            delay_secs(5);
         }
     }
 }
