@@ -4,6 +4,7 @@
 
 #include "nvs_flash.h"
 
+#include "main.h"
 #include "util.h"
 #include "display.h"
 #include "graphics.h"
@@ -18,6 +19,8 @@
 #include "console.h"
 
 LOG_CONTEXT("main");
+
+EventGroupHandle_t system_events;
 
 //////////////////////////////////////////////////////////////////////
 
@@ -65,6 +68,8 @@ extern "C" void app_main()
         ret = nvs_flash_init();
     }
     ESP_LOG_ERR(ret);
+
+    system_events = xEventGroupCreate();
 
     settings.load();
 

@@ -9,6 +9,8 @@
 #include "esp_http_client.h"
 #include "cJSON.h"
 #include "esp_sntp.h"
+
+#include "main.h"
 #include "provisioning.h"
 #include "time.h"
 #include "ota.h"
@@ -40,6 +42,8 @@ LOG_CONTEXT("clock");
 
 #define TIMEZONEDB_API_KEY "VV0F65261GPD"
 
+//////////////////////////////////////////////////////////////////////
+
 namespace
 {
     int timezone_offset_seconds = 0;
@@ -49,6 +53,21 @@ namespace
 
     double current_lat = 0.0;
     double current_lon = 0.0;
+    char const *timezone_name = "unknown tz";
+
+    //////////////////////////////////////////////////////////////////////
+
+    void set_timezone(char const *name, int offset_seconds)
+    {
+        if(name == nullptr) {
+            name = "Unknown TZ?";
+        }
+        LOG_INFO("Timezone: %s (offset %d seconds)", name, offset_seconds);
+        timezone_offset_seconds = offset_seconds;
+        timezone_name = name;
+        got_timezone = true;
+        xEventGroupSetBits(system_events, GOT_TIMEZONE_BIT);
+    }
 
 }    // namespace
 
@@ -237,7 +256,7 @@ esp_err_t get_location()
     current_lon = lon_item->valuedouble;
     got_location = true;
 #endif
-
+    xEventGroupSetBits(system_events, GOT_LOCATION_BIT);
     LOG_INFO("Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
     return ESP_OK;
 }
@@ -264,6 +283,9 @@ esp_err_t get_timezone()
     }
 
     char *json_response = (char *)context.buffer;
+
+    LOG_INFO("TIMEZONE HTTP RESPONSE:\n%s", json_response);
+
     cJSON *root = cJSON_Parse(json_response);
     if(root == NULL) {
         LOG_ERROR("Error parsing response: %s", json_response);
@@ -291,8 +313,9 @@ esp_err_t get_timezone()
         LOG_ERROR("Bad JSON!?");
         return ESP_ERR_INVALID_RESPONSE;
     }
-    timezone_offset_seconds = offset_item->valueint;
-    got_timezone = true;
+    char const *timezone_name;
+    cJSON *timezone = cJSON_GetObjectItemCaseSensitive(root, "zoneName");
+    set_timezone(cJSON_GetStringValue(timezone), offset_item->valueint);
     return ESP_OK;
 }
 
@@ -325,23 +348,18 @@ void delay_until(long hour, long minute)
 
 //////////////////////////////////////////////////////////////////////
 
-EventGroupHandle_t sntp_events;
-
-#define SNTP_UP_BIT BIT0
-
 void sntp_callback(struct timeval *tv)
 {
     LOG_INFO("SNTP IS UP!");
-    xEventGroupSetBits(sntp_events, SNTP_UP_BIT);
+    xEventGroupSetBits(system_events, SNTP_UP_BIT);
 }
 
 //////////////////////////////////////////////////////////////////////
-// start this task AFTER provision_init()
+// Wait for SNTP - if it gets stuck (>30 seconds), reset it until
+// it's up
 
-void clock_time_task(void *pvParameter)
+void sntp_task(void *)
 {
-    sntp_events = xEventGroupCreate();
-
     LOG_INFO("Init SNTP");
     esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
@@ -352,38 +370,39 @@ void clock_time_task(void *pvParameter)
 
     while(true) {
 
-        // wait for wifi to be connected
         xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
+        LOG_INFO("Wait for SNTP...");
 
-        if(!got_firmware_version) {
-            got_firmware_version = check_firmware_version() == ESP_OK;
+        // wait 30 seconds for SNTP to arrive
+        EventBits_t sntp_up = xEventGroupWaitBits(system_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
+
+        got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
+        if(!got_sntp) {
+            LOG_INFO("RESET SNTP");
+            esp_sntp_stop();
+            esp_sntp_init();
+        } else {
+            vTaskDelete(NULL);
         }
+    }
+}
 
+//////////////////////////////////////////////////////////////////////
+// Get location and timezone
+
+void timezone_task(void *)
+{
+    while(!(got_location && got_timezone)) {
+        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
+        LOG_INFO("Init Timezone");
         get_location();
-
         get_timezone();
 
-        if(got_location && got_firmware_version && got_timezone) {
+        // wait indefinitely for sntp to be up
+        xEventGroupWaitBits(system_events, SNTP_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
 
-            LOG_INFO("Wait for SNTP...");
-
-            // wait 30 seconds for SNTP to arrive
-            EventBits_t sntp_up = xEventGroupWaitBits(sntp_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
-
-            got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
-            if(!got_sntp) {
-                LOG_INFO("RESET SNTP");
-                esp_sntp_stop();
-                esp_sntp_init();
-            } else {
-                LOG_INFO("Clock is good, waiting until 4am to do it all again...");
-                delay_until(4, 0);
-                got_timezone = false;
-                got_firmware_version = false;
-            }
-        } else {
-            delay_secs(5);
-        }
+        // TODO (chs): wait until DST transition
+        vTaskDelay(portMAX_DELAY);
     }
 }
 
@@ -391,5 +410,6 @@ void clock_time_task(void *pvParameter)
 
 void clock_init()
 {
-    xTaskCreatePinnedToCore(clock_time_task, "clock", 1024 * 6, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 6, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(sntp_task, "sntp", 1024 * 4, NULL, 1, NULL, 0);
 }

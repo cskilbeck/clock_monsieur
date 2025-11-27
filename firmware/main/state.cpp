@@ -3,10 +3,11 @@
 #include <memory>
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "main.h"
 #include "nvs_flash.h"
+#include "graphics.h"
 #include "state.h"
 #include "version.h"
-#include "graphics.h"
 #include "settings.h"
 #include "button.h"
 #include "util.h"
@@ -162,6 +163,7 @@ void boot_state_t::on_stop()
     if(factory_reset) {
         state_set(factory_reset_state);
     }
+    xEventGroupSetBits(system_events, BOOT_MSG_COMPLETE_BIT);
 }
 
 //////////////////////////////////////////////////////////////////////
