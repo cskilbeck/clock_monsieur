@@ -74,17 +74,20 @@ esp_err_t settings_t::load()
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"brightness", "set brightness", "auto|fixed 0..255">
+struct : console_command_t<"brightness", "show/set brightness", "auto|fixed 0..255">
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<auto_brightness_t> b[] = {
+        enum_name<auto_brightness_t> names[] = {
             "auto", auto_brightness_t::on,     //
             "fixed", auto_brightness_t::off    //
         };
         auto_brightness_t auto_brightness = auto_brightness_t::on;
         int brightness = -1;
-        if(argc == 3 && find_enum(argv[1], b, auto_brightness)) {
+        if(argc == 1) {
+            printf("%s %d\n", get_enum_name(names, settings.auto_brightness), settings.brightness);
+            return;
+        } else if(argc == 3 && find_enum(argv[1], names, auto_brightness)) {
             brightness = atoi(argv[2]);
             if(brightness > 255) {
                 brightness = 255;
@@ -101,18 +104,20 @@ struct : console_command_t<"brightness", "set brightness", "auto|fixed 0..255">
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"seconds", "set seconds display mode", "long|medium|short|fixed|single">
+struct : console_command_t<"seconds", "show/set seconds display mode", "long|medium|short|fixed|single">
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<seconds_mode_t> m[] = {
+        enum_name<seconds_mode_t> names[] = {
             "long",   seconds_mode_t::tail_long,      //
             "medium", seconds_mode_t::tail_medium,    //
             "short",  seconds_mode_t::tail_short,     //
             "fixed",  seconds_mode_t::fixed,          //
             "single", seconds_mode_t::single,
         };
-        if(!(argc == 2 && find_enum(argv[1], m, settings.seconds_mode))) {
+        if(argc == 1) {
+            printf("%s\n", get_enum_name(names, settings.seconds_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], names, settings.seconds_mode))) {
             usage();
         }
     }
@@ -120,17 +125,19 @@ struct : console_command_t<"seconds", "set seconds display mode", "long|medium|s
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"colon", "set colon display mode", "off|on|dim|pulse">
+struct : console_command_t<"colon", "show/set colon display mode", "off|on|dim|pulse">
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<colon_mode_t> m[] = {
+        enum_name<colon_mode_t> names[] = {
             "off",   colon_mode_t::off,      //
             "on",    colon_mode_t::on,       //
             "dim",   colon_mode_t::dim,      //
             "pulse", colon_mode_t::pulse,    //
         };
-        if(!(argc == 2 && find_enum(argv[1], m, settings.colon_mode))) {
+        if(argc == 1) {
+            printf("%s\n", get_enum_name(names, settings.colon_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], names, settings.colon_mode))) {
             usage();
         }
     }
@@ -138,7 +145,7 @@ struct : console_command_t<"colon", "set colon display mode", "off|on|dim|pulse"
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"fade", "set fade between seconds", "off|low|medium|high">
+struct : console_command_t<"fade", "show/set fade between seconds", "off|low|medium|high">
 {
     void on_command(int argc, char **argv) override
     {
@@ -148,7 +155,9 @@ struct : console_command_t<"fade", "set fade between seconds", "off|low|medium|h
             "medium", clock_fade_mode_t::medium,    //
             "high",   clock_fade_mode_t::high,      //
         };
-        if(!(argc == 2 && find_enum(argv[1], names, settings.clock_fade_mode))) {
+        if(argc == 1) {
+            printf("%s\n", get_enum_name(names, settings.clock_fade_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], names, settings.clock_fade_mode))) {
             usage();
         }
     }
@@ -157,7 +166,7 @@ struct : console_command_t<"fade", "set fade between seconds", "off|low|medium|h
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"clock", "set 12/24 hour clock mode", "12|24">
+struct : console_command_t<"clock", "show/set 12/24 hour clock mode", "12|24">
 {
     void on_command(int argc, char **argv) override
     {
@@ -165,7 +174,9 @@ struct : console_command_t<"clock", "set 12/24 hour clock mode", "12|24">
             "12", clock_mode_t::clock_12_hour,    //
             "24", clock_mode_t::clock_24_hour,    //
         };
-        if(!(argc == 2 && find_enum(argv[1], names, settings.clock_mode))) {
+        if(argc == 1) {
+            printf("%s\n", get_enum_name(names, settings.clock_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], names, settings.clock_mode))) {
             usage();
         }
     }
@@ -177,7 +188,6 @@ struct : console_command_t<"save", "save settings", "">
 {
     void on_command(int argc, char **argv) override
     {
-        printf("Save!\n");
         settings.save();
     }
 } cmd_save;

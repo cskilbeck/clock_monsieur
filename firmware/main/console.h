@@ -83,6 +83,18 @@ template <typename S> struct enum_name
 
 //////////////////////////////////////////////////////////////////////
 
+template <typename T, size_t N> char const *get_enum_name(enum_name<T> const (&values)[N], T needle)
+{
+    for(auto const &f : values) {
+        if(f.value == needle) {
+            return f.name;
+        }
+    }
+    return "?Bad value?";
+}
+
+//////////////////////////////////////////////////////////////////////
+
 template <typename T, size_t N> bool find_enum(char const *what, enum_name<T> const (&values)[N], T &result)
 {
     for(auto const &f : values) {

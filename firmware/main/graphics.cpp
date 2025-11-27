@@ -9,7 +9,16 @@
 #include "display.h"
 #include "graphics.h"
 #include "settings.h"
-#include "font_6x7.h"
+#include "button.h"
+#include "util.h"
+#include "settings.h"
+#include "font_5x6.h"
+#include "font_5x7.h"
+
+LOG_CONTEXT("graphics");
+
+constexpr int screen_height = 7;
+constexpr int screen_width = 26;
 
 //////////////////////////////////////////////////////////////////////
 
@@ -54,7 +63,11 @@ uint8_t const seconds_hours_lookup[120] = {
     184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
 };
 
+// gfx is the primary graphics buffer
 graphics_t gfx;
+
+// gfx2 is for drawing the 'other second' clock display into
+// so we can fade between it and gfx
 graphics_t gfx2;
 
 //////////////////////////////////////////////////////////////////////
@@ -81,13 +94,122 @@ uint16_t gamma_get(float x)
 
 //////////////////////////////////////////////////////////////////////
 
-glyph_t const &get_glyph(int c)
+font_t::bounds_t font_t::get_bounds(int c) const
 {
     c -= 32;
     if(c < 0 || c > 95) {
         c = 95;
     }
-    return font_6x7[c];
+    return bounds_t{ .bounds = bounds[c] };
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
+{
+    bounds_t b = get_bounds(c);
+
+    int char_width = b.width() + 1;
+
+    // empty char?
+    if(char_width == 1) {
+        return b.safe_width();
+    }
+
+    // fully clipped?
+    if(y <= -font_height) {
+        return char_width;
+    }
+
+    int x_end = x + char_width;
+    if(x_end <= 0) {
+        return char_width;
+    }
+
+    c -= 32;
+    if(c < 0) {
+        c = 95;
+    }
+
+    uint8_t const *char_data = bitmap + c * font_height;
+
+    // y clip
+    int y_end = y + font_height;
+    if(y < 0) {
+        int clip = -y;
+        char_data += clip;
+        y_end = font_height - clip;
+        y = 0;
+    }
+    if(y_end > screen_height) {
+        y_end = screen_height;
+    }
+
+    // x clip
+    int shift = 7 - b.high();
+    if(x < 0) {
+        if(button_up.pressed) {
+            LOG_INFO("BEFORE x: %d, x_end: %d, shift = %d", x, x_end, shift);
+        }
+        shift -= x;
+        x = 0;
+    }
+    if(x_end >= screen_width) {
+        x_end = screen_width - 1;
+    }
+
+    if(button_up.pressed) {
+        LOG_INFO(" AFTER x: %d, x_end: %d, shift = %d, CW = %d", x, x_end, shift, char_width);
+    }
+
+    // draw it
+    for(; y < y_end; ++y) {
+        uint8_t row = *char_data++;
+        row <<= shift;
+        for(int sx = x; sx < x_end && row != 0; ++sx) {
+            if((row & 0x80) != 0) {
+                gfx.buffer[matrix_lookup[y][sx]] = color;
+            }
+            row <<= 1;
+        }
+    }
+    return char_width;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const
+{
+    return draw_char(gfx, c, x - get_bounds(c).width() / 2, y, color);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const
+{
+    int width = 0;
+    while(*str) {
+        int w = draw_char(gfx, *str, x, y, color) + 1;
+        str += 1;
+        x += w;
+        width += w;
+    }
+    return width;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+int font_t::measure_string(char const *str) const
+{
+    int width = 0;
+    while(int c = *str++) {
+        int w = get_bounds(c).width();
+        if(w == 0) {
+            w = 2;
+        }
+        width += w + 1;
+    }
+    return width;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -118,103 +240,6 @@ void graphics_t::set_second(float color, uint8_t second)
 
 //////////////////////////////////////////////////////////////////////
 
-int graphics_t::draw_char(glyph_t const &glyph, int x, int y, float color)
-{
-    constexpr int glyph_height = 7;
-    constexpr int glyph_width = 6;
-    constexpr int screen_height = 7;
-    constexpr int screen_width = 26;
-
-    // fully clipped?
-    if(y <= -glyph_height) {
-        return glyph.width;
-    }
-
-    if(x <= -glyph.width) {
-        return glyph.width;
-    }
-
-    uint8_t const *char_data = glyph.data;
-
-    // y clip
-    int y_end = y + glyph_height;
-    if(y < 0) {
-        int clip = -y;
-        char_data += clip;
-        y_end = glyph_height - clip;
-        y = 0;
-    }
-    if(y_end > screen_height) {
-        y_end = screen_height;
-    }
-
-    // x clip
-    int shift = glyph.shift;
-    int x_end = x + glyph.width;
-    if(x < 0) {
-        int clip = -x;
-        shift += clip;
-        x_end = glyph.width - clip;
-        x = 0;
-    }
-    if(x_end > screen_width) {
-        x_end = screen_width;
-    }
-
-    // draw it
-    for(; y < y_end; ++y) {
-        uint8_t row = *char_data++;
-        row >>= shift;
-        for(int sx = x; sx < x_end; ++sx) {
-            if((row & 1) != 0) {
-                buffer[matrix_lookup[y][sx]] = color;
-            }
-            row >>= 1;
-        }
-    }
-    return glyph.width;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-int graphics_t::draw_char_centered(int c, int x, int y, float color)
-{
-    glyph_t const &glyph = get_glyph(c);
-    return draw_char(glyph, x - glyph.width / 2, y, color);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-int graphics_t::draw_string(char const *str, int x, int y, float color)
-{
-    int width = 0;
-    while(*str) {
-        glyph_t const &c = get_glyph(*str);
-        int w = draw_char(c, x, y, color) + 1;
-        ++str;
-        x += w;
-        width += w;
-    }
-    return width;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-int measure_string(char const *str)
-{
-    int width = 0;
-    while(int c = *str++) {
-        c -= 32;
-        if(c < 0 || c > 95) {
-            c = 95;
-        }
-        width += font_6x7[c].width + 1;
-    }
-    return width;
-}
-
-//////////////////////////////////////////////////////////////////////
-
 void graphics_t::draw_time(int hours, int minutes, float color)
 {
     minutes %= 60;
@@ -231,10 +256,10 @@ void graphics_t::draw_time(int hours, int minutes, float color)
     }
     char time_buffer[16];
     sprintf(time_buffer, fmt, hours, minutes);
-    draw_char_centered(time_buffer[0], 2, 0, color);
-    draw_char_centered(time_buffer[1], 8, 0, color);
-    draw_char_centered(time_buffer[2], 16, 0, color);
-    draw_char_centered(time_buffer[3], 22, 0, color);
+    font_5x7_font.draw_char_centered(*this, time_buffer[0], 2, 0, color);
+    font_5x7_font.draw_char_centered(*this, time_buffer[1], 8, 0, color);
+    font_5x7_font.draw_char_centered(*this, time_buffer[2], 16, 0, color);
+    font_5x7_font.draw_char_centered(*this, time_buffer[3], 22, 0, color);
 }
 
 //////////////////////////////////////////////////////////////////////

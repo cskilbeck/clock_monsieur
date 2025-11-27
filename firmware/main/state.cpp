@@ -84,6 +84,7 @@ void boot_state_t::on_start()
 {
     boot_msg = (char *)malloc(128);
     sprintf(boot_msg, "Clock Monsieur v %s", VERSION_STR);
+    // sprintf(boot_msg, "A");
     factory_reset = true;
 }
 
@@ -92,10 +93,17 @@ void boot_state_t::on_start()
 void boot_state_t::on_update()
 {
     factory_reset &= button_left.held && button_right.held;
-    int x = 30 - frames / 2;
+    int x = 30 - (frames >> 4) / 2;
+    // static int x = 0;
+    // if(button_left.pressed) {
+    //     x -= 1;
+    // }
+    // if(button_right.pressed) {
+    //     x += 1;
+    // }
     display->set_ambient(255);
     gfx.clear();
-    int width = gfx.draw_string(boot_msg, x, 0, 1);
+    int width = font_5x6_font.draw_string(gfx, boot_msg, x, 0, 1);
     gfx.display();
     if(x < -width) {
         state_set(clock_state);
@@ -120,7 +128,7 @@ void factory_reset_state_t::on_update()
     int x = 30 - frames / 2;
     display->set_ambient(255);
     gfx.clear();
-    int width = gfx.draw_string(msg, x, 0, 1);
+    int width = font_5x7_font.draw_string(gfx, msg, x, 0, 1);
     gfx.display();
     if(x < -width) {
         ESP_LOG_ERR(nvs_flash_erase());
@@ -164,6 +172,6 @@ void clock_state_t::on_update()
 void ota_state_t::on_update()
 {
     gfx.clear();
-    gfx.draw_string("FW!!", 0, 0, 1);
+    font_5x7_font.draw_string(gfx, "FW!!", 0, 0, 1);
     gfx.display();
 }
