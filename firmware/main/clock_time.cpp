@@ -11,7 +11,8 @@
 #include "esp_sntp.h"
 
 #include "main.h"
-#include "provisioning.h"
+#include "wifi.h"
+#include "ping.h"
 #include "time.h"
 #include "ota.h"
 #include "util.h"
@@ -38,6 +39,25 @@ LOG_CONTEXT("clock");
 //     "query": "92.236.115.196"
 // }
 
+// http://api.timezonedb.com
+// {
+//     "status": "OK",
+//     "message": "",
+//     "countryCode": "GB",
+//     "countryName": "United Kingdom",
+//     "regionName": "England",
+//     "cityName": "Twickenham",
+//     "zoneName": "Europe\/London",
+//     "abbreviation": "GMT",
+//     "gmtOffset": 0,
+//     "dst": "0",
+//     "zoneStart": 1761440400,
+//     "zoneEnd": 1774746000,
+//     "nextAbbreviation": "BST",
+//     "timestamp": 1764269050,
+//     "formatted": "2025-11-27 18:44:10"
+// }
+
 #define MAX_HTTP_OUTPUT_BUFFER 512
 
 #define TIMEZONEDB_API_KEY "VV0F65261GPD"
@@ -55,18 +75,35 @@ namespace
     double current_lon = 0.0;
     char const *timezone_name = "unknown tz";
 
-    //////////////////////////////////////////////////////////////////////
+    char const *month[] = { "January", "February", "March",     "April",   "May",      "June",
+                            "July",    "August",   "September", "October", "November", "December" };
 
-    void set_timezone(char const *name, int offset_seconds)
+    char const *weekday[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+    char const *json_string(cJSON const *item, char const *name, char const *default_value = "")
     {
-        if(name == nullptr) {
-            name = "Unknown TZ?";
+        char const *value = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(item, name));
+        return value == nullptr ? default_value : value;
+    }
+
+    bool json_double(cJSON const *item, char const *name, double &value)
+    {
+        cJSON *i = cJSON_GetObjectItemCaseSensitive(item, name);
+        if(!cJSON_IsNumber(i)) {
+            return false;
         }
-        LOG_INFO("Timezone: %s (offset %d seconds)", name, offset_seconds);
-        timezone_offset_seconds = offset_seconds;
-        timezone_name = name;
-        got_timezone = true;
-        xEventGroupSetBits(system_events, GOT_TIMEZONE_BIT);
+        value = cJSON_GetNumberValue(i);
+        return true;
+    }
+
+    bool json_int64(cJSON const *item, char const *name, int64_t &value)
+    {
+        double v;
+        if(!json_double(item, name, v)) {
+            return false;
+        }
+        value = (int64_t)v;
+        return true;
     }
 
 }    // namespace
@@ -149,32 +186,37 @@ esp_err_t do_http_request(char const *url, http_data_context_t *ctx, int retries
     }
     DEFER(esp_http_client_cleanup(client));
 
-    while(retries != 0) {
+    do {
         ctx->reset();
-
         esp_err_t err = esp_http_client_perform(client);
         if(err == ESP_OK) {
             int status_code = esp_http_client_get_status_code(client);
             LOG_DEBUG("STATUS_CODE: %d", status_code);
-            if(status_code < 400) {
+            if(status_code < 300) {
                 return ESP_OK;
             }
             switch(status_code) {
-            case 503:    // SERVER_UNAVAILABLE
-            case 429:    // TOO_MANY_REQUESTS
-                delay_ms(retry_delay_ms);
+            case 503:
+                LOG_INFO("SERVER_UNAVAILABLE");
+                break;
+            case 429:
+                LOG_INFO("TOO_MANY_REQUESTS");
                 break;
             default:
                 return ESP_ERR_INVALID_RESPONSE;
             }
         } else if(err == ESP_ERR_HTTP_EAGAIN) {
-            delay_ms(retry_delay_ms);
+            // just retry
+            LOG_INFO("HTTP_EAGAIN");
         } else {
             LOG_ERROR("HTTP CLIENT Error %d (%s)", err, esp_err_to_name(err));
             return err;
         }
         retries -= 1;
-    }
+        if(retries != 0) {
+            delay_ms(retry_delay_ms);
+        }
+    } while(retries != 0);
     return ESP_ERR_INVALID_RESPONSE;
 }
 
@@ -201,32 +243,10 @@ esp_err_t get_location()
     }
     DEFER(cJSON_Delete(root));
 
-    cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
-    if(status == NULL) {
-        LOG_ERROR("No status");
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-
-    if(!cJSON_IsString(status)) {
-        LOG_ERROR("Status not a string");
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-
-    if(strcmp(status->valuestring, "success") != 0) {
-        char const *message = "unknown reason";
-        cJSON *msg = cJSON_GetObjectItemCaseSensitive(root, "message");
-        if(msg && cJSON_IsString(msg)) {
-            message = msg->valuestring;
-        }
-        LOG_ERROR("Failed: %s (%s)", status->string, message);
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-
-    cJSON *lat_item = cJSON_GetObjectItemCaseSensitive(root, "lat");
-    cJSON *lon_item = cJSON_GetObjectItemCaseSensitive(root, "lon");
-
-    if(!(cJSON_IsNumber(lat_item) && cJSON_IsNumber(lon_item))) {
-        LOG_ERROR("lat/lon not both numbers!?");
+    char const *status = json_string(root, "status", "no status?");
+    if(strcmp(status, "success") != 0) {
+        char const *message = json_string(root, "message", "no message?");
+        LOG_ERROR("Failed: %s (%s)", status, message);
         return ESP_ERR_INVALID_RESPONSE;
     }
 
@@ -252,11 +272,17 @@ esp_err_t get_location()
     got_location = true;
 
 #else
-    current_lat = lat_item->valuedouble;
-    current_lon = lon_item->valuedouble;
+    double lat;
+    double lon;
+    if(!(json_double(root, "lat", lat) && json_double(root, "lon", lon))) {
+        LOG_ERROR("lat/lon not numbers");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    current_lat = lat;
+    current_lon = lon;
     got_location = true;
 #endif
-    xEventGroupSetBits(system_events, GOT_LOCATION_BIT);
+    xEventGroupSetBits(system_events, SYS_EVENT_GOT_LOCATION);
     LOG_INFO("Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
     return ESP_OK;
 }
@@ -273,7 +299,7 @@ esp_err_t get_timezone()
     }
     LOG_INFO("get_timezone_data");
 
-    char url_buffer[256];
+    char url_buffer[160];
     sprintf(url_buffer, "http://api.timezonedb.com/v2.1/get-time-zone?key=%s&format=json&by=position&lat=%.4f&lng=%.4f", TIMEZONEDB_API_KEY,
             current_lat, current_lon);
 
@@ -293,29 +319,67 @@ esp_err_t get_timezone()
     }
     DEFER(cJSON_Delete(root));
 
-    cJSON *status = cJSON_GetObjectItemCaseSensitive(root, "status");
-    if(!cJSON_IsString(status)) {
-        LOG_ERROR("Error parsing JSON from timezonedb");
-        return ESP_ERR_INVALID_RESPONSE;
-    }
-    if(strcmp(status->valuestring, "OK") != 0) {
-        LOG_ERROR("Error getting timezone: status = %s", status->valuestring);
+    char const *status = json_string(root, "status");
+    if(strcmp(status, "OK") != 0) {
+        LOG_ERROR("Error getting timezone: status = %s", status);
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-    // TODO (chs): look at zoneEnd and check timezone again just after then
-
-    cJSON *dst_item = cJSON_GetObjectItemCaseSensitive(root, "dst");
-    int dst = cJSON_IsString(dst_item) ? atoi(dst_item->valuestring) : 0;
-
-    cJSON *offset_item = cJSON_GetObjectItemCaseSensitive(root, "gmtOffset");
-    if(!(cJSON_IsNumber(offset_item))) {
-        LOG_ERROR("Bad JSON!?");
-        return ESP_ERR_INVALID_RESPONSE;
+    char const *dst_str = json_string(root, "dst", "");
+    bool dst{ false };
+    switch(dst_str[0]) {
+    case '0':
+        break;
+    case '1':
+        dst = true;
+        break;
+    case 0:
+        LOG_WARN("No DST");
+        break;
+    default:
+        LOG_WARN("Invalid DST: %s", dst_str);
+        break;
     }
-    char const *timezone_name;
-    cJSON *timezone = cJSON_GetObjectItemCaseSensitive(root, "zoneName");
-    set_timezone(cJSON_GetStringValue(timezone), offset_item->valueint);
+
+    int64_t offset_seconds{ 0 };
+    if(!json_int64(root, "gmtOffset", offset_seconds)) {
+        LOG_WARN("No gmtOffset");
+    }
+
+    time_t zone_end{ 0 };
+    if(!json_int64(root, "zoneEnd", zone_end)) {
+        LOG_WARN("No Zone End!");
+    }
+
+    char const *abbreviation = json_string(root, "abbreviation", "???");
+    char const *timezone_name = json_string(root, "zoneName", "Unknown TZ?");
+
+    struct tm *tm = gmtime(&zone_end);
+
+    int hour = tm->tm_hour;
+    int min = tm->tm_min;
+    int mday = tm->tm_mday;
+    int year = tm->tm_year + 1900;
+    char const *day = weekday[tm->tm_wday];
+    char const *mnth = month[tm->tm_mon];
+
+    LOG_CONTEXT("timezone");
+    LOG_INFO("%s", abbreviation);
+    LOG_INFO("%s", timezone_name);
+    LOG_INFO("Offset %d secs", offset_seconds);
+    LOG_INFO("DST %s", dst ? "Active" : "Not active");
+    LOG_INFO("Next zone at %02d:%02d, %s %d/%s/%d (%lld epoch seconds)", hour, min, day, mday, mnth, year, zone_end);
+
+    timezone_offset_seconds = offset_seconds;
+    got_timezone = true;
+    xEventGroupSetBits(system_events, SYS_EVENT_GOT_TIMEZONE);
+
+    // !!!!!!!!!!!! CHECK THE TIMESTAMP IN THE API RESPONSE !!!!!!!!!!!
+    // Set up a timer which fires every 60 minutes and calls WAKE_WHEN_TZ_CHANGES
+
+    // 60_MINUTE_TIMER: If next zone active in <80 minutes, set a ZONE_END_CALLBACK timer for then (which might mean waking straight up,
+    // which is fine) ZONE_END_CALLBACK: get_timezone(), set up 60_MINUTE_TIMER
+
     return ESP_OK;
 }
 
@@ -347,37 +411,62 @@ void delay_until(long hour, long minute)
 }
 
 //////////////////////////////////////////////////////////////////////
+// Get location and timezone
+
+void timezone_task(void *)
+{
+    while(!(got_location && got_timezone)) {
+        xEventGroupWaitBits(wifi_events, WIFI_CONNECTED, false, true, portMAX_DELAY);
+        LOG_INFO("Init Timezone");
+        get_location();
+        get_timezone();
+
+        // wait indefinitely for sntp to be up
+        xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_UP, false, true, portMAX_DELAY);
+
+        // TODO (chs): wait until DST transition
+        vTaskDelay(portMAX_DELAY);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
 
 void sntp_callback(struct timeval *tv)
 {
     LOG_INFO("SNTP IS UP!");
-    xEventGroupSetBits(system_events, SNTP_UP_BIT);
+    xEventGroupSetBits(system_events, SYS_EVENT_SNTP_UP);
 }
 
 //////////////////////////////////////////////////////////////////////
-// Wait for SNTP - if it gets stuck (>30 seconds), reset it until
-// it's up
+// Wait for SNTP - if it gets stuck (>60 seconds), reset and wait again
 
 void sntp_task(void *)
 {
+    while(do_ping_check() != ESP_OK) {
+        delay_secs(60);
+    }
+    xEventGroupSetBits(system_events, SYS_EVENT_PING_OK);
+
+    xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 6, NULL, 1, NULL, 0);
+
+    int constexpr SNTP_WAIT_SECS = 60;
+    int constexpr SNTP_WAIT_TICKS = pdMS_TO_TICKS(SNTP_WAIT_SECS * 1000);
+
     LOG_INFO("Init SNTP");
     esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, "pool.ntp.org");
     esp_sntp_setservername(1, "time.google.com");
 
-    bool got_sntp{ false };
-
     while(true) {
 
-        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
+        xEventGroupWaitBits(wifi_events, WIFI_CONNECTED, false, false, portMAX_DELAY);
         LOG_INFO("Wait for SNTP...");
 
-        // wait 30 seconds for SNTP to arrive
-        EventBits_t sntp_up = xEventGroupWaitBits(system_events, SNTP_UP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(30000));
+        // wait for SNTP to get up
+        EventBits_t sntp_up = xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_UP, false, false, SNTP_WAIT_TICKS);
 
-        got_sntp = (sntp_up & SNTP_UP_BIT) == SNTP_UP_BIT;
-        if(!got_sntp) {
+        if((sntp_up & SYS_EVENT_SNTP_UP) == 0) {
             LOG_INFO("RESET SNTP");
             esp_sntp_stop();
             esp_sntp_init();
@@ -388,28 +477,8 @@ void sntp_task(void *)
 }
 
 //////////////////////////////////////////////////////////////////////
-// Get location and timezone
-
-void timezone_task(void *)
-{
-    while(!(got_location && got_timezone)) {
-        xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_EVENT, pdFALSE, pdFALSE, portMAX_DELAY);
-        LOG_INFO("Init Timezone");
-        get_location();
-        get_timezone();
-
-        // wait indefinitely for sntp to be up
-        xEventGroupWaitBits(system_events, SNTP_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-
-        // TODO (chs): wait until DST transition
-        vTaskDelay(portMAX_DELAY);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
 
 void clock_init()
 {
-    xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 6, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(sntp_task, "sntp", 1024 * 4, NULL, 1, NULL, 0);
 }

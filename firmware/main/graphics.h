@@ -39,6 +39,9 @@ struct font_t
     int draw_char(graphics_t &gfx, int c, int x, int y, float color) const;
     int draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const;
     int draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const;
+
+    // adds a scrollbar for the X pos/width
+    void draw_long_string(font_t const &font, char const *text, int x, int y, float color, float scrollbar_color) const;
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -48,10 +51,12 @@ struct graphics_t
     float buffer[256];
 
     void clear();
+    void clear_matrix();
     void set_led(float color, uint8_t n);
     void set_pixel(float color, int x, int y);
     float get_pixel(int x, int y);
     void set_second(float color, uint8_t second);
+    void set_second_only(float color, uint8_t second);
     void draw_time(int hours, int minutes, float color);
     void draw_colon(int seconds);
     void draw_seconds(int current_second);

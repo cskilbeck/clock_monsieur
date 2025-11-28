@@ -15,9 +15,9 @@
 #include <wifi_provisioning/manager.h>
 #include <wifi_provisioning/scheme_ble.h>
 
-#include "provisioning.h"
+#include "wifi.h"
 
-static char const *TAG = "provisioning";
+static char const *TAG = "wifi";
 
 //////////////////////////////////////////////////////////////////////
 
@@ -34,7 +34,7 @@ static char const *TAG = "provisioning";
 
 esp_err_t start_provisioning();
 
-EventGroupHandle_t wifi_event_group;
+EventGroupHandle_t wifi_events;
 
 int wifi_retries = 0;
 
@@ -246,9 +246,9 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
     } else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "Connected with IP Address:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_EVENT);
+        xEventGroupSetBits(wifi_events, WIFI_CONNECTED);
     } else if(event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {
         switch(event_id) {
         case PROTOCOMM_TRANSPORT_BLE_CONNECTED:
@@ -377,7 +377,7 @@ const wifi_prov_event_handler_t wifi_prov_event_handler = {
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t provisioning_init()
+esp_err_t wifi_init()
 {
 #if CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE
     ESP_ERROR_CHECK(read_security_info());
@@ -388,7 +388,6 @@ esp_err_t provisioning_init()
 
     /* Initialize the event loop */
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_event_group = xEventGroupCreate();
 
     /* Register our event handler for Wi-Fi, IP and Provisioning related events */
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_PROV_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));

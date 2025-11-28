@@ -8,11 +8,11 @@
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t provisioning_init();
+esp_err_t wifi_init();
 char const *provisioning_pop();
 
 //////////////////////////////////////////////////////////////////////
 
-const int WIFI_CONNECTED_EVENT = BIT0;
+const int WIFI_CONNECTED = BIT0;
 
-extern EventGroupHandle_t wifi_event_group;
+extern EventGroupHandle_t wifi_events;

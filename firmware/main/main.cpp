@@ -8,7 +8,7 @@
 #include "util.h"
 #include "display.h"
 #include "graphics.h"
-#include "provisioning.h"
+#include "wifi.h"
 #include "lux.h"
 #include "button.h"
 #include "clock_time.h"
@@ -70,13 +70,16 @@ extern "C" void app_main()
     ESP_LOG_ERR(ret);
 
     system_events = xEventGroupCreate();
+    wifi_events = xEventGroupCreate();
 
     settings.load();
 
     lux_init();
     display_init();
     button_init();
-    provisioning_init();
+    wifi_init();
+
+    ota_init();
     console_init();
     clock_init();
     state_init();

@@ -12,9 +12,10 @@
 #include "esp_crt_bundle.h"
 
 #include "version.h"
+#include "main.h"
 #include "util.h"
 #include "state.h"
-#include "provisioning.h"
+#include "wifi.h"
 
 //////////////////////////////////////////////////////////////////////
 
@@ -226,4 +227,22 @@ esp_err_t check_firmware_version()
         do_ota_firmware_update(latest);
     }
     return ESP_OK;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void ota_task(void *)
+{
+    while(true) {
+        xEventGroupWaitBits(system_events, SYS_EVENT_PING_OK, false, true, portMAX_DELAY);
+        check_firmware_version();
+        vTaskDelay(pdMS_TO_TICKS(1000 * 60 * 60 * 24));
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void ota_init()
+{
+    xTaskCreate(ota_task, "ota", 4096, nullptr, 1, nullptr);
 }

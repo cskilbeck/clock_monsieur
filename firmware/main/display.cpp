@@ -387,7 +387,7 @@ namespace
 //////////////////////////////////////////////////////////////////////
 // Set the dot correction (i.e. brightness) for a channel
 
-void fcontrol_data_t::set_dc(int channel, uint8_t value)
+IRAM_ATTR void fcontrol_data_t::set_dc(int channel, uint8_t value)
 {
     int bit_pos = channel * 7;
     int byte_idx = 13 - (bit_pos >> 3);

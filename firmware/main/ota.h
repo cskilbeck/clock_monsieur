@@ -8,5 +8,6 @@
 
 //////////////////////////////////////////////////////////////////////
 
+void ota_init();
 esp_err_t check_firmware_version();
 void ota_mark_app_valid();

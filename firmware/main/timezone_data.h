@@ -7,7 +7,6 @@
 #define TZ_NODE 0
 #define TZ_LEAF 1
 
-// Define the structure for a timezone node
 struct tz_node_t
 {
     // Constructor for BRANCH nodes (takes ints)

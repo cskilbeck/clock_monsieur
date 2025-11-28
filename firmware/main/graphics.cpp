@@ -21,7 +21,7 @@ LOG_CONTEXT("graphics");
 
 namespace
 {
-    uint8_t const matrix_lookup[7][26] = {
+    DRAM_ATTR uint8_t const matrix_lookup[7][26] = {
         { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
           0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
 
@@ -44,23 +44,48 @@ namespace
           0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
     };
 
-    uint8_t const hour_lookup[12] = {
+    DRAM_ATTR uint8_t const hour_lookup[12] = {
         235, 226, 26, 10, 90, 106, 111, 101, 153, 169, 218, 234,
     };
 
-    uint8_t const second_lookup[60] = {
+    DRAM_ATTR uint8_t const second_lookup[60] = {
         236, 231, 230, 229, 228, 227, 225, 248, 250, 249, 24,  25,  40,  42,  41,  8,   9,   56,  58,  57,
         88,  89,  72,  74,  104, 105, 107, 108, 109, 110, 96,  97,  98,  99,  100, 102, 103, 121, 122, 120,
         154, 152, 137, 138, 136, 170, 168, 185, 184, 217, 216, 201, 202, 200, 232, 233, 224, 239, 238, 237,
     };
 
-    uint8_t const seconds_hours_lookup[120] = {
+    DRAM_ATTR uint8_t const seconds_hours_lookup[120] = {
         236, 235, 231, 231, 230, 230, 229, 229, 228, 228, 227, 226, 225, 225, 248, 248, 250, 250, 249, 249, 24,  26,  25,  25,
         40,  40,  42,  42,  41,  41,  8,   10,  9,   9,   56,  56,  58,  58,  57,  57,  88,  90,  89,  89,  72,  72,  74,  74,
         104, 104, 105, 106, 107, 107, 108, 108, 109, 109, 110, 110, 96,  111, 97,  97,  98,  98,  99,  99,  100, 100, 102, 101,
         103, 103, 121, 121, 122, 122, 120, 120, 154, 153, 152, 152, 137, 137, 138, 138, 136, 136, 170, 169, 168, 168, 185, 185,
         184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
     };
+
+    //////////////////////////////////////////////////////////////////////
+    // content_width is width of the content to show
+    // screen_width is width of the display screen
+    // content_pos is the origin X pos where the content was drawn (always either negative or 0)
+
+    void calculate_scrollbar(int content_width, int content_pos, int *scrollbar_width_out, int *scrollbar_pos_out)
+    {
+        if(content_width <= screen_width) {
+            *scrollbar_width_out = 0;
+            *scrollbar_pos_out = 0;
+            return;
+        }
+        float ratio = (float)screen_width / (float)content_width;
+        float scrollbar_width = (float)(screen_width * ratio + 0.5f);
+        float max_scroll = (float)content_width - (float)screen_width;
+        float current_scroll = (float)-content_pos;
+        float normalized_pos = current_scroll / max_scroll;
+        float scrollbar_track_length = (float)screen_width - scrollbar_width;
+        float scrollbar_pos_float = normalized_pos * scrollbar_track_length;
+        *scrollbar_width_out = (int)scrollbar_width;
+        *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.5f);
+    }
+
+
 };    // namespace
 
 // gfx is the primary graphics buffer
@@ -74,7 +99,7 @@ graphics_t gfx2;
 // approximate pow(2.2) as x^2 - (x^2 - x^3) / 4
 // and convert endianness for display buffer
 
-uint16_t gamma_get(uint16_t x)
+IRAM_ATTR uint16_t gamma_get(uint16_t x)
 {
     int x2 = (x * x) >> 11;
     int x3 = (x * x2) >> 11;
@@ -84,7 +109,7 @@ uint16_t gamma_get(uint16_t x)
 
 //////////////////////////////////////////////////////////////////////
 
-uint16_t gamma_get(float x)
+IRAM_ATTR uint16_t gamma_get(float x)
 {
     float x2 = x * x;
     float x3 = x2 * x;
@@ -94,21 +119,21 @@ uint16_t gamma_get(float x)
 
 //////////////////////////////////////////////////////////////////////
 
-uint8_t font_t::get_width(int c) const
+IRAM_ATTR uint8_t font_t::get_width(int c) const
 {
     return widths[get_c(c)];
 }
 
 //////////////////////////////////////////////////////////////////////
 
-uint8_t const *font_t::get_bitmap(int c) const
+IRAM_ATTR uint8_t const *font_t::get_bitmap(int c) const
 {
     return bitmap + get_c(c) * font_height;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-int font_t::measure_string(char const *str) const
+IRAM_ATTR int font_t::measure_string(char const *str) const
 {
     int width = 0;
     while(int c = *str++) {
@@ -121,7 +146,7 @@ int font_t::measure_string(char const *str) const
 
 //////////////////////////////////////////////////////////////////////
 
-int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
+IRAM_ATTR int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
 {
     uint8_t char_width = get_width(c);
     if(char_width == 0) {
@@ -178,14 +203,14 @@ int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
 
 //////////////////////////////////////////////////////////////////////
 
-int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const
+IRAM_ATTR int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const
 {
     return draw_char(gfx, c, x - get_width(c) / 2, y, color);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const
+IRAM_ATTR int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const
 {
     int width = 0;
     while(*str) {
@@ -199,21 +224,50 @@ int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float co
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::clear()
+IRAM_ATTR void font_t::draw_long_string(font_t const &font, char const *text, int x, int y, float color, float scrollbar_color) const
+{
+    int width = font.draw_string(gfx, text, x, y, color);
+    if(width > screen_width) {
+        int scrollbar_width;
+        int scrollbar_pos;
+        calculate_scrollbar(width, x, &scrollbar_width, &scrollbar_pos);
+        int scrollbar_end = scrollbar_pos + scrollbar_width;
+        for(int sx = scrollbar_pos; sx < scrollbar_end; ++sx) {
+            if(gfx.get_pixel(sx, screen_height - 1) == 0) {
+                gfx.set_pixel(scrollbar_color, sx, screen_height - 1);
+            }
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+IRAM_ATTR void graphics_t::clear()
 {
     memset(buffer, 0, sizeof(buffer));
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::set_led(float color, uint8_t pixel)
+IRAM_ATTR void graphics_t::clear_matrix()
+{
+    for(auto &y : matrix_lookup) {
+        for(auto x : y) {
+            buffer[x] = 0.0f;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+IRAM_ATTR void graphics_t::set_led(float color, uint8_t pixel)
 {
     buffer[pixel] = color;
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::set_pixel(float color, int x, int y)
+IRAM_ATTR void graphics_t::set_pixel(float color, int x, int y)
 {
     if(y < 0 || y >= screen_height || x < 0 || x >= screen_width) {
         return;
@@ -223,7 +277,7 @@ void graphics_t::set_pixel(float color, int x, int y)
 
 //////////////////////////////////////////////////////////////////////
 
-float graphics_t::get_pixel(int x, int y)
+IRAM_ATTR float graphics_t::get_pixel(int x, int y)
 {
     if(y < 0 || y >= screen_height || x < 0 || x >= screen_width) {
         return 0.0f;
@@ -233,7 +287,7 @@ float graphics_t::get_pixel(int x, int y)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::set_second(float color, uint8_t second)
+IRAM_ATTR void graphics_t::set_second(float color, uint8_t second)
 {
     if(second > 59) {
         second = 59;
@@ -245,7 +299,17 @@ void graphics_t::set_second(float color, uint8_t second)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_time(int hours, int minutes, float color)
+IRAM_ATTR void graphics_t::set_second_only(float color, uint8_t second)
+{
+    if(second > 59) {
+        second = 59;
+    }
+    buffer[second_lookup[second]] = color;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+IRAM_ATTR void graphics_t::draw_time(int hours, int minutes, float color)
 {
     minutes %= 60;
     char const *fmt;
@@ -269,7 +333,7 @@ void graphics_t::draw_time(int hours, int minutes, float color)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_colon(int seconds)
+IRAM_ATTR void graphics_t::draw_colon(int seconds)
 {
     float colon_color{};
     switch(settings.colon_mode) {
@@ -292,7 +356,7 @@ void graphics_t::draw_colon(int seconds)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_seconds(int current_second)
+IRAM_ATTR void graphics_t::draw_seconds(int current_second)
 {
     auto draw_tail = [this, current_second](int TAIL_LENGTH) {
         float delta = 1.0f / TAIL_LENGTH;
@@ -336,7 +400,7 @@ void graphics_t::draw_seconds(int current_second)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::fade_to(graphics_t &other, float scale)
+IRAM_ATTR void graphics_t::fade_to(graphics_t &other, float scale)
 {
     float o = 1.0f - scale;
     for(int i = 0; i < 256; ++i) {
@@ -348,7 +412,7 @@ void graphics_t::fade_to(graphics_t &other, float scale)
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::display()
+IRAM_ATTR void graphics_t::display()
 {
     for(int i = 0; i < 256; ++i) {
         ::display->led[i] = gamma_get(buffer[i]);
@@ -357,7 +421,7 @@ void graphics_t::display()
 
 //////////////////////////////////////////////////////////////////////
 
-void graphics_t::draw_clock(long seconds)
+IRAM_ATTR void graphics_t::draw_clock(long seconds)
 {
     int hours = seconds / 3600;
     int hour_seconds = seconds % 3600;

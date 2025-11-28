@@ -5,13 +5,14 @@ idf_component_register(
         graphics.cpp
         lux.cpp
         button.cpp
-        provisioning.cpp
+        wifi.cpp
         clock_time.cpp
         settings.cpp
         ota.cpp
         util.cpp
         state.cpp
         console.cpp
+        ping.cpp
         timezone.cpp
         timezone_data.cpp
         font_5x7.cpp
