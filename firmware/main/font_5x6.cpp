@@ -3,8 +3,7 @@
 #include "font_5x6.h"
 
 // Definition of the struct font_t for local linkage of the data.
-struct font_t
-{
+struct font_t {
     uint8_t width;
     uint8_t height;
     const uint8_t *bitmap;
@@ -219,4 +218,10 @@ static const uint8_t font_5x6_widths[96] = {
 
 
 // The main font structure instance, referencing the static arrays above.
-const struct font_t font_5x6_font = { .width = 5, .height = 6, .bitmap = font_5x6_bitmap, .widths = font_5x6_widths };
+const struct font_t font_5x6_font = {
+    .width = 5,
+    .height = 6,
+    .bitmap = font_5x6_bitmap,
+    .widths = font_5x6_widths
+};
+
