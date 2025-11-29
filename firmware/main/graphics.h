@@ -58,9 +58,9 @@ struct graphics_t
     void set_second(float color, uint8_t second);
     void set_second_only(float color, uint8_t second);
     void draw_time(int hours, int minutes, float color);
-    void draw_colon(int seconds);
+    void draw_colon(int seconds, float color);
     void draw_seconds(int current_second);
-    void draw_clock(long seconds);
+    void draw_clock(long seconds, float clock_color);
     void display();
     void fade_to(graphics_t &other, float scale);
 };

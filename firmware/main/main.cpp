@@ -70,7 +70,6 @@ extern "C" void app_main()
     ESP_LOG_ERR(ret);
 
     system_events = xEventGroupCreate();
-    wifi_events = xEventGroupCreate();
 
     settings.load();
 

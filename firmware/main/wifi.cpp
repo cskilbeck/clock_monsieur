@@ -16,6 +16,7 @@
 #include <wifi_provisioning/scheme_ble.h>
 
 #include "wifi.h"
+#include "main.h"
 
 static char const *TAG = "wifi";
 
@@ -33,8 +34,6 @@ static char const *TAG = "wifi";
 #define SEC_PARTITION_SUBTYPE ((esp_partition_subtype_t)0x40)
 
 esp_err_t start_provisioning();
-
-EventGroupHandle_t wifi_events;
 
 int wifi_retries = 0;
 
@@ -233,6 +232,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         case WIFI_EVENT_STA_DISCONNECTED:
             wifi_retries += 1;
             ESP_LOGI(TAG, "Disconnected");
+            xEventGroupClearBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED | SYS_EVENT_NETWORK_CONNECTED | SYS_EVENT_WIFI_CONNECTED);
             if(wifi_retries < 10) {
                 ESP_LOGI(TAG, "Connecting to the AP again for %d time", wifi_retries);
                 esp_wifi_connect();
@@ -248,7 +248,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
-        xEventGroupSetBits(wifi_events, WIFI_CONNECTED);
+        xEventGroupSetBits(system_events, SYS_EVENT_WIFI_CONNECTED);
     } else if(event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {
         switch(event_id) {
         case PROTOCOMM_TRANSPORT_BLE_CONNECTED:
@@ -363,6 +363,8 @@ esp_err_t start_provisioning()
     wifi_prov_scheme_ble_set_service_uuid(custom_service_uuid);
 
     /* Do not stop and de-init provisioning even after success, so that we can restart it later. */
+    ESP_ERROR_CHECK(wifi_prov_mgr_disable_auto_stop(1000));
+
     /* Start provisioning service */
     ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, service_name, service_key));
     return ESP_OK;

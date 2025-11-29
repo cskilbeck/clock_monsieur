@@ -27,7 +27,6 @@ struct boot_state_t : state_handler_t
     void on_stop() override;
     char *boot_msg;
     bool factory_reset;
-    int x;
 };
 
 //////////////////////////////////////////////////////////////////////

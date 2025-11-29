@@ -95,7 +95,6 @@ void boot_state_t::on_start()
     boot_msg = (char *)malloc(128);
     sprintf(boot_msg, "CLOCK MONSIEUR! FIRMWARE V%s   ", VERSION_STR);
     factory_reset = true;
-    x = screen_width - 1;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -106,9 +105,7 @@ void boot_state_t::on_update()
     factory_reset &= button_left.held && button_right.held;
     int content_width = font.measure_string(boot_msg);
     int max_x = content_width - screen_width;
-    if((frames & 1) == 0) {
-        x -= 1;
-    }
+    int x = screen_width - 1 - (frames >> 1);
     display->set_ambient(160);
     gfx.clear();
     font.draw_string(gfx, boot_msg, x, 0, 0.6);
@@ -139,33 +136,29 @@ void boot_state_t::on_stop()
 
 void wifi_check_state_t::on_update()
 {
-    bool wifi_up = (xEventGroupGetBits(wifi_events) & WIFI_CONNECTED) == WIFI_CONNECTED;
-    bool network_up = (xEventGroupGetBits(system_events) & SYS_EVENT_PING_OK) == SYS_EVENT_PING_OK;
-    if(wifi_up && network_up) {
-        LOG_INFO("WIFI IS UP!");
+    auto sys_events = xEventGroupGetBits(system_events);
+    bool network_up = (sys_events & SYS_EVENT_NETWORK_CONNECTED) == SYS_EVENT_NETWORK_CONNECTED;
+    bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
+    if(network_up && wifi_up) {
+        // if(false) {
         state_set(clock_state);
     } else {
         gfx.clear();
-        if(state_elapsed_seconds < 3) {
-            int s = frames >> 2;
-            for(int y = 1; y < 6; ++y) {
-                for(int x = 0; x < screen_width; ++x) {
-                    float color = 0.2f;
-                    if((((x - s) >> 2) & 1) == 0) {
-                        color = 0.8f;
-                    }
-                    gfx.set_pixel(color, x, y);
-                }
-                s += 1;
-            }
-        } else {
-            const char *msg = wifi_up ? "Net?" : "WiFi?";
-            font_t const &font = font_5x7_font;
-            int w = font.measure_string(msg);
-            int x = (screen_width - w) / 2;
-            float color = fabsf((frames & 127) / 127.0f - 0.5f) + 0.5f;
-            font.draw_string(gfx, msg, x, 0, color);
+        int sec = ((frames >> 2) % 12);
+        for(int s = 0; s < 60; ++s) {
+            float color = ((s + sec) % 12) < 6 ? 0.0f : 0.8f;
+            gfx.set_second_only(color, 59 - s);
         }
+        for(int s = sec; s < 60; s += 12) {
+            for(int t = 0; t < 6; ++t) {
+            }
+        }
+        const char *msg = wifi_up ? "Net?" : "WiFi?";
+        font_t const &font = font_5x7_font;
+        int w = font.measure_string(msg);
+        int x = (screen_width - w) / 2;
+        float color = fabsf((frames & 127) / 127.0f - 0.5f) * 2.0f;
+        font.draw_string(gfx, msg, x, 0, color);
         gfx.display();
     }
 }
@@ -194,7 +187,12 @@ void clock_state_t::on_update()
     struct timeval tv_now;
     get_time(&tv_now);
 
-    gfx.draw_clock(tv_now.tv_sec);
+    float clock_color = 1.0f;
+    if((xEventGroupGetBits(system_events) & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {
+        clock_color = fabsf((frames & 127) / 127.0f - 0.5f) + 0.5f;
+    }
+
+    gfx.draw_clock(tv_now.tv_sec, clock_color);
 
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
@@ -213,7 +211,7 @@ void clock_state_t::on_update()
         second_snap = (one_second / 0.2f) / microseconds;
         break;
     }
-    gfx2.draw_clock(tv_now.tv_sec - 1);
+    gfx2.draw_clock(tv_now.tv_sec - 1, clock_color);
     gfx2.fade_to(gfx, min(1.0f, tv_now.tv_usec * second_snap));
 }
 

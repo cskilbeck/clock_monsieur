@@ -12,7 +12,3 @@ esp_err_t wifi_init();
 char const *provisioning_pop();
 
 //////////////////////////////////////////////////////////////////////
-
-const int WIFI_CONNECTED = BIT0;
-
-extern EventGroupHandle_t wifi_events;

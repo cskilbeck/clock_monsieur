@@ -392,14 +392,14 @@ void timezone_task(void *)
 
         LOG_INFO("Wait for network");
 
-        // Wait for network to be up
-        xEventGroupWaitBits(system_events, SYS_EVENT_PING_OK, false, true, portMAX_DELAY);
+        // wait for network to be up
+        xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
 
         get_location();
         get_timezone();
 
-        // wait indefinitely for sntp to be up
-        xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_UP, false, true, portMAX_DELAY);
+        // wait for sntp to be up
+        xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, true, portMAX_DELAY);
 
         // wait until daylight savings transition
         if(dst_transition_epoch_seconds == 0) {
@@ -427,7 +427,7 @@ void timezone_task(void *)
 void sntp_callback(struct timeval *tv)
 {
     LOG_INFO("SNTP IS UP!");
-    xEventGroupSetBits(system_events, SYS_EVENT_SNTP_UP);
+    xEventGroupSetBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -438,7 +438,7 @@ void sntp_task(void *)
     while(do_ping_check() != ESP_OK) {
         delay_secs(60);
     }
-    xEventGroupSetBits(system_events, SYS_EVENT_PING_OK);
+    xEventGroupSetBits(system_events, SYS_EVENT_NETWORK_CONNECTED);
 
     xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 6, NULL, 1, NULL, 0);
 
@@ -453,13 +453,12 @@ void sntp_task(void *)
 
     while(true) {
 
-        xEventGroupWaitBits(wifi_events, WIFI_CONNECTED, false, false, portMAX_DELAY);
         LOG_INFO("Wait for SNTP...");
 
         // wait for SNTP to get up
-        EventBits_t sntp_up = xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_UP, false, false, SNTP_WAIT_TICKS);
+        EventBits_t sntp_up = xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, false, SNTP_WAIT_TICKS);
 
-        if((sntp_up & SYS_EVENT_SNTP_UP) == 0) {
+        if((sntp_up & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {
             LOG_INFO("RESET SNTP");
             esp_sntp_stop();
             esp_sntp_init();

@@ -234,7 +234,7 @@ esp_err_t check_firmware_version()
 void ota_task(void *)
 {
     while(true) {
-        xEventGroupWaitBits(system_events, SYS_EVENT_PING_OK, false, true, portMAX_DELAY);
+        xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
         check_firmware_version();
         int64_t one_day_seconds = 60 * 60 * 24;
         int64_t one_day_millis = one_day_seconds * 1000;

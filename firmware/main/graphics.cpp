@@ -333,7 +333,7 @@ IRAM_ATTR void graphics_t::draw_time(int hours, int minutes, float color)
 
 //////////////////////////////////////////////////////////////////////
 
-IRAM_ATTR void graphics_t::draw_colon(int seconds)
+IRAM_ATTR void graphics_t::draw_colon(int seconds, float color)
 {
     float colon_color{};
     switch(settings.colon_mode) {
@@ -341,13 +341,13 @@ IRAM_ATTR void graphics_t::draw_colon(int seconds)
         colon_color = 0.0f;
         break;
     case colon_mode_t::on:
-        colon_color = 1.0f;
+        colon_color = color;
         break;
     case colon_mode_t::dim:
-        colon_color = 0.5f;
+        colon_color = color * 0.5f;
         break;
     case colon_mode_t::pulse:
-        colon_color = (seconds & 1) == 0 ? 0 : 0.75f;
+        colon_color = (seconds & 1) == 0 ? 0 : color * 0.75f;
         break;
     }
     buffer[matrix_lookup[2][12]] = colon_color;
@@ -421,7 +421,7 @@ IRAM_ATTR void graphics_t::display()
 
 //////////////////////////////////////////////////////////////////////
 
-IRAM_ATTR void graphics_t::draw_clock(long seconds)
+IRAM_ATTR void graphics_t::draw_clock(long seconds, float clock_color)
 {
     int hours = seconds / 3600;
     int hour_seconds = seconds % 3600;
@@ -429,6 +429,6 @@ IRAM_ATTR void graphics_t::draw_clock(long seconds)
     int secs = hour_seconds % 60;
     clear();
     draw_seconds(secs);
-    draw_time(hours, minutes, 1);
-    draw_colon(secs);
+    draw_time(hours, minutes, clock_color);
+    draw_colon(secs, clock_color);
 }

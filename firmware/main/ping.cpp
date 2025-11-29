@@ -35,7 +35,7 @@ esp_err_t do_ping_check()
 {
     LOG_INFO("starting");
 
-    xEventGroupWaitBits(wifi_events, WIFI_CONNECTED, false, true, portMAX_DELAY);
+    xEventGroupWaitBits(system_events, SYS_EVENT_WIFI_CONNECTED, false, true, portMAX_DELAY);
 
     esp_ping_config_t config{};
     ipaddr_aton("8.8.8.8", &config.target_addr);
