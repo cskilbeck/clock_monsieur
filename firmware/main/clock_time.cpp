@@ -74,6 +74,7 @@ namespace
     double current_lat = 0.0;
     double current_lon = 0.0;
     char const *timezone_name = "unknown tz";
+    time_t dst_transition_epoch_seconds = 0;
 
     char const *month[] = { "January", "February", "March",     "April",   "May",      "June",
                             "July",    "August",   "September", "October", "November", "December" };
@@ -347,8 +348,11 @@ esp_err_t get_timezone()
     }
 
     time_t zone_end{ 0 };
-    if(!json_int64(root, "zoneEnd", zone_end)) {
+    if(json_int64(root, "zoneEnd", zone_end)) {
+        dst_transition_epoch_seconds = zone_end;
+    } else {
         LOG_WARN("No Zone End!");
+        dst_transition_epoch_seconds = 0;
     }
 
     char const *abbreviation = json_string(root, "abbreviation", "???");
@@ -374,40 +378,7 @@ esp_err_t get_timezone()
     got_timezone = true;
     xEventGroupSetBits(system_events, SYS_EVENT_GOT_TIMEZONE);
 
-    // !!!!!!!!!!!! CHECK THE TIMESTAMP IN THE API RESPONSE !!!!!!!!!!!
-    // Set up a timer which fires every 60 minutes and calls WAKE_WHEN_TZ_CHANGES
-
-    // 60_MINUTE_TIMER: If next zone active in <80 minutes, set a ZONE_END_CALLBACK timer for then (which might mean waking straight up,
-    // which is fine) ZONE_END_CALLBACK: get_timezone(), set up 60_MINUTE_TIMER
-
     return ESP_OK;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-void delay_until(long hour, long minute)
-{
-    struct timeval tv_now;
-    gettimeofday(&tv_now, NULL);
-
-    struct tm timeinfo;
-    localtime_r(&(tv_now.tv_sec), &timeinfo);
-
-    long seconds_since_midnight = (timeinfo.tm_hour * 3600) + (timeinfo.tm_min * 60) + timeinfo.tm_sec;
-
-    long delay_sec;
-
-    long seconds = hour * 3600 + minute * 60;
-
-    if(seconds_since_midnight < seconds - 1) {
-        delay_sec = seconds - seconds_since_midnight;
-    } else {
-        long day_seconds = 24 * 3600;
-        delay_sec = day_seconds - seconds_since_midnight + seconds;
-    }
-    if(delay_sec > 0) {
-        delay_secs(delay_sec);
-    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -415,17 +386,39 @@ void delay_until(long hour, long minute)
 
 void timezone_task(void *)
 {
+    LOG_CONTEXT("timezone");
+
     while(!(got_location && got_timezone)) {
-        xEventGroupWaitBits(wifi_events, WIFI_CONNECTED, false, true, portMAX_DELAY);
-        LOG_INFO("Init Timezone");
+
+        LOG_INFO("Wait for network");
+
+        // Wait for network to be up
+        xEventGroupWaitBits(system_events, SYS_EVENT_PING_OK, false, true, portMAX_DELAY);
+
         get_location();
         get_timezone();
 
         // wait indefinitely for sntp to be up
         xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_UP, false, true, portMAX_DELAY);
 
-        // TODO (chs): wait until DST transition
-        vTaskDelay(portMAX_DELAY);
+        // wait until daylight savings transition
+        if(dst_transition_epoch_seconds == 0) {
+            LOG_INFO("No daylight savings in this timezone, we're done!");
+            vTaskDelete(nullptr);
+        }
+        while(true) {
+            time_t now = time(nullptr);
+            int64_t time_until_dst_change = dst_transition_epoch_seconds - now;
+            int seconds = 60 * 60;
+            if(time_until_dst_change < 60 * 70) {
+                LOG_INFO("Here comes DST!");
+                seconds = time_until_dst_change + 1;
+            } else {
+                LOG_INFO("%lld seconds until DST change", time_until_dst_change);
+            }
+            LOG_INFO("Delaying for %d seconds", seconds);
+            delay_secs(seconds);
+        }
     }
 }
 

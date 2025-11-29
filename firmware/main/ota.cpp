@@ -238,7 +238,8 @@ void ota_task(void *)
         check_firmware_version();
         int64_t one_day_seconds = 60 * 60 * 24;
         int64_t one_day_millis = one_day_seconds * 1000;
-        vTaskDelay(pdMS_TO_TICKS(one_day_millis));
+        int64_t ticks = one_day_millis / configTICK_RATE_HZ;
+        vTaskDelay((TickType_t)ticks);
     }
 }
 
