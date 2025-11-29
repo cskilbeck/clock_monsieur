@@ -85,6 +85,7 @@ extern "C" void app_main()
     state_init();
 
     state_set(boot_state);
+    // state_set(ota_state);
 
     // got this far, probably fine...
     ota_mark_app_valid();

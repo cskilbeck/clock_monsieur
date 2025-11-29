@@ -12,6 +12,7 @@ X fix esp-prog header pinout
 X provisioning stuff in factory partition
 X OTA firmware update
 X measure/tweak cc drain capacitors
+X save/load settings in NVS
 
 ? put ambient light sensor on the front
 - tweak Ambient light sensor gamma ramp
@@ -20,7 +21,6 @@ X measure/tweak cc drain capacitors
 - diagnose esp-prog boot / reset problem
 - frosted glass/gel problem
 - small font for menus
-- save/load settings in NVS
 - back compatible settings format changes
 - menus
     - 12/24

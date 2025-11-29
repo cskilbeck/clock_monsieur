@@ -236,7 +236,9 @@ void ota_task(void *)
     while(true) {
         xEventGroupWaitBits(system_events, SYS_EVENT_PING_OK, false, true, portMAX_DELAY);
         check_firmware_version();
-        vTaskDelay(pdMS_TO_TICKS(1000 * 60 * 60 * 24));
+        int64_t one_day_seconds = 60 * 60 * 24;
+        int64_t one_day_millis = one_day_seconds * 1000;
+        vTaskDelay(pdMS_TO_TICKS(one_day_millis));
     }
 }
 

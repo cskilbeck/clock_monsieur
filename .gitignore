@@ -3,4 +3,5 @@
 .vscode/
 *.blend1
 build/
+.cmake/
 ~*

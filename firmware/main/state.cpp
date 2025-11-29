@@ -219,9 +219,13 @@ void clock_state_t::on_update()
 
 //////////////////////////////////////////////////////////////////////
 
-void ota_state_t::on_update()
+IRAM_ATTR void ota_state_t::on_update()
 {
     gfx.clear();
-    font_5x7_font.draw_string(gfx, "FW!!", 0, 0, 1);
+    display->set_ambient(200);
+    char const *msg = "Firmware Updating...";
+    int width = font_5x7_font.measure_string(msg);
+    int x = screen_width - ((frames >> 1) % (width + screen_width));
+    font_5x7_font.draw_string(gfx, msg, x, 0, 1);
     gfx.display();
 }

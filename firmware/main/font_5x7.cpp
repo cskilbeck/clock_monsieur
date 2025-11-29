@@ -2,8 +2,11 @@
 // Generated C++ Source for Bitmap Font: font_5x7
 #include "font_5x7.h"
 
+#include "esp_attr.h"
+
 // Definition of the struct font_t for local linkage of the data.
-struct font_t {
+struct font_t
+{
     uint8_t width;
     uint8_t height;
     const uint8_t *bitmap;
@@ -15,7 +18,7 @@ struct font_t {
 // Data is **Right-Aligned** (occupies low bits 0 to 4).
 // Total size: 96 chars * 7 rows = 672 bytes.
 // Indexing: (char_code - 32) * 7 + row
-static const uint8_t font_5x7_bitmap[672] = {
+static DRAM_ATTR const uint8_t font_5x7_bitmap[672] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* ' ' (ASCII 32) */
     0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 0x80, /* '!' (ASCII 33) */
     0xA0, 0xA0, 0x00, 0x00, 0x00, 0x00, 0x00, /* '"' (ASCII 34) */
@@ -117,7 +120,7 @@ static const uint8_t font_5x7_bitmap[672] = {
 
 // Array storing character widths
 // Indexing: char_code - 32
-static const uint8_t font_5x7_widths[96] = {
+static DRAM_ATTR const uint8_t font_5x7_widths[96] = {
     0x00, /* ' ' (Shift: 0, Width: 0) */
     0x01, /* '!' (Shift: 5, Width: 1) */
     0x03, /* '"' (Shift: 4, Width: 3) */
@@ -218,10 +221,4 @@ static const uint8_t font_5x7_widths[96] = {
 
 
 // The main font structure instance, referencing the static arrays above.
-const struct font_t font_5x7_font = {
-    .width = 5,
-    .height = 7,
-    .bitmap = font_5x7_bitmap,
-    .widths = font_5x7_widths
-};
-
+DRAM_ATTR const struct font_t font_5x7_font = { .width = 5, .height = 7, .bitmap = font_5x7_bitmap, .widths = font_5x7_widths };
