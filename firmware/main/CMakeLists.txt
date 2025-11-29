@@ -18,6 +18,7 @@ idf_component_register(
         font_5x7.cpp
         font_5x6.cpp
         big_caps.cpp
+        menu.cpp
     PRIV_REQUIRES
         driver
         bt
@@ -33,5 +34,6 @@ idf_component_register(
 target_compile_options(
     ${COMPONENT_LIB}
     PRIVATE
+        -Wno-format-truncation
         -Wno-missing-field-initializers
         -Wno-unused-variable)

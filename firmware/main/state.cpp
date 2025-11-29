@@ -10,6 +10,7 @@
 #include "wifi.h"
 #include "graphics.h"
 #include "state.h"
+#include "menu.h"
 #include "version.h"
 #include "settings.h"
 #include "button.h"
@@ -25,6 +26,7 @@ boot_state_t boot_state;
 wifi_check_state_t wifi_check_state;
 factory_reset_state_t factory_reset_state;
 clock_state_t clock_state;
+menu_state_t menu_state;
 ota_state_t ota_state;
 
 //////////////////////////////////////////////////////////////////////
@@ -93,7 +95,7 @@ void state_set(state_handler_t &new_state)
 void boot_state_t::on_start()
 {
     boot_msg = (char *)malloc(128);
-    sprintf(boot_msg, "CLOCK MONSIEUR! FIRMWARE V%s   ", VERSION_STR);
+    sprintf(boot_msg, "CLOCK MONSIEUR! V%s   ", VERSION_STR);
     factory_reset = true;
 }
 
@@ -213,6 +215,24 @@ void clock_state_t::on_update()
     }
     gfx2.draw_clock(tv_now.tv_sec - 1, clock_color);
     gfx2.fade_to(gfx, min(1.0f, tv_now.tv_usec * second_snap));
+
+    if(button_select.pressed) {
+        state_set(menu_state);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void menu_state_t::on_start()
+{
+    menu_init();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void menu_state_t::on_update()
+{
+    menu_update();
 }
 
 //////////////////////////////////////////////////////////////////////

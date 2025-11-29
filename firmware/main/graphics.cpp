@@ -224,9 +224,9 @@ IRAM_ATTR int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y
 
 //////////////////////////////////////////////////////////////////////
 
-IRAM_ATTR void font_t::draw_long_string(font_t const &font, char const *text, int x, int y, float color, float scrollbar_color) const
+IRAM_ATTR void font_t::draw_long_string(graphics_t &gfx, char const *text, int x, int y, float color, float scrollbar_color) const
 {
-    int width = font.draw_string(gfx, text, x, y, color);
+    int width = draw_string(gfx, text, x, y, color);
     if(width > screen_width) {
         int scrollbar_width;
         int scrollbar_pos;

@@ -41,7 +41,7 @@ struct font_t
     int draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const;
 
     // adds a scrollbar for the X pos/width
-    void draw_long_string(font_t const &font, char const *text, int x, int y, float color, float scrollbar_color) const;
+    void draw_long_string(graphics_t &gfx, char const *text, int x, int y, float color, float scrollbar_color) const;
 };
 
 //////////////////////////////////////////////////////////////////////
