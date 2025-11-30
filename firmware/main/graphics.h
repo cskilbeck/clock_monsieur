@@ -8,6 +8,7 @@
 #include "display.h"
 #include "font_5x6.h"
 #include "font_5x7.h"
+#include "font_5x7_narrow.h"
 #include "big_caps.h"
 
 //////////////////////////////////////////////////////////////////////

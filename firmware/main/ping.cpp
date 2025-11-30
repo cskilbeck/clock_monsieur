@@ -39,9 +39,9 @@ esp_err_t do_ping_check()
 
     esp_ping_config_t config{};
     ipaddr_aton("8.8.8.8", &config.target_addr);
-    config.count = 3;    // MUST BE ODD to avoid pass/fail tie
+    config.count = 3;
     config.interval_ms = 100;
-    config.timeout_ms = 1000;
+    config.timeout_ms = 2000;
     config.data_size = 64;
     config.tos = 0;
     config.ttl = IP_DEFAULT_TTL;
@@ -69,7 +69,7 @@ esp_err_t do_ping_check()
         LOG_INFO("Waiting for pings");
         delay_secs(1);
     }
-    if(fails > pings) {
+    if(pings == 0) {
         return ESP_ERR_TIMEOUT;
     }
     return ESP_OK;

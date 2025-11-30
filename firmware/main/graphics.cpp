@@ -75,14 +75,14 @@ namespace
             return;
         }
         float ratio = (float)screen_width / (float)content_width;
-        float scrollbar_width = (float)(screen_width * ratio + 0.5f);
+        float scrollbar_width = (float)(screen_width * ratio + 0.9999f);
         float max_scroll = (float)content_width - (float)screen_width;
         float current_scroll = (float)-content_pos;
         float normalized_pos = current_scroll / max_scroll;
         float scrollbar_track_length = (float)screen_width - scrollbar_width;
         float scrollbar_pos_float = normalized_pos * scrollbar_track_length;
         *scrollbar_width_out = (int)scrollbar_width;
-        *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.5f);
+        *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.9999f);
     }
 
 
@@ -233,9 +233,8 @@ IRAM_ATTR void font_t::draw_long_string(graphics_t &gfx, char const *text, int x
         calculate_scrollbar(width, x, &scrollbar_width, &scrollbar_pos);
         int scrollbar_end = scrollbar_pos + scrollbar_width;
         for(int sx = scrollbar_pos; sx < scrollbar_end; ++sx) {
-            if(gfx.get_pixel(sx, screen_height - 1) == 0) {
-                gfx.set_pixel(scrollbar_color, sx, screen_height - 1);
-            }
+            float p = min(1.0f, gfx.get_pixel(sx, 0) + scrollbar_color);
+            gfx.set_pixel(p, sx, 0);
         }
     }
 }

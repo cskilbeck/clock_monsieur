@@ -138,31 +138,44 @@ void boot_state_t::on_stop()
 
 void wifi_check_state_t::on_update()
 {
-    auto sys_events = xEventGroupGetBits(system_events);
+    EventBits_t sys_events = xEventGroupGetBits(system_events);
     bool network_up = (sys_events & SYS_EVENT_NETWORK_CONNECTED) == SYS_EVENT_NETWORK_CONNECTED;
-    bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
-    if(network_up && wifi_up) {
-        // if(false) {
+    if(network_up) {
         state_set(clock_state);
-    } else {
-        gfx.clear();
-        int sec = ((frames >> 2) % 12);
-        for(int s = 0; s < 60; ++s) {
-            float color = ((s + sec) % 12) < 6 ? 0.0f : 0.8f;
-            gfx.set_second_only(color, 59 - s);
-        }
-        for(int s = sec; s < 60; s += 12) {
-            for(int t = 0; t < 6; ++t) {
-            }
-        }
-        const char *msg = wifi_up ? "Net?" : "WiFi?";
-        font_t const &font = font_5x7_font;
-        int w = font.measure_string(msg);
-        int x = (screen_width - w) / 2;
-        float color = fabsf((frames & 127) / 127.0f - 0.5f) * 2.0f;
-        font.draw_string(gfx, msg, x, 0, color);
-        gfx.display();
+        return;
     }
+    bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
+    bool provisioning = (sys_events & SYS_EVENT_PROVISIONING) != 0;
+    bool connected = (sys_events & SYS_EVENT_BLE_CONNECTED) != 0;
+    bool error = (sys_events & SYS_EVENT_PROVISIONING_ERROR) != 0;
+    bool done = (sys_events & SYS_EVENT_PROVISIONING_DONE) != 0;
+    gfx.clear();
+    int sec = ((frames >> 2) % 12);
+    for(int s = 0; s < 60; ++s) {
+        float color = ((s + sec) % 12) < 6 ? 0.0f : 0.95f;
+        gfx.set_second_only(color, 59 - s);
+    }
+    char const *msg = "Network?";
+    if(wifi_up) {
+        char const *msg = "WiFi connecting...";
+    }
+    if(provisioning) {
+        msg = "Searching...";
+    }
+    if(connected) {
+        msg = "Connected...";
+    }
+    if(error) {
+        msg = "Error...";
+    }
+    if(done) {
+        msg = "Success!";
+    }
+    font_t const &font = font_5x7_font;
+    int w = font.measure_string(msg);
+    int x = (frames >> 2) % (screen_width + w);
+    font.draw_string(gfx, msg, screen_width - x, 0, 0.9f);
+    gfx.display();
 }
 
 //////////////////////////////////////////////////////////////////////

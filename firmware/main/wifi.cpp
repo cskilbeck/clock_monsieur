@@ -23,7 +23,6 @@ static char const *TAG = "wifi";
 //////////////////////////////////////////////////////////////////////
 
 #define CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE 0
-
 #define CONFIG_EXAMPLE_PROV_SEC2_PROD_MODE 1
 
 #define PROV_QR_VERSION "v1"
@@ -216,9 +215,11 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
         case WIFI_PROV_CRED_SUCCESS:
             ESP_LOGI(TAG, "Provisioning successful");
+            xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_DONE);
             break;
         case WIFI_PROV_END:
             /* De-initialize manager once provisioning is finished */
+            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING | SYS_EVENT_BLE_CONNECTED);
             wifi_prov_mgr_deinit();
             break;
         default:
@@ -245,6 +246,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
         }
     } else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING);
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
@@ -252,9 +254,11 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     } else if(event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {
         switch(event_id) {
         case PROTOCOMM_TRANSPORT_BLE_CONNECTED:
+            xEventGroupSetBits(system_events, SYS_EVENT_BLE_CONNECTED);
             ESP_LOGI(TAG, "BLE transport: Connected!");
             break;
         case PROTOCOMM_TRANSPORT_BLE_DISCONNECTED:
+            xEventGroupClearBits(system_events, SYS_EVENT_BLE_CONNECTED);
             ESP_LOGI(TAG, "BLE transport: Disconnected!");
             break;
         default:
@@ -267,9 +271,11 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
         case PROTOCOMM_SECURITY_SESSION_INVALID_SECURITY_PARAMS:
             ESP_LOGE(TAG, "Received invalid security parameters for establishing secure session!");
+            xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_ERROR);
             break;
         case PROTOCOMM_SECURITY_SESSION_CREDENTIALS_MISMATCH:
             ESP_LOGE(TAG, "Received incorrect username and/or PoP for establishing secure session!");
+            xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_ERROR);
             break;
         default:
             break;
@@ -312,6 +318,7 @@ void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *e
 esp_err_t start_provisioning()
 {
     ESP_LOGI(TAG, "Starting provisioning");
+    xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING);
 
     /* What is the Device Service Name that we want
      * This translates to :
@@ -421,7 +428,7 @@ esp_err_t wifi_init()
     } else {
         ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
 
-        /* We don't need the manager as device is already provisioned, so let's release it's resources */
+        /* We don't need the manager as device is already provisioned, so let's release its resources */
         wifi_prov_mgr_deinit();
 
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));

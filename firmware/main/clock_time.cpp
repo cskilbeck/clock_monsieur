@@ -395,29 +395,36 @@ void timezone_task(void *)
         // wait for network to be up
         xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
 
+        delay_secs(1);
+
         get_location();
         get_timezone();
 
-        // wait for sntp to be up
-        xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, true, portMAX_DELAY);
+        if(!got_location || !got_timezone) {
+            LOG_INFO("Will retry location/timezone in 10 seconds");
+            delay_secs(9);
+        } else {
+            // wait for sntp to be up
+            xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, true, portMAX_DELAY);
 
-        // wait until daylight savings transition
-        if(dst_transition_epoch_seconds == 0) {
-            LOG_INFO("No daylight savings in this timezone, we're done!");
-            vTaskDelete(nullptr);
-        }
-        while(true) {
-            time_t now = time(nullptr);
-            int64_t time_until_dst_change = dst_transition_epoch_seconds - now;
-            int seconds = 60 * 60;
-            if(time_until_dst_change < 60 * 70) {
-                LOG_INFO("Here comes DST!");
-                seconds = time_until_dst_change + 1;
-            } else {
-                LOG_INFO("%lld seconds until DST change", time_until_dst_change);
+            // wait until daylight savings transition
+            if(dst_transition_epoch_seconds == 0) {
+                LOG_INFO("No daylight savings in this timezone, we're done!");
+                vTaskDelete(nullptr);
             }
-            LOG_INFO("Delaying for %d seconds", seconds);
-            delay_secs(seconds);
+            while(true) {
+                time_t now = time(nullptr);
+                int64_t time_until_dst_change = dst_transition_epoch_seconds - now;
+                int seconds = 60 * 60;
+                if(time_until_dst_change < 60 * 70) {
+                    LOG_INFO("Here comes DST!");
+                    seconds = time_until_dst_change + 1;
+                } else {
+                    LOG_INFO("%lld seconds until DST change", time_until_dst_change);
+                }
+                LOG_INFO("Delaying for %d seconds", seconds);
+                delay_secs(seconds);
+            }
         }
     }
 }
@@ -445,11 +452,14 @@ void sntp_task(void *)
     int constexpr SNTP_WAIT_SECS = 60;
     int constexpr SNTP_WAIT_TICKS = pdMS_TO_TICKS(SNTP_WAIT_SECS * 1000);
 
+    delay_secs(3);
+
     LOG_INFO("Init SNTP");
     esp_sntp_set_time_sync_notification_cb(sntp_callback);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    esp_sntp_setservername(1, "time.google.com");
+    esp_sntp_setservername(0, "time.google.com");
+    esp_sntp_setservername(1, "pool.ntp.org");
+    esp_sntp_init();
 
     while(true) {
 

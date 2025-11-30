@@ -235,6 +235,7 @@ void ota_task(void *)
 {
     while(true) {
         xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
+        delay_secs(30);
         check_firmware_version();
         int64_t one_day_seconds = 60 * 60 * 24;
         int64_t one_day_millis = one_day_seconds * 1000;
