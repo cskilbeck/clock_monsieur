@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "font_5x6.h"
 #include "font_5x7.h"
+#include "square_font.h"
 
 LOG_CONTEXT("graphics");
 
@@ -138,7 +139,7 @@ IRAM_ATTR int font_t::measure_string(char const *str) const
     int width = 0;
     while(int c = *str++) {
         int w = get_width(c);
-        width += w == 0 ? font_width / 2 : w;
+        width += w == 0 ? (font_width / 2 - 1) : w;
         width += 1;    // +1 for single pixel gap between chars
     }
     return width - 1;    // trim the trailing single pixel gap
@@ -150,7 +151,7 @@ IRAM_ATTR int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float colo
 {
     uint8_t char_width = get_width(c);
     if(char_width == 0) {
-        return font_width / 2;
+        return (font_width / 2) - 1;
     }
 
     // fully clipped?
@@ -219,7 +220,7 @@ IRAM_ATTR int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y
         x += w;
         width += w;
     }
-    return width;
+    return width - 1;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -324,10 +325,11 @@ IRAM_ATTR void graphics_t::draw_time(int hours, int minutes, float color)
     }
     char time_buffer[16];
     sprintf(time_buffer, fmt, hours, minutes);
-    font_5x7_font.draw_char_centered(*this, time_buffer[0], 2, 0, color);
-    font_5x7_font.draw_char_centered(*this, time_buffer[1], 8, 0, color);
-    font_5x7_font.draw_char_centered(*this, time_buffer[2], 16, 0, color);
-    font_5x7_font.draw_char_centered(*this, time_buffer[3], 22, 0, color);
+    font_t const &font = settings.clock_font == clock_font_t::modern ? square_font : font_5x7_font;
+    font.draw_char_centered(*this, time_buffer[0], 2, 0, color);
+    font.draw_char_centered(*this, time_buffer[1], 8, 0, color);
+    font.draw_char_centered(*this, time_buffer[2], 16, 0, color);
+    font.draw_char_centered(*this, time_buffer[3], 22, 0, color);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -376,12 +378,12 @@ IRAM_ATTR void graphics_t::draw_seconds(int current_second)
             set_second(1.0f, i);
         }
         for(int i = current_second + 1; i < 60; ++i) {
-            set_second(0.25f, i);
+            set_second(0.2f, i);
         }
         break;
     case seconds_mode_t::single:
         for(int i = 0; i < 60; ++i) {
-            set_second(0.25f, i);
+            set_second(0.2f, i);
         }
         set_second(1.0f, current_second);
         break;

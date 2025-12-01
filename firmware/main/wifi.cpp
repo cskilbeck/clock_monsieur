@@ -44,7 +44,7 @@ int wifi_retries = 0;
 #define EXAMPLE_PROV_SEC2_PWD "abcd1234"
 
 /* This salt,verifier has been generated for username = "wifiprov" and password = "abcd1234"
- * IMPORTANT NOTE: Forses, this m production caust be unique to every device
+ * IMPORTANT NOTE: For production cases, this must be unique to every device
  * and should come from device manufacturing partition.*/
 static const char sec2_salt[] = { 0x03, 0x6e, 0xe0, 0xc7, 0xbc, 0xb9, 0xed, 0xa8, 0x4c, 0x9e, 0xac, 0x97, 0xd9, 0x3d, 0xec, 0xf4 };
 
@@ -83,6 +83,11 @@ static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *veri
     *verifier = sec2_verifier;
     *verifier_len = sizeof(sec2_verifier);
     return ESP_OK;
+}
+
+char const *provisioning_pop()
+{
+    return EXAMPLE_PROV_SEC2_PWD;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -144,11 +149,11 @@ esp_err_t read_security_info()
     if(err != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read data from partition (0x%x)!", err);
     }
-    // ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
-    // ESP_LOGI(TAG, "SALT:");
-    // dump_hex(sec_info.salt, sizeof(sec_info.salt));
-    // ESP_LOGI(TAG, "VERIFIER:");
-    // dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
+    ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
+    ESP_LOGI(TAG, "SALT:");
+    dump_hex(sec_info.salt, sizeof(sec_info.salt));
+    ESP_LOGI(TAG, "VERIFIER:");
+    dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
     return err;
 }
 
@@ -184,25 +189,29 @@ static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *veri
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
+    ESP_LOGI(TAG, "EVENT: %s, ID = %d", event_base, event_id);
+
     if(event_base == WIFI_PROV_EVENT) {
+
         switch(event_id) {
+
         case WIFI_PROV_START:
             ESP_LOGI(TAG, "Provisioning started");
             break;
+
         case WIFI_PROV_CRED_RECV: {
             wifi_sta_config_t *wifi_sta_cfg = (wifi_sta_config_t *)event_data;
-            ESP_LOGI(TAG,
-                     "Received Wi-Fi credentials"
-                     "\n\tSSID     : %s\n\tPassword : %s",
-                     (const char *)wifi_sta_cfg->ssid, (const char *)wifi_sta_cfg->password);
+            ESP_LOGI(TAG, "Received Wi-Fi credentials:");
+            ESP_LOGI(TAG, "    SSID     : %s", (const char *)wifi_sta_cfg->ssid);
+            ESP_LOGI(TAG, "    Password : %s", (const char *)wifi_sta_cfg->password);
             break;
         }
+
         case WIFI_PROV_CRED_FAIL: {
             wifi_prov_sta_fail_reason_t *reason = (wifi_prov_sta_fail_reason_t *)event_data;
-            ESP_LOGE(TAG,
-                     "Provisioning failed!\n\tReason : %s"
-                     "\n\tPlease reset to factory and retry provisioning",
-                     (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi station authentication failed" : "Wi-Fi access-point not found");
+            ESP_LOGE(TAG, "Provisioning failed!");
+            ESP_LOGE(TAG, "Reason : %s", (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi auth failed" : "Wi-Fi access-point not found");
+            ESP_LOGE(TAG, "Please reset to factory and retry provisioning");
 
             /* Reset the state machine on provisioning failure.
              * It allows the provisioning manager to retry the provisioning process
@@ -213,15 +222,18 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             wifi_prov_mgr_reset_sm_state_on_failure();
             break;
         }
+
         case WIFI_PROV_CRED_SUCCESS:
             ESP_LOGI(TAG, "Provisioning successful");
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_DONE);
             break;
+
         case WIFI_PROV_END:
             /* De-initialize manager once provisioning is finished */
             xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING | SYS_EVENT_BLE_CONNECTED);
             wifi_prov_mgr_deinit();
             break;
+
         default:
             break;
         }
@@ -416,26 +428,19 @@ esp_err_t wifi_init()
     config.app_event_handler = wifi_prov_event_handler;
     config.scheme_event_handler = WIFI_PROV_SCHEME_BLE_EVENT_HANDLER_FREE_BTDM;
 
-    /* Initialize provisioning manager with the configuration parameters set above */
-    ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
-
-    bool provisioned = false;
-    /* Let's find out if the device is provisioned */
-    ESP_ERROR_CHECK(wifi_prov_mgr_is_provisioned(&provisioned));
-    /* If device is not yet provisioned start provisioning service */
-    if(!provisioned) {
-        ESP_ERROR_CHECK(start_provisioning());
-    } else {
+    /* Get Wi-Fi Station configuration */
+    wifi_config_t wifi_cfg;
+    if(esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK && strlen((const char *)wifi_cfg.sta.ssid) != 0) {
         ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
-
-        /* We don't need the manager as device is already provisioned, so let's release its resources */
-        wifi_prov_mgr_deinit();
-
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
         /* Start Wi-Fi station */
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_start());
+    } else {
+        /* Initialize provisioning manager with the configuration parameters set above */
+        ESP_ERROR_CHECK(wifi_prov_mgr_init(config));
+        ESP_ERROR_CHECK(start_provisioning());
     }
     return ESP_OK;
 }

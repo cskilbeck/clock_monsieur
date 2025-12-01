@@ -16,6 +16,7 @@
 #include "button.h"
 #include "util.h"
 #include "clock_time.h"
+#include "timezone.h"
 
 LOG_CONTEXT("state");
 
@@ -27,6 +28,7 @@ wifi_check_state_t wifi_check_state;
 factory_reset_state_t factory_reset_state;
 clock_state_t clock_state;
 menu_state_t menu_state;
+timezone_select_state_t timezone_select_state;
 ota_state_t ota_state;
 
 //////////////////////////////////////////////////////////////////////
@@ -163,7 +165,7 @@ void wifi_check_state_t::on_update()
         msg = "Searching...";
     }
     if(connected) {
-        msg = "Connected...";
+        msg = provisioning_pop();
     }
     if(error) {
         msg = "Error...";
@@ -246,6 +248,20 @@ void menu_state_t::on_start()
 void menu_state_t::on_update()
 {
     menu_update();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void timezone_select_state_t::on_start()
+{
+    timezone_select_init();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void timezone_select_state_t::on_update()
+{
+    timezone_select_update();
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -72,6 +72,14 @@ enum class clock_fade_mode_t : uint8_t
 
 //////////////////////////////////////////////////////////////////////
 
+enum class clock_font_t : uint8_t
+{
+    normal = 0,
+    modern = 1
+};
+
+//////////////////////////////////////////////////////////////////////
+
 struct settings_t
 {
     clock_mode_t clock_mode{ clock_mode_t::clock_12_hour };
@@ -80,6 +88,7 @@ struct settings_t
     seconds_mode_t seconds_mode{ seconds_mode_t::tail_long };
     colon_mode_t colon_mode{ colon_mode_t::on };
     clock_fade_mode_t clock_fade_mode{ clock_fade_mode_t::medium };
+    clock_font_t clock_font{ clock_font_t::modern };
 
     esp_err_t load();
     esp_err_t save();

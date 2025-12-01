@@ -25,3 +25,6 @@ tz_node_t const &timezone_current();
 
 // get the first node of the parent
 tz_node_t const &timezone_first();
+
+void timezone_select_init();
+void timezone_select_update();

@@ -25,11 +25,7 @@ namespace
     int name_x = 0;
     item_t *current_item{ nullptr };
 
-    void go(item_t *where)
-    {
-        name_x = 0;
-        current_item = where;
-    }
+    void go(item_t *where);
 
     struct item_t
     {
@@ -95,66 +91,179 @@ namespace
 
             } else if(button_select.pressed) {
                 // SELECT go into child menu or call on_select()
+                item_t *old_item = current_item;
                 if(on_select) {
                     LOG_INFO("%s selected!", name);
                     on_select();
+                    if(old_item != current_item) {
+                        LOG_INFO("went to %s!", current_item->name);
+                    }
+                    if(parent != nullptr && old_item == current_item) {
+                        go(parent);
+                        return;
+                    }
                 }
-                if(children != nullptr) {
+                // only go into children if on_select didn't call go()
+                if(children != nullptr && old_item == current_item) {
                     go(children);
-                } else {
-                    go(parent);
                 }
             }
         }
     };
 
-    item_t root_menu = item_t("Save", nullptr, []() {
-        settings.save();
-        state_set(clock_state);
-    });
+    void go(item_t *where)
+    {
+        LOG_INFO("GO to %s", where->name);
+        name_x = 0;
+        current_item = where;
+    }
 
-    item_t settings_menu = item_t("Settings", &root_menu);
+    item_t root_menu{ "Save", nullptr, [] {
+                         settings.save();
+                         state_set(clock_state);
+                     } };
 
-    // need to get the timezones in there which is a hassle
+    ///// Settings
 
-    item_t mode_menu = item_t("Mode", &settings_menu);
-    item_t mode_12_menu = item_t("12 hr", &mode_menu, []() { settings.clock_mode = clock_mode_t::clock_12_hour; });
-    item_t mode_24_menu = item_t("24 hr", &mode_menu, []() { settings.clock_mode = clock_mode_t::clock_24_hour; });
+    item_t settings_menu{ "Settings", &root_menu };
 
-    item_t brightness_menu = item_t("Brightness", &settings_menu);
-    item_t brightness_auto_menu = item_t("Auto", &brightness_menu);
-    item_t brightness_auto_on_menu = item_t("On", &brightness_auto_menu, []() { settings.auto_brightness = auto_brightness_t::on; });
-    item_t brightness_auto_off_menu = item_t("Off", &brightness_auto_menu, []() { settings.auto_brightness = auto_brightness_t::off; });
-    item_t brightness_low_menu = item_t("Low", &brightness_menu, []() { settings.brightness = 96; });
-    item_t brightness_medium_menu = item_t("Medium", &brightness_menu, []() { settings.brightness = 150; });
-    item_t brightness_high_menu = item_t("High", &brightness_menu, []() { settings.brightness = 255; });
+    /////     Mode
 
-    item_t seconds_menu = item_t("Seconds", &settings_menu);
-    item_t seconds_single_menu = item_t("Single", &seconds_menu, []() { settings.seconds_mode = seconds_mode_t::single; });
-    item_t seconds_fixed_menu = item_t("Fixed", &seconds_menu, []() { settings.seconds_mode = seconds_mode_t::fixed; });
-    item_t seconds_long_menu = item_t("Long", &seconds_menu, []() { settings.seconds_mode = seconds_mode_t::tail_long; });
-    item_t seconds_medium_menu = item_t("Medium", &seconds_menu, []() { settings.seconds_mode = seconds_mode_t::tail_medium; });
-    item_t seconds_short_menu = item_t("Short", &seconds_menu, []() { settings.seconds_mode = seconds_mode_t::tail_short; });
+    extern item_t mode_menu;
 
-    item_t colon_menu = item_t("Colon", &settings_menu);
-    item_t colon_off_menu = item_t("Off", &colon_menu, []() { settings.colon_mode = colon_mode_t::off; });
-    item_t colon_on_menu = item_t("On", &colon_menu, []() { settings.colon_mode = colon_mode_t::on; });
-    item_t colon_dim_menu = item_t("Dim", &colon_menu, []() { settings.colon_mode = colon_mode_t::dim; });
-    item_t colon_pulse_menu = item_t("Pulse", &colon_menu, []() { settings.colon_mode = colon_mode_t::pulse; });
+    item_t mode_12_menu{ "12 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_12_hour; } };
+    item_t mode_24_menu{ "24 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_24_hour; } };
 
-    item_t fade_menu = item_t("Fade", &settings_menu);
-    item_t fade_low_menu = item_t("Low", &fade_menu, []() { settings.clock_fade_mode = clock_fade_mode_t::low; });
-    item_t fade_medium_menu = item_t("Medium", &fade_menu, []() { settings.clock_fade_mode = clock_fade_mode_t::medium; });
-    item_t fade_high_menu = item_t("High", &fade_menu, []() { settings.clock_fade_mode = clock_fade_mode_t::high; });
-    item_t fade_off_menu = item_t("Off", &fade_menu, []() { settings.clock_fade_mode = clock_fade_mode_t::off; });
+    item_t mode_menu{ "Mode", &settings_menu, [] {
+                         if(settings.clock_mode == clock_mode_t::clock_24_hour) {
+                             go(&mode_24_menu);
+                         } else {
+                             go(&mode_12_menu);
+                         }
+                     } };
 
-    item_t timezone_menu = item_t("Timezone", &root_menu);
+    /////     Brightness
 
-    item_t system_menu = item_t("System", &root_menu);
-    item_t factory_reset_menu = item_t("Factory reset", &system_menu);
-    item_t factory_reset_are_you_sure_menu = item_t("You sure?", &factory_reset_menu);
-    item_t factory_reset_no = item_t("No", &factory_reset_are_you_sure_menu, []() { go(&settings_menu); });
-    item_t factory_reset_yes = item_t("Yes", &factory_reset_are_you_sure_menu, []() { state_set(factory_reset_state); });
+    item_t brightness_menu{ "Brightness", &settings_menu };
+
+    item_t brightness_auto_menu{ "Auto", &brightness_menu };
+    item_t brightness_auto_on_menu{ "On", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::on; } };
+    item_t brightness_auto_off_menu{ "Off", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::off; } };
+
+    item_t brightness_low_menu{ "Low", &brightness_menu, [] { settings.brightness = 96; } };
+    item_t brightness_medium_menu{ "Medium", &brightness_menu, [] { settings.brightness = 150; } };
+    item_t brightness_high_menu{ "High", &brightness_menu, [] { settings.brightness = 255; } };
+
+    /////     Seconds
+
+    extern item_t seconds_menu;
+
+    item_t seconds_single_menu{ "Single", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::single; } };
+    item_t seconds_fixed_menu{ "Fixed", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::fixed; } };
+    item_t seconds_long_menu{ "Long", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_long; } };
+    item_t seconds_medium_menu{ "Medium", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_medium; } };
+    item_t seconds_short_menu{ "Short", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_short; } };
+
+    item_t seconds_menu{ "Seconds", &settings_menu, [] {
+                            switch(settings.seconds_mode) {
+                            case seconds_mode_t::tail_long:
+                                go(&seconds_long_menu);
+                                break;
+                            case seconds_mode_t::tail_medium:
+                                go(&seconds_medium_menu);
+                                break;
+                            case seconds_mode_t::tail_short:
+                                go(&seconds_short_menu);
+                                break;
+                            case seconds_mode_t::fixed:
+                                go(&seconds_fixed_menu);
+                                break;
+                            case seconds_mode_t::single:
+                                go(&seconds_single_menu);
+                                break;
+                            }
+                        } };
+
+    /////     Colon
+
+    extern item_t colon_menu;
+
+    item_t colon_off_menu{ "Off", &colon_menu, [] { settings.colon_mode = colon_mode_t::off; } };
+    item_t colon_on_menu{ "On", &colon_menu, [] { settings.colon_mode = colon_mode_t::on; } };
+    item_t colon_dim_menu{ "Dim", &colon_menu, [] { settings.colon_mode = colon_mode_t::dim; } };
+    item_t colon_pulse_menu{ "Pulse", &colon_menu, [] { settings.colon_mode = colon_mode_t::pulse; } };
+
+    item_t colon_menu{ "Colon", &settings_menu, [] {
+                          switch(settings.colon_mode) {
+                          case colon_mode_t::off:
+                              go(&colon_off_menu);
+                              break;
+                          case colon_mode_t::on:
+                              go(&colon_on_menu);
+                              break;
+                          case colon_mode_t::dim:
+                              go(&colon_dim_menu);
+                              break;
+                          case colon_mode_t::pulse:
+                              go(&colon_pulse_menu);
+                              break;
+                          }
+                      } };
+
+    /////     Font
+
+    extern item_t font_menu;
+
+    item_t font_normal_menu{ "Normal", &font_menu, [] { settings.clock_font = clock_font_t::normal; } };
+    item_t font_modern_menu{ "Modern", &font_menu, [] { settings.clock_font = clock_font_t::modern; } };
+
+    item_t font_menu{ "Font", &settings_menu, [] {
+                         if(settings.clock_font == clock_font_t::normal) {
+                             go(&font_normal_menu);
+                         } else {
+                             go(&font_modern_menu);
+                         }
+                     } };
+
+    /////     Fade
+
+    extern item_t fade_menu;
+
+    item_t fade_low_menu{ "Low", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::low; } };
+    item_t fade_medium_menu{ "Medium", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::medium; } };
+    item_t fade_high_menu{ "High", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::high; } };
+    item_t fade_off_menu{ "Off", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::off; } };
+
+    item_t fade_menu{ "Fade", &settings_menu, [] {
+                         switch(settings.clock_fade_mode) {
+                         case clock_fade_mode_t::off:
+                             go(&fade_off_menu);
+                             break;
+                         case clock_fade_mode_t::low:
+                             go(&fade_low_menu);
+                             break;
+                         case clock_fade_mode_t::medium:
+                             go(&fade_medium_menu);
+                             break;
+                         case clock_fade_mode_t::high:
+                             go(&fade_high_menu);
+                             break;
+                         }
+                     } };
+
+    ///// Timezone
+
+    item_t timezone_menu{ "Timezone", &root_menu };
+    item_t timezone_auto_menu{ "Auto", &timezone_menu, [] { LOG_INFO("AUTO!"); } };
+    item_t timezone_select_menu{ "Select", &timezone_menu, [] { state_set(timezone_select_state); } };
+
+    ///// System
+
+    item_t system_menu{ "System", &root_menu };
+    item_t factory_reset_menu{ "Factory reset", &system_menu };
+    item_t factory_reset_are_you_sure_menu{ "You sure?", &factory_reset_menu };
+    item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { go(&settings_menu); } };
+    item_t factory_reset_yes{ "Yes", &factory_reset_are_you_sure_menu, [] { state_set(factory_reset_state); } };
 
 }    // namespace
 

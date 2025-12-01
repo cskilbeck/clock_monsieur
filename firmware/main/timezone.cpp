@@ -176,3 +176,9 @@ char *create_posix_tz_string(const char *std_abbr, long std_offset_sec, const ch
 
     return tz_string;
 }
+void timezone_select_init()
+{
+}
+void timezone_select_update()
+{
+}

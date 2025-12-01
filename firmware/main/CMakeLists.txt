@@ -18,6 +18,7 @@ idf_component_register(
         font_5x7.cpp
         font_5x7_narrow.cpp
         font_5x6.cpp
+        square_font.cpp
         big_caps.cpp
         menu.cpp
     PRIV_REQUIRES

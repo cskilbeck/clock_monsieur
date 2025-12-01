@@ -42,7 +42,7 @@ void ota_mark_app_valid(void)
             LOG_INFO("First boot of new firmware: Marking as valid to prevent rollback.");
             esp_ota_mark_app_valid_cancel_rollback();
         } else {
-            LOG_DEBUG("App state is not pending verify (State: %d)", ota_state);
+            LOG_INFO("App state is not pending verify");
         }
     }
 }
@@ -225,6 +225,8 @@ esp_err_t check_firmware_version()
     if(strcmp(latest, VERSION_STR) != 0) {
         state_set(ota_state);
         do_ota_firmware_update(latest);
+    } else {
+        ota_mark_app_valid();
     }
     return ESP_OK;
 }

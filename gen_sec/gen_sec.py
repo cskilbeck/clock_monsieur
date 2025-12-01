@@ -22,7 +22,7 @@ from qr_code_pdf import create_qr_pdf
 # --- CONFIGURATION & CONSTANTS ---
 PASSWORD_CHAR_SET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 PASSWORD_LENGTH = 4
-DEFAULT_USERNAME = "Clock_Monsieur"
+DEFAULT_USERNAME = "wifiprov"
 DEFAULT_PARTITION_NAME = "prov_dat"
 DEFAULT_SERVICE_NAME = "Clock Monsieur"
 TEMP_BINARY_FILENAME = "prov_creds.bin"
@@ -94,22 +94,6 @@ def generate_mac_based_password():
         new_password = f"{PASSWORD_CHAR_SET[mac % base]}{new_password}"
         mac //= base
     return new_password.zfill(PASSWORD_LENGTH)
-
-
-def validate_custom_password(custom_password):
-    """
-    Ensure that user-supplied password is a valid base 36 number
-    :param custom_password
-    :return: validated password
-    """
-    if len(custom_password) != PASSWORD_LENGTH:
-        raise ValueError(f"Password must be exactly {PASSWORD_LENGTH} characters long.")
-    for char in custom_password.upper():
-        if char not in PASSWORD_CHAR_SET:
-            raise ValueError(
-                f"Password contains invalid character '{char}'. Only A-Z and 0-9 are allowed."
-            )
-    return custom_password.upper()
 
 
 def get_sec_output(username, actual_password):
@@ -416,13 +400,11 @@ if __name__ == "__main__":
 
         # Password
         if args.password:
-            password = validate_custom_password(args.password)
+            password = args.password
             print("--- USING CUSTOM PASSWORD FOR TESTING ---")
         else:
             password = generate_mac_based_password()
             print("--- USING MAC ADDRESS PASSWORD (PRODUCTION MODE) ---")
-
-        print(f"Provisioning Password: {password}")
 
         # Get salt, verifier output
         sec_output = get_sec_output(args.username, password)
@@ -431,6 +413,9 @@ if __name__ == "__main__":
 
         print(sec_output)
 
+        print(f'#define EXAMPLE_PROV_SEC2_USERNAME "{args.username}"')
+        print(f'#define EXAMPLE_PROV_SEC2_PWD "{password}"')
+        # {"ver":"v1","name":"Clock Monsieur","username":"CLOCKMONSIEUR","pop":"E1VC","transport":"ble"}
         make_qr_code()
 
         if args.clear_nvs:

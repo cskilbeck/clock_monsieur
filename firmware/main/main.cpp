@@ -77,17 +77,12 @@ extern "C" void app_main()
     display_init();
     button_init();
     wifi_init();
-
     ota_init();
     console_init();
     clock_init();
     state_init();
 
     state_set(boot_state);
-    // state_set(ota_state);
-
-    // got this far, probably fine...
-    ota_mark_app_valid();
 
     while(true) {
         display_update();

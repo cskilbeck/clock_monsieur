@@ -13,24 +13,23 @@ X provisioning stuff in factory partition
 X OTA firmware update
 X measure/tweak cc drain capacitors
 X save/load settings in NVS
+X small font for menus
 
-? put ambient light sensor on the front
+- put ambient light sensor on the front
 - tweak Ambient light sensor gamma ramp
-
 - bigger less ridiculous buttons
 - diagnose esp-prog boot / reset problem
+
 - frosted glass/gel problem
-- small font for menus
 - back compatible settings format changes
+
 - menus
-    - 12/24
-    - Seconds mode
-    - Seconds brightness
-    - Time brightness
-    - Colon mode
-    - Auto brightness on/off
+    X 12/24
+    X Seconds mode
+    X Colon mode
+    X Auto brightness on/off
     - Clock font
-    - Brightness 1..10
+    X Brightness
     - Set timezone
     - Setup WiFi
     - Reset WiFi
