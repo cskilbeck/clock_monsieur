@@ -65,11 +65,7 @@ struct graphics_t
     void display();
     void fade_to(graphics_t &other, float scale);
 
-    bool debug_flag[2];
-    void set_debug(int led, bool set)
-    {
-        debug_flag[led & 1] = set;
-    }
+    void set_debug(int led, int value);
 };
 
 //////////////////////////////////////////////////////////////////////

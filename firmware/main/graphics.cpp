@@ -63,7 +63,10 @@ namespace
         184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
     };
 
-    DRAM_ATTR uint8_t const debug_leds[2] = { 0x49, 0xBA };
+    uint8_t constexpr debug_led_0 = 0x49;
+    uint8_t constexpr debug_led_1 = 0xBA;
+
+    static DRAM_ATTR bool debug_led[2] = { 0, 0 };
 
     //////////////////////////////////////////////////////////////////////
     // content_width is width of the content to show
@@ -403,6 +406,13 @@ IRAM_ATTR void graphics_t::draw_seconds(int current_second)
 
 //////////////////////////////////////////////////////////////////////
 
+void graphics_t::set_debug(int led, int value)
+{
+    debug_led[led & 1] = value;
+}
+
+//////////////////////////////////////////////////////////////////////
+
 IRAM_ATTR void graphics_t::fade_to(graphics_t &other, float scale)
 {
     float o = 1.0f - scale;
@@ -411,11 +421,8 @@ IRAM_ATTR void graphics_t::fade_to(graphics_t &other, float scale)
         float dst = other.buffer[i] * scale;
         ::display->led[i] = gamma_get(src + dst);
     }
-    for(int i = 0; i < 2; ++i) {
-        if(debug_flag[i]) {
-            ::display->led[debug_leds[i]] = 2047;
-        }
-    }
+    ::display->led[debug_led_0] = debug_led[0];
+    ::display->led[debug_led_1] = debug_led[1];
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -425,11 +432,8 @@ IRAM_ATTR void graphics_t::display()
     for(int i = 0; i < 256; ++i) {
         ::display->led[i] = gamma_get(buffer[i]);
     }
-    for(int i = 0; i < 2; ++i) {
-        if(debug_flag[i]) {
-            ::display->led[debug_leds[i]] = 2047;
-        }
-    }
+    ::display->led[debug_led_0] = debug_led[0];
+    ::display->led[debug_led_1] = debug_led[1];
 }
 
 //////////////////////////////////////////////////////////////////////

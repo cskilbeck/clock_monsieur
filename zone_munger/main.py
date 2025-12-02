@@ -51,7 +51,7 @@ def build_timezone_tree(zone_tab_data: str) -> dict:
         $
     """, re.VERBOSE)
 
-    tree_root = {"name": None, "children": {}}
+    tree_root = {"name": "root", "children": {}}
 
     for line in zone_tab_data.splitlines():
         if not line.strip() or line.startswith('#'):
@@ -110,7 +110,7 @@ def flatten_tree(root_node: dict) -> tuple[dict, list[dict], list[str]]:
     node_index = 0
     name_offset = 0
     name_list = []  # Stores names as a list of strings
-    flattened_nodes = []
+    flattened_nodes = [ ]
 
     # The queue holds (node) tuples
     queue = [root_node]
@@ -211,14 +211,12 @@ def format_string_literal_concatenated(name_list: list[str], max_len: int = 80) 
 
 
 MIN_EPOCH = int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025 = 1735689600
-MAX_EPOCH = int(datetime(2093, 12, 18).timestamp())  # Dec 18 2093 = 3911932800
+MAX_EPOCH = int(datetime(2089, 1, 1).timestamp())
 
 
 def parse_timezone_csv(csv_file_path: str) -> dict:
     """
     Parse the timezone CSV file and return a dictionary mapping locations to their timezone data.
-    Filters entries to be between Jan 1 2025 and Dec 18 2093.
-
     Returns:
         dict: {location: [{'epoch_time': int, 'offset_seconds': int}, ...]}
     """
@@ -259,14 +257,9 @@ def parse_timezone_csv(csv_file_path: str) -> dict:
         new_data = []
         for entry in location_data[location]:
             if MIN_EPOCH < entry['epoch_time'] < MAX_EPOCH:
-                entry['epoch_time'] -= MIN_EPOCH
                 new_data.append(entry)
         if len(new_data) == 0:
-            entry = location_data[location][-1]
-            entry['epoch_time'] -= MIN_EPOCH
-            if entry['epoch_time'] < 0:
-                entry['epoch_time'] = 0
-            new_data.append(entry)
+            new_data.append(max(location_data[location][-1], MIN_EPOCH))
         location_data[location] = new_data
 
     return location_data
@@ -396,16 +389,13 @@ const char TZ_NAME_STRING[{name_string_total_len}] = '''
     else:
         count = 0
         for offset in offset_array:
-            epoch_time = offset['epoch_start_time_seconds']
-            # check if it can fit in a signed 32 bit integer
-            # if not, clamp it to
-            if epoch_time < -0x7fffffff:
-                epoch_time = -0x7fffffff
+            absolute_epoch_time = offset['epoch_start_time_seconds']
+            epoch_time = absolute_epoch_time - MIN_EPOCH
             epoch_time_u = epoch_time & 0xffffffff
             epoch_time_low =  epoch_time_u & 0xffff
             epoch_time_high = (epoch_time_u >> 16) & 0xffff
             offset_seconds = offset['offset_seconds']
-            cpp_content += f"    {{ 0x{epoch_time_high:04x}U, 0x{epoch_time_low:04x}U, {offset_seconds // 10} }}, // [{count}] = {epoch_time}, {offset_seconds}\n"
+            cpp_content += f"    {{ 0x{epoch_time_high:04x}U, 0x{epoch_time_low:04x}U, {offset_seconds // 10} }}, // [{count}] = {absolute_epoch_time}, {offset_seconds}\n"
             count += 1
         cpp_content = cpp_content.rstrip(',\n') + "\n"
 
@@ -437,7 +427,6 @@ const char TZ_NAME_STRING[{name_string_total_len}] = '''
     cpp_content += f"const tz_node_t TZ_NODES[{num_nodes}] = {{\n"
 
     for node in flattened_nodes:
-        # Common fields
         name_offset = node['name_offset']
         node_name = node.get('name', 'ROOT_CHILDREN')
 

@@ -26,7 +26,7 @@ struct tz_node_t
     uint16_t children_index;  // For non-leaf: index into TZ_NODES, for leaf: index into TZ_DETAILS
 };
 
-extern const char TZ_NAME_STRING[3725];
-extern const zone_offset_t ZONE_OFFSETS[18332];
+extern const char TZ_NAME_STRING[3730];
+extern const zone_offset_t ZONE_OFFSETS[17052];
 extern const tz_details_t TZ_DETAILS[418];
-extern const tz_node_t TZ_NODES[432];
+extern const tz_node_t TZ_NODES[433];

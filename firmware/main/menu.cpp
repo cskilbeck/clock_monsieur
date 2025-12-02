@@ -13,6 +13,7 @@
 #include "menu.h"
 #include "state.h"
 #include "settings.h"
+#include "version.h"
 
 LOG_CONTEXT("menu");
 
@@ -146,13 +147,45 @@ namespace
 
     item_t brightness_menu{ "Brightness", &settings_menu };
 
-    item_t brightness_auto_menu{ "Auto", &brightness_menu };
+    extern item_t brightness_auto_menu;
+
     item_t brightness_auto_on_menu{ "On", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::on; } };
     item_t brightness_auto_off_menu{ "Off", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::off; } };
 
-    item_t brightness_low_menu{ "Low", &brightness_menu, [] { settings.brightness = 96; } };
-    item_t brightness_medium_menu{ "Medium", &brightness_menu, [] { settings.brightness = 150; } };
-    item_t brightness_high_menu{ "High", &brightness_menu, [] { settings.brightness = 255; } };
+    item_t brightness_auto_menu{ "Auto", &brightness_menu, [] {
+                                    switch(settings.auto_brightness) {
+                                    case auto_brightness_t::on:
+                                        go(&brightness_auto_on_menu);
+                                        break;
+                                    case auto_brightness_t::off:
+                                        go(&brightness_auto_off_menu);
+                                        break;
+                                    }
+                                } };
+
+    extern item_t brightness_level_menu;
+
+    item_t brightness_low_menu{ "Low", &brightness_level_menu, [] { settings.brightness = 32; } };
+    item_t brightness_medium_menu{ "Medium", &brightness_level_menu, [] { settings.brightness = 64; } };
+    item_t brightness_high_menu{ "High", &brightness_level_menu, [] { settings.brightness = 128; } };
+    item_t brightness_max_menu{ "Max", &brightness_level_menu, [] { settings.brightness = 255; } };
+
+    item_t brightness_level_menu{ "Level", &brightness_menu, [] {
+                                     switch(settings.brightness) {
+                                     case 32:
+                                         go(&brightness_low_menu);
+                                         break;
+                                     default:
+                                         go(&brightness_medium_menu);
+                                         break;
+                                     case 128:
+                                         go(&brightness_high_menu);
+                                         break;
+                                     case 255:
+                                         go(&brightness_max_menu);
+                                         break;
+                                     }
+                                 } };
 
     /////     Seconds
 
@@ -260,6 +293,10 @@ namespace
     ///// System
 
     item_t system_menu{ "System", &root_menu };
+
+    item_t version_menu{ "Version", &system_menu };
+    item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { go(&system_menu); } };
+
     item_t factory_reset_menu{ "Factory reset", &system_menu };
     item_t factory_reset_are_you_sure_menu{ "You sure?", &factory_reset_menu };
     item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { go(&settings_menu); } };

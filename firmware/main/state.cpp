@@ -109,7 +109,7 @@ void boot_state_t::on_update()
     factory_reset &= button_left.held && button_right.held;
     int content_width = font.measure_string(boot_msg);
     int max_x = content_width - screen_width;
-    int x = screen_width - 1 - (frames >> 1);
+    int x = screen_width - 1 - frames;
     display->set_ambient(160);
     gfx.clear();
     font.draw_string(gfx, boot_msg, x, 0, 0.6);
@@ -158,8 +158,8 @@ void wifi_check_state_t::on_update()
         gfx.set_second_only(color, 59 - s);
     }
     char const *msg = "Network?";
-    if(wifi_up) {
-        char const *msg = "WiFi connecting...";
+    if(!wifi_up) {
+        msg = "WiFi?";
     }
     if(provisioning) {
         msg = "Searching...";
@@ -210,29 +210,32 @@ void clock_state_t::on_update()
     float constexpr one_second = 1.0f;
     float second_snap{ 0.0f };
     suseconds_t usecs = wall_time.tv_usec;
+    float fade = 0.0f;
     switch(settings.clock_fade_mode) {
     case clock_fade_mode_t::off:
         break;
     case clock_fade_mode_t::high:
         second_snap = one_second / microseconds;
+        fade = min(usecs * second_snap, 1.0f);
         break;
     case clock_fade_mode_t::medium:
         second_snap = (one_second / 0.5f) / microseconds;
         usecs = max(0l, usecs - 500000);
+        fade = min(usecs * second_snap, 1.0f);
         break;
     case clock_fade_mode_t::low:
         second_snap = (one_second / 0.25f) / microseconds;
         usecs = max(0l, usecs - 750000);
+        fade = min(usecs * second_snap, 1.0f);
         break;
     }
 
+    gfx.draw_clock(wall_time.tv_sec, clock_color);
     if(settings.clock_fade_mode == clock_fade_mode_t::off) {
-        gfx.draw_clock(wall_time.tv_sec, clock_color);
         gfx.display();
     } else {
-        gfx.draw_clock(wall_time.tv_sec, clock_color);
         gfx2.draw_clock(wall_time.tv_sec + 1, clock_color);
-        gfx.fade_to(gfx2, min(usecs * second_snap, 1.0f));
+        gfx.fade_to(gfx2, fade);
     }
 
     if(button_select.pressed) {
