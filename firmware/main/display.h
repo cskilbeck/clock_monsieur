@@ -37,7 +37,6 @@ struct display_t
 {
     fcontrol_data_t fcontrol;
     uint16_t led[256];
-
     uint8_t ambient;
 
     void set_ambient(uint8_t b)

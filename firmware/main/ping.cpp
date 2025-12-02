@@ -23,6 +23,7 @@ void ping_success(esp_ping_handle_t hdl, void *args)
 {
     pings += 1;
     LOG_INFO("SUCCESS %d", pings);
+    xEventGroupSetBits(system_events, SYS_EVENT_NETWORK_CONNECTED);
 }
 
 void ping_timeout(esp_ping_handle_t hdl, void *args)
@@ -38,10 +39,10 @@ esp_err_t do_ping_check()
     xEventGroupWaitBits(system_events, SYS_EVENT_WIFI_CONNECTED, false, true, portMAX_DELAY);
 
     esp_ping_config_t config{};
-    ipaddr_aton("8.8.8.8", &config.target_addr);
-    config.count = 3;
+    ipaddr_aton("1.1.1.1", &config.target_addr);
+    config.count = 10;
     config.interval_ms = 100;
-    config.timeout_ms = 2000;
+    config.timeout_ms = 3000;
     config.data_size = 64;
     config.tos = 0;
     config.ttl = IP_DEFAULT_TTL;
@@ -65,12 +66,14 @@ esp_err_t do_ping_check()
 
     ESP_CHECK(esp_ping_start(ping_handle));
 
-    while(!done) {
+    while(true) {
         LOG_INFO("Waiting for pings");
-        delay_secs(1);
+        EventBits_t b = xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, pdMS_TO_TICKS(5000));
+        if((b & SYS_EVENT_NETWORK_CONNECTED) != 0) {
+            esp_ping_stop(ping_handle);
+            LOG_INFO("Network is up");
+            return ESP_OK;
+        }
     }
-    if(pings == 0) {
-        return ESP_ERR_TIMEOUT;
-    }
-    return ESP_OK;
+    return ESP_ERR_TIMEOUT;
 }

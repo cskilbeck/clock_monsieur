@@ -443,9 +443,8 @@ void sntp_callback(struct timeval *tv)
 void sntp_task(void *)
 {
     while(do_ping_check() != ESP_OK) {
-        delay_secs(60);
+        delay_secs(10);
     }
-    xEventGroupSetBits(system_events, SYS_EVENT_NETWORK_CONNECTED);
 
     xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 6, NULL, 1, NULL, 0);
 

@@ -1,5 +1,6 @@
 import re
-
+import csv
+from datetime import datetime
 
 def decimal_from_tz_coord(coord_str: str) -> float:
     """convert tz coordinate to decimal coordinate"""
@@ -66,7 +67,8 @@ def build_timezone_tree(zone_tab_data: str) -> dict:
         path_components = name.split('/')
         current_node = tree_root
         for i, component in enumerate(path_components):
-            name = component.replace('_', ' ')
+            #name = component.replace('_', ' ')
+            name = component
             # If the component is not in the current node's children, create it
             if name not in current_node['children']:
                 new_node = {
@@ -208,99 +210,252 @@ def format_string_literal_concatenated(name_list: list[str], max_len: int = 80) 
     return ' \\\n'.join(output_lines)
 
 
-def generate_cpp_header(tree_root: dict, header_filename: str) -> str:
+MIN_EPOCH = int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025 = 1735689600
+MAX_EPOCH = int(datetime(2093, 12, 18).timestamp())  # Dec 18 2093 = 3911932800
+
+
+def parse_timezone_csv(csv_file_path: str) -> dict:
+    """
+    Parse the timezone CSV file and return a dictionary mapping locations to their timezone data.
+    Filters entries to be between Jan 1 2025 and Dec 18 2093.
+
+    Returns:
+        dict: {location: [{'epoch_time': int, 'offset_seconds': int}, ...]}
+    """
+    location_data = {}
+
+    try:
+        with open(csv_file_path, 'r') as csv_file:
+            reader = csv.reader(csv_file)
+            for row in reader:
+                if len(row) < 6:
+                    continue
+
+                location = row[0]
+                # region = row[1]
+                # zone_name = row[2]
+                epoch_time = int(row[3])
+                offset_seconds = int(row[4])
+                # dst_active = int(row[5])
+
+                if location not in location_data:
+                    location_data[location] = []
+
+                location_data[location].append({
+                    'epoch_time': epoch_time,
+                    'offset_seconds': offset_seconds
+                })
+
+    except FileNotFoundError:
+        print(f"Warning: '{csv_file_path}' not found. No timezone offset data will be included.")
+        return {}
+
+    # Sort each location's data by epoch time
+    for location in location_data:
+        location_data[location].sort(key=lambda x: x['epoch_time'])
+
+        # and remove everything outside range
+        # but keep at least the last one regardless
+        new_data = []
+        for entry in location_data[location]:
+            if MIN_EPOCH < entry['epoch_time'] < MAX_EPOCH:
+                entry['epoch_time'] -= MIN_EPOCH
+                new_data.append(entry)
+        if len(new_data) == 0:
+            entry = location_data[location][-1]
+            entry['epoch_time'] -= MIN_EPOCH
+            if entry['epoch_time'] < 0:
+                entry['epoch_time'] = 0
+            new_data.append(entry)
+        location_data[location] = new_data
+
+    return location_data
+
+def build_timezone_tree_with_offsets(zone_tab_data: str, csv_file_path: str = 'zones.csv') -> dict:
+    """
+    Parse zone.tab data and build a tree structure with timezone offset data.
+    """
+    # First build the basic tree
+    tree_root = build_timezone_tree(zone_tab_data)
+
+    # Parse timezone offset data
+    timezone_data = parse_timezone_csv(csv_file_path)
+
+    # Add timezone data to leaf nodes
+    def add_timezone_data(node, path_so_far=""):
+        if "children" in node:
+            # Internal node
+            for name, child in node["children"].items():
+                child_path = f"{path_so_far}/{name}" if path_so_far else name
+                add_timezone_data(child, child_path)
+        else:
+            # Leaf node - add timezone data
+            if path_so_far in timezone_data:
+                node['timezone_offsets'] = timezone_data[path_so_far]
+            else:
+                node['timezone_offsets'] = []  # No timezone data available
+
+    add_timezone_data(tree_root)
+    return tree_root
+
+def generate_cpp_header(tree_root: dict) -> tuple[str, str]:
     """
     Generates the content for a C++ header file containing
-    the timezone tree data structures.
+    the timezone tree data structures with separate lat/lon array and timezone offsets.
     """
     # 1. Flatten the tree and get the list of names
     _, flattened_nodes, name_list = flatten_tree(tree_root)
-    name_string_total_len = sum(len(name) + 1 for name in name_list)
+    name_string_total_len = sum(len(name) + 1 for name in name_list) + 1
 
-    # 2. C++ Structures and preamble
-    cpp_content = f"""#pragma once
+    # 2. Create separate arrays for coordinates and timezone offsets
+    coord_array = []
+    offset_array = []
+    coord_index = 0
+    offset_index = 0
+
+    # Map leaf nodes to coordinate and offset indices
+    for node in flattened_nodes:
+        if 'latitude' in node:  # This is a leaf node
+            # Add coordinate data
+            coord_array.append({
+                'latitude': node['latitude'],
+                'longitude': node['longitude']
+            })
+
+            # Add timezone offset data
+            timezone_offsets = node.get('timezone_offsets', [])
+            offset_start_index = offset_index
+
+            for offset_data in timezone_offsets:
+                offset_array.append({
+                    'epoch_start_time_seconds': offset_data['epoch_time'],
+                    'offset_seconds': offset_data['offset_seconds']
+                })
+                offset_index += 1
+
+            # Store indices in the node
+            node['coord_index'] = coord_index
+            node['offset_start_index'] = offset_start_index
+            node['offset_count'] = len(timezone_offsets)
+            coord_index += 1
+
+    num_offsets = len(offset_array)
+    num_details = len(coord_array)
+    num_nodes = len(flattened_nodes)
+
+    # 3. C++ Structures and preamble
+    header_content = f"""#pragma once
 
 #include <cstdint>
 #include <cstddef>
 
-// Constants for the is_leaf field
-#define NODE 0
-#define LEAF 1
-
-// Define the structure for a timezone node
-struct tz_node_t
+// timezone offset data
+struct zone_offset_t
 {{
-    uint16_t name_offset;
-    uint16_t is_leaf: 1;
-    uint16_t pad: 15;
-    union {{
-        struct {{
-            // 'children_index' is an index into the TZ_NODES array
-            int children_index; 
-            int num_children;
-        }};
-        struct {{
-            float latitude;
-            float longitude;
-        }};
-    }};
+    uint16_t epoch_start_high;  // high 16 bits of epoch start time in seconds
+    uint16_t epoch_start_low;   // low 16 bits of epoch start time in seconds
+    int16_t offset_seconds_10;  // GMT offset in seconds * 10
 }};
 
-// The big string containing all timezone names, null-separated.
-// Total size (including final null): {name_string_total_len} bytes.
-const char TZ_NAME_STRING[] = \\
+// timezone details (coordinates and offset info)
+struct tz_details_t
+{{
+    uint16_t offset_start_index;  // Index into ZONE_OFFSETS array
+    uint16_t offset_count;        // Number of offset entries for this location
+}};
+
+// timezone node
+struct tz_node_t
+{{
+    uint16_t name_offset;     // Offset into TZ_NAME_STRING
+    uint16_t num_children;    // # of child nodes (>0 = treenode, 0 =leafnode (zone)) 
+    uint16_t children_index;  // For non-leaf: index into TZ_NODES, for leaf: index into TZ_DETAILS
+}};
+
+extern const char TZ_NAME_STRING[{name_string_total_len}];
+extern const zone_offset_t ZONE_OFFSETS[{max(1, num_offsets)}];
+extern const tz_details_t TZ_DETAILS[{num_details}];
+extern const tz_node_t TZ_NODES[{num_nodes}];
 """
 
-    # 3. Generate the Name String literal (up to 80 chars per line)
-
+    # 4. Generate the Name String literal (up to 80 chars per line)
     formatted_string_literals = format_string_literal_concatenated(name_list, max_len=80)
+    cpp_content = f'''
+#include "timezone_data.h"
+const char TZ_NAME_STRING[{name_string_total_len}] = '''
 
     cpp_content += formatted_string_literals + ';\n\n'
 
-    # 4. Generate the Node Array
-    num_nodes = len(flattened_nodes)
+    # 5. Generate the Zone Offset Array
+    num_offsets = len(offset_array)
+    cpp_content += f"// Array of timezone offset data. Total offsets: {num_offsets}\n"
+    cpp_content += f"const zone_offset_t ZONE_OFFSETS[{max(1, num_offsets)}] = {{\n"
+
+    if num_offsets == 0:
+        cpp_content += "    { 0, 0 }  // Placeholder entry\n"
+    else:
+        count = 0
+        for offset in offset_array:
+            epoch_time = offset['epoch_start_time_seconds']
+            # check if it can fit in a signed 32 bit integer
+            # if not, clamp it to
+            if epoch_time < -0x7fffffff:
+                epoch_time = -0x7fffffff
+            epoch_time_u = epoch_time & 0xffffffff
+            epoch_time_low =  epoch_time_u & 0xffff
+            epoch_time_high = (epoch_time_u >> 16) & 0xffff
+            offset_seconds = offset['offset_seconds']
+            cpp_content += f"    {{ 0x{epoch_time_high:04x}U, 0x{epoch_time_low:04x}U, {offset_seconds // 10} }}, // [{count}] = {epoch_time}, {offset_seconds}\n"
+            count += 1
+        cpp_content = cpp_content.rstrip(',\n') + "\n"
+
+    cpp_content += "};\n\n"
+
+    # 6. Generate the Details Array
+    cpp_content += f"// Array of timezone details for leaf nodes. Total details: {num_details}\n"
+    cpp_content += f"const tz_details_t TZ_DETAILS[{num_details}] = {{\n"
+
+    for i, coord in enumerate(coord_array):
+        lat_str = f"{coord['latitude']:.5f}"
+        lon_str = f"{coord['longitude']:.5f}"
+
+        # Find the corresponding node to get offset info
+        offset_start_index = 0
+        offset_count = 0
+        for node in flattened_nodes:
+            if node.get('coord_index') == i:
+                offset_start_index = node.get('offset_start_index', 0)
+                offset_count = node.get('offset_count', 0)
+                break
+
+        cpp_content += f"    {{ {offset_start_index}, {offset_count} }},\n"
+
+    cpp_content = cpp_content.rstrip(',\n') + "\n};\n\n"
+
+    # 7. Generate the Node Array
     cpp_content += f"// Array of all timezone nodes. Total nodes: {num_nodes}\n"
     cpp_content += f"const tz_node_t TZ_NODES[{num_nodes}] = {{\n"
 
-    # The C++ structure expects a name_offset, is_leaf, and a union for children/coords.
     for node in flattened_nodes:
         # Common fields
         name_offset = node['name_offset']
-
-        # Use the defined constants for is_leaf
-        is_leaf_val = "LEAF" if 'latitude' in node else "NODE"
-
-        # Get the node name for the inline comment
         node_name = node.get('name', 'ROOT_CHILDREN')
 
-        union_content = ""
-        if is_leaf_val == "LEAF":
-            # Leaf: coordinates (using literal floats, formatted to max 5 digits of precision)
-            latitude = node['latitude']
-            longitude = node['longitude']
-
-            # Use string formatting to limit precision
-            lat_str = f"{latitude:.5f}"
-            lon_str = f"{longitude:.5f}"
-
-            # struct { float latitude; float longitude; };
-            union_content = f"{{ {lat_str}f, {lon_str}f }}"
-
+        # Determine if this is a leaf (num_children == 0)
+        if 'latitude' in node:
+            # Leaf node: num_children = 0, children_index points to details array
+            num_children = 0
+            children_index = node['coord_index']
         else:
-            # Non-leaf: children array index and count
-            children_index = node.get('children_index', 0)
+            # Non-leaf node: has children
             num_children = node.get('num_children', 0)
+            children_index = node.get('children_index', 0)
 
-            # struct { int children_index; int num_children; };
-            union_content = f"{{ {children_index}, {num_children} }}"
-
-        # The full node initializer: { name_offset, is_leaf:1, pad:15, union_content }, // Node Name
-        # Note the use of '\t' to separate the struct initializer from the comment for cleaner alignment
-        cpp_content += f"    {{ {name_offset}, {is_leaf_val}, 0, {union_content} }},\t// {node_name}\n"
+        cpp_content += f"    {{ {name_offset}, {num_children}, {children_index} }},\t// {node_name}\n"
 
     cpp_content = cpp_content.rstrip(',\n') + "\n};\n"
 
-    return cpp_content
+    return header_content, cpp_content
 
 
 # --- Original Example Usage (Modified to call the new function) ---
@@ -333,19 +488,13 @@ AR	-3436-05822	America/Argentina/Buenos_Aires
 CL	-3327-07040	America/Santiago
 """
 
-root = build_timezone_tree(zone_data)
+root = build_timezone_tree_with_offsets(zone_data)
 # print_node(root) # Uncomment to see the tree structure
 
-# Generate the C++ header file content
-header_content = generate_cpp_header(root, "timezone_data.h")
+header, cpp = generate_cpp_header(root)
 
-# Print to console or save to file
-print("\n" + "=" * 80)
-print("Generated C++ Header Content (timezone_data.h) - Final Version with 5-Digit Float Precision:")
-print("=" * 80)
-print(header_content)
-
-# Optional: Save to file
 with open("timezone_data.h", "w") as f:
-    f.write(header_content)
+    f.write(header)
+with open("timezone_data.cpp", "w") as f:
+    f.write(cpp)
 print("\nData successfully written to timezone_data.h")

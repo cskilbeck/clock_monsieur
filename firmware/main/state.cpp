@@ -201,35 +201,39 @@ void factory_reset_state_t::on_update()
 
 void clock_state_t::on_update()
 {
-    struct timeval tv_now;
-    get_time(&tv_now);
-
     float clock_color = 1.0f;
     if((xEventGroupGetBits(system_events) & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {
         clock_color = fabsf((frames & 127) / 127.0f - 0.5f) + 0.5f;
     }
 
-    gfx.draw_clock(tv_now.tv_sec, clock_color);
-
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
-    float second_snap{};
+    float second_snap{ 0.0f };
+    suseconds_t usecs = wall_time.tv_usec;
     switch(settings.clock_fade_mode) {
     case clock_fade_mode_t::off:
-        gfx.display();
-        return;    // <--- !
+        break;
     case clock_fade_mode_t::high:
         second_snap = one_second / microseconds;
         break;
     case clock_fade_mode_t::medium:
         second_snap = (one_second / 0.5f) / microseconds;
+        usecs = max(0l, usecs - 500000);
         break;
     case clock_fade_mode_t::low:
-        second_snap = (one_second / 0.2f) / microseconds;
+        second_snap = (one_second / 0.25f) / microseconds;
+        usecs = max(0l, usecs - 750000);
         break;
     }
-    gfx2.draw_clock(tv_now.tv_sec - 1, clock_color);
-    gfx2.fade_to(gfx, min(1.0f, tv_now.tv_usec * second_snap));
+
+    if(settings.clock_fade_mode == clock_fade_mode_t::off) {
+        gfx.draw_clock(wall_time.tv_sec, clock_color);
+        gfx.display();
+    } else {
+        gfx.draw_clock(wall_time.tv_sec, clock_color);
+        gfx2.draw_clock(wall_time.tv_sec + 1, clock_color);
+        gfx.fade_to(gfx2, min(usecs * second_snap, 1.0f));
+    }
 
     if(button_select.pressed) {
         state_set(menu_state);

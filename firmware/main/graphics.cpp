@@ -63,6 +63,8 @@ namespace
         184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
     };
 
+    DRAM_ATTR uint8_t const debug_leds[2] = { 0x49, 0xBA };
+
     //////////////////////////////////////////////////////////////////////
     // content_width is width of the content to show
     // screen_width is width of the display screen
@@ -409,6 +411,11 @@ IRAM_ATTR void graphics_t::fade_to(graphics_t &other, float scale)
         float dst = other.buffer[i] * scale;
         ::display->led[i] = gamma_get(src + dst);
     }
+    for(int i = 0; i < 2; ++i) {
+        if(debug_flag[i]) {
+            ::display->led[debug_leds[i]] = 2047;
+        }
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -417,6 +424,11 @@ IRAM_ATTR void graphics_t::display()
 {
     for(int i = 0; i < 256; ++i) {
         ::display->led[i] = gamma_get(buffer[i]);
+    }
+    for(int i = 0; i < 2; ++i) {
+        if(debug_flag[i]) {
+            ::display->led[debug_leds[i]] = 2047;
+        }
     }
 }
 

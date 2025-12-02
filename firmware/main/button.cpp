@@ -8,6 +8,7 @@
 
 #include "button.h"
 #include "gpio_defs.h"
+#include "graphics.h"
 #include "util.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -60,6 +61,8 @@ namespace
 
 esp_err_t button_init()
 {
+    LOG_INFO("init");
+
     // set the GPIOs to input with pullup
     gpio_config_t gpio_cfg{};
     gpio_cfg.mode = GPIO_MODE_INPUT;
@@ -68,6 +71,7 @@ esp_err_t button_init()
         gpio_cfg.pin_bit_mask |= 1LLU << real_buttons[i].gpio_num;
     }
     ESP_CHECK(gpio_config(&gpio_cfg));
+    memset(buttons, 0, sizeof(buttons));
     read_buttons(nullptr);
 
     // start 5mS timer

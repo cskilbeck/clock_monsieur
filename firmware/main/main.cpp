@@ -22,6 +22,8 @@ LOG_CONTEXT("main");
 
 EventGroupHandle_t system_events;
 
+timeval wall_time;
+
 //////////////////////////////////////////////////////////////////////
 
 struct : console_command_t<"mem", "show stack and heap usage", "">
@@ -86,6 +88,7 @@ extern "C" void app_main()
 
     while(true) {
         display_update();
+        get_time(&wall_time);
         button_update();
         int ambient = lux_update();
         display->set_ambient(ambient);
