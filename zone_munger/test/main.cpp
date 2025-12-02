@@ -19,7 +19,6 @@ std::string format_time(int64_t time)
     gmtime_r(&t, &x);
 #endif
     return std::format("{:04d}/{:02d}/{:02d} {:02d}:{:02d}", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
-
 }
 
 int get_offset_seconds(zone_offset_t const &zone_offset)
@@ -36,9 +35,7 @@ int64_t get_epoch_seconds(zone_offset_t const &zone_offset)
 
 int64_t get_epoch_seconds(zone_offset_t const *zone_offset)
 {
-    uint16_t low = zone_offset->epoch_start_low;
-    uint16_t high = zone_offset->epoch_start_high;
-    return ((int32_t)high << 16 | low) + MIN_EPOCH;
+    return get_epoch_seconds(*zone_offset);
 }
 
 char const *get_node_name(tz_node_t const &node)
@@ -86,48 +83,9 @@ zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin,
     return result;
 }
 
-void print_node(tz_node_t const *node)
-{
-    if(node == nullptr) {
-        printf("NULL Node!?\n");
-    } else if(node->num_children == 0) {
-        printf("%s:\n", get_node_name(node));
-        tz_details_t const &details = TZ_DETAILS[node->children_index];
-        for(int i = 0; i < details.offset_count; ++i) {
-            int offset = i + details.offset_start_index;
-            zone_offset_t const &zone_offset = ZONE_OFFSETS[offset];
-            int64_t seconds = get_epoch_seconds(zone_offset);
-            printf("%lld (%s),%d (offset %d)\n", seconds, format_time(seconds).c_str(), get_offset_seconds(zone_offset), offset);
-        }
-    } else {
-        printf("%s\n", get_node_name(node));
-    }
-}
-
-void show_node(int const node_index, int const indent = 0)
-{
-    tz_node_t const &node = TZ_NODES[node_index];
-    if(node.num_children == 0) {
-        printf("%*s%s:\n", indent, "", get_node_name(node));
-        tz_details_t const &details = TZ_DETAILS[node.children_index];
-        for(int i = 0; i < details.offset_count; ++i) {
-            int offset = i + details.offset_start_index;
-            zone_offset_t const &zone_offset = ZONE_OFFSETS[offset];
-            int64_t seconds = get_epoch_seconds(zone_offset);
-            std::string s = format_time(seconds);
-            printf("%*s%lld (%s),%d (offset %d)\n", indent + 4, "", seconds, s.c_str(), get_offset_seconds(zone_offset), offset);
-        }
-    } else {
-        printf("%*s%s\n", indent, "", get_node_name(node));
-        for(int i = 0; i < node.num_children; ++i) {
-            show_node(i + node.children_index, indent + 4);
-        }
-    }
-}
-
 // Find the tz_node_t for a given timezone location (e.g. Europe/London, America/Argentina/Buenos_Aires)
 
-const tz_node_t *find_timezone_location(const char *path)
+const tz_node_t *find_location(const char *path)
 {
     if(path == nullptr) {
         return nullptr;
@@ -167,6 +125,45 @@ const tz_node_t *find_timezone_location(const char *path)
     return current_node;
 }
 
+void print_node(tz_node_t const *node)
+{
+    if(node == nullptr) {
+        printf("NULL Node!?\n");
+    } else if(node->num_children == 0) {
+        printf("%s:\n", get_node_name(node));
+        tz_details_t const &details = TZ_DETAILS[node->children_index];
+        for(int i = 0; i < details.offset_count; ++i) {
+            int offset = i + details.offset_start_index;
+            zone_offset_t const &zone_offset = ZONE_OFFSETS[offset];
+            int64_t seconds = get_epoch_seconds(zone_offset);
+            printf("%lld (%s),%d (offset %d)\n", seconds, format_time(seconds).c_str(), get_offset_seconds(zone_offset), offset);
+        }
+    } else {
+        printf("%s\n", get_node_name(node));
+    }
+}
+
+void show_node(int const node_index, int const indent = 0)
+{
+    tz_node_t const &node = TZ_NODES[node_index];
+    if(node.num_children == 0) {
+        printf("%*s%s:\n", indent, "", get_node_name(node));
+        tz_details_t const &details = TZ_DETAILS[node.children_index];
+        for(int i = 0; i < details.offset_count; ++i) {
+            int offset = i + details.offset_start_index;
+            zone_offset_t const &zone_offset = ZONE_OFFSETS[offset];
+            int64_t seconds = get_epoch_seconds(zone_offset);
+            std::string s = format_time(seconds);
+            printf("%*s%lld (%s),%d (offset %d)\n", indent + 4, "", seconds, s.c_str(), get_offset_seconds(zone_offset), offset);
+        }
+    } else {
+        printf("%*s%s\n", indent, "", get_node_name(node));
+        for(int i = 0; i < node.num_children; ++i) {
+            show_node(i + node.children_index, indent + 4);
+        }
+    }
+}
+
 int main()
 {
     setbuf(stdout, nullptr);
@@ -190,7 +187,7 @@ int main()
     };
 
     for(char const *location : locations) {
-        tz_node_t const *node = find_timezone_location(location);
+        tz_node_t const *node = find_location(location);
         if(node == nullptr || node->num_children != 0) {
             printf("Location %s not found\n", location);
             continue;

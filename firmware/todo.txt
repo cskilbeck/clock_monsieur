@@ -22,15 +22,16 @@ X small font for menus
 
 - frosted glass/gel problem
 - back compatible settings format changes
+- button auto-repeat
 
 - menus
     X 12/24
     X Seconds mode
     X Colon mode
     X Auto brightness on/off
-    - Clock font
+    X Clock font
     X Brightness
-    - Set timezone
+    X Set timezone
     - Setup WiFi
     - Reset WiFi
     - Undo last OTA update?

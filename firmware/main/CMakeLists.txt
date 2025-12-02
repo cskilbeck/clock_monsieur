@@ -21,6 +21,7 @@ idf_component_register(
         square_font.cpp
         big_caps.cpp
         menu.cpp
+        timezone_data.cpp
     PRIV_REQUIRES
         driver
         bt

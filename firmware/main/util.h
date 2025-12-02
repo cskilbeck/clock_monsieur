@@ -130,6 +130,41 @@ namespace
 {
     //////////////////////////////////////////////////////////////////////
 
+    template <typename T, size_t S> struct simplestack_t
+    {
+        T buffer[S];
+        size_t size = 0;
+
+        void clear()
+        {
+            size = 0;
+        }
+
+        bool empty() const
+        {
+            return size == 0;
+        }
+
+        void push(T v)
+        {
+            if(size < S) {
+                buffer[size] = v;
+                size += 1;
+            }
+        }
+
+        T pop()
+        {
+            if(size != 0) {
+                size -= 1;
+                return buffer[size];
+            }
+            return (T)0;
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
     inline uint8_t int_to_bcd(int n)
     {
         return (n % 10) | ((n / 10) << 4);

@@ -1,5 +1,7 @@
 //////////////////////////////////////////////////////////////////////
 
+#include <esp_sntp.h>
+
 #include <freertos/FreeRTOS.h>
 
 #include "nvs_flash.h"
@@ -16,6 +18,7 @@
 #include "version.h"
 #include "ota.h"
 #include "state.h"
+#include "timezone.h"
 #include "console.h"
 
 LOG_CONTEXT("main");
@@ -88,7 +91,13 @@ extern "C" void app_main()
 
     while(true) {
         display_update();
-        get_time(&wall_time);
+
+        timeval now;
+        gettimeofday(&now, NULL);
+        timezone_update(now, timezone_offset_seconds);
+        wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
+        wall_time.tv_usec = now.tv_usec;
+
         button_update();
         int ambient = lux_update();
         display->set_ambient(ambient);

@@ -15,6 +15,7 @@
 #include "ping.h"
 #include "time.h"
 #include "ota.h"
+#include "timezone.h"
 #include "util.h"
 
 LOG_CONTEXT("clock");
@@ -66,7 +67,6 @@ LOG_CONTEXT("clock");
 
 namespace
 {
-    int timezone_offset_seconds = 0;
     bool got_location{ false };
     bool got_timezone{ false };
     bool got_firmware_version{ false };
@@ -238,11 +238,18 @@ esp_err_t get_location()
     char *json_response = (char *)context.buffer;
 
     cJSON *root = cJSON_Parse(json_response);
-    if(root == NULL) {
+    if(root == nullptr) {
         LOG_ERROR("JSON parse error from location data");
         return ESP_ERR_INVALID_RESPONSE;
     }
     DEFER(cJSON_Delete(root));
+
+    char const *location = json_string(root, "timezone");
+    if(location == nullptr) {
+        LOG_ERROR("No timezone in ip-api response");
+    } else {
+        timezone_set(location);
+    }
 
     char const *status = json_string(root, "status", "no status?");
     if(strcmp(status, "success") != 0) {
@@ -388,7 +395,8 @@ void timezone_task(void *)
 {
     LOG_CONTEXT("timezone");
 
-    while(!(got_location && got_timezone)) {
+    while(!got_location) {
+        // while(!(got_location && got_timezone)) {
 
         LOG_INFO("Wait for network");
 
@@ -398,35 +406,37 @@ void timezone_task(void *)
         delay_secs(1);
 
         get_location();
-        get_timezone();
+        // get_timezone();
 
-        if(!got_location || !got_timezone) {
+        if(!got_location) {
+            // if(!got_location || !got_timezone) {
             LOG_INFO("Will retry location/timezone in 10 seconds");
             delay_secs(9);
         } else {
             // wait for sntp to be up
-            xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, true, portMAX_DELAY);
+            // xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, true, portMAX_DELAY);
 
-            // wait until daylight savings transition
-            if(dst_transition_epoch_seconds == 0) {
-                LOG_INFO("No daylight savings in this timezone, we're done!");
-                vTaskDelete(nullptr);
-            }
-            while(true) {
-                time_t now = time(nullptr);
-                int64_t time_until_dst_change = dst_transition_epoch_seconds - now;
-                int seconds = 60 * 60;
-                if(time_until_dst_change < 60 * 70) {
-                    LOG_INFO("Here comes DST!");
-                    seconds = time_until_dst_change + 1;
-                } else {
-                    LOG_INFO("%lld seconds until DST change", time_until_dst_change);
-                }
-                LOG_INFO("Delaying for %d seconds", seconds);
-                delay_secs(seconds);
-            }
+            // // wait until daylight savings transition
+            // if(dst_transition_epoch_seconds == 0) {
+            //     LOG_INFO("No daylight savings in this timezone, we're done!");
+            //     vTaskDelete(nullptr);
+            // }
+            // while(true) {
+            //     time_t now = time(nullptr);
+            //     int64_t time_until_dst_change = dst_transition_epoch_seconds - now;
+            //     int seconds = 60 * 60;
+            //     if(time_until_dst_change < 60 * 70) {
+            //         LOG_INFO("Here comes DST!");
+            //         seconds = time_until_dst_change + 1;
+            //     } else {
+            //         LOG_INFO("%lld seconds until DST change", time_until_dst_change);
+            //     }
+            //     LOG_INFO("Delaying for %d seconds", seconds);
+            //     delay_secs(seconds);
+            // }
         }
     }
+    vTaskDelete(nullptr);
 }
 
 //////////////////////////////////////////////////////////////////////

@@ -1,184 +1,262 @@
+//////////////////////////////////////////////////////////////////////
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <time.h>
 #include <string.h>
+#include "util.h"
+#include "button.h"
+#include "state.h"
+#include "timezone_data.h"
 
-// Define maximum size for the TZ string
-#define TZ_MAX_LEN 128
+LOG_CONTEXT("timezone");
 
-/**
- * @brief Helper function to convert seconds offset to TZ format string (e.g., -28800 -> "8").
- * The output offset is UTC - Local Time, meaning the raw offset sign is negated.
- * @param offset_sec The raw offset from UTC in seconds (e.g., -28800 for PST).
- * @param buffer Output buffer for the formatted string.
- * @param max_len Max size of the buffer.
- */
-static void format_offset(long offset_sec, char *buffer, size_t max_len)
+//////////////////////////////////////////////////////////////////////
+
+namespace
 {
-    // POSIX TZ offset is LOCAL time offset WEST of UTC (negated raw offset).
-    long total_sec = -offset_sec;    // Apply the sign flip for POSIX format
+    //////////////////////////////////////////////////////////////////////
+    // NOTE: This must equal MIN_EPOCH from zone_munger/main.py
 
-    char sign = (total_sec < 0) ? '-' : '+';
+    constexpr int64_t MIN_EPOCH = 1735689600;    // int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025
 
-    // Ensure total_sec is positive for calculations
-    if(total_sec < 0) {
-        total_sec = -total_sec;
+    //////////////////////////////////////////////////////////////////////
+
+    int get_offset_seconds(zone_offset_t const *zone_offset)
+    {
+        return zone_offset->offset_seconds_10 * 10;
     }
 
-    long hours = total_sec / 3600;
-    long minutes = (total_sec % 3600) / 60;
-    long seconds = total_sec % 60;
+    //////////////////////////////////////////////////////////////////////
 
-    // Standard TZ format is HH[:MM[:SS]].
-    // Only include sign if the offset is negative (i.e., local time is East of UTC).
-    if(minutes == 0 && seconds == 0) {
-        if(sign == '-') {
-            snprintf(buffer, max_len, "%c%ld", sign, hours);
-        } else {
-            snprintf(buffer, max_len, "%ld", hours);
+    int64_t get_epoch_seconds(zone_offset_t const *zone_offset)
+    {
+        uint16_t low = zone_offset->epoch_start_low;
+        uint16_t high = zone_offset->epoch_start_high;
+        return ((int32_t)high << 16 | low) + MIN_EPOCH;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    char const *get_node_name(tz_node_t const *node)
+    {
+        return &TZ_NAME_STRING[node->name_offset];
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    tz_details_t const *get_node_details(const tz_node_t *node)
+    {
+        if(node->num_children != 0) {
+            return nullptr;
         }
-    } else if(seconds == 0) {
-        snprintf(buffer, max_len, "%c%ld:%02ld", sign, hours, minutes);
-    } else {
-        snprintf(buffer, max_len, "%c%ld:%02ld:%02ld", sign, hours, minutes, seconds);
-    }
-}
-
-/**
- * @brief Converts a DST transition epoch time into the POSIX rule format: M<month>.<week>.<day>/<time>
- * @param epoch_time The time_t value of the DST transition (in local time *before* the change).
- * @param buffer Output buffer to store the formatted rule string.
- * @param max_len Max size of the buffer.
- * @return True on success, False on error.
- */
-static bool format_posix_rule(time_t epoch_time, char *buffer, size_t max_len)
-{
-    struct tm tm_info;
-
-    // Use localtime_r to fill tm_info with the local time components
-    // Note: The TZ environment variable must be set *prior* to calling this
-    // for this function to work correctly in a fresh environment.
-    // In the context of ESP-IDF, setting TZ *before* calling this is usually necessary
-    // if the system's current rules are not already correct.
-    if(localtime_r(&epoch_time, &tm_info) == NULL) {
-        return false;
+        return &TZ_DETAILS[node->children_index];
     }
 
-    int m = tm_info.tm_mon + 1;    // Month (1-12)
-    int d = tm_info.tm_wday;       // Day of week (0=Sunday, 6=Saturday)
-    int day_of_month = tm_info.tm_mday;
+    //////////////////////////////////////////////////////////////////////
+    // Find the most recent timezone which started before now (i.e. the current one)
 
-    // 1. Determine 'n' (the week number: 1st, 2nd, 3rd, 4th, or 5th/Last)
-    int n;
-    int occurrence = (day_of_month - 1) / 7 + 1;
-
-    // Check if the current occurrence is the last one in the month
-    // We calculate the last day of the month for comparison
-    struct tm last_day_check = tm_info;
-    last_day_check.tm_mday = 1;    // Start at the 1st of the month
-
-    // Advance to the next month
-    int next_month = last_day_check.tm_mon + 1;
-    if(next_month > 11) {
-        next_month = 0;
-        last_day_check.tm_year++;
-    }
-    last_day_check.tm_mon = next_month;
-
-    // Calculate the epoch for the first day of the next month
-    time_t next_month_start = mktime(&last_day_check);
-
-    // Calculate the epoch for the last day of the current month
-    time_t current_month_end_epoch = next_month_start - 24 * 3600;
-
-    // Get the structure for the last day
-    if(localtime_r(&current_month_end_epoch, &last_day_check) == NULL) {
-        return false;
-    }
-
-    int last_day_of_month = last_day_check.tm_mday;
-    int last_occurrence = (last_day_of_month - 1) / 7 + 1;
-
-    if(occurrence == last_occurrence) {
-        n = 5;    // It is the last occurrence of that day in the month
-    } else {
-        n = occurrence;
-    }
-
-    // 2. Format the time part (HH:MM:SS)
-    char time_str[9];    // HH:MM:SS
-    // The format specifiers must be correct based on the time components derived from the epoch
-    strftime(time_str, sizeof(time_str), "%H:%M:%S", &tm_info);
-
-    // 3. Assemble the rule: M<m>.<n>.<d>/<time>
-    snprintf(buffer, max_len, "M%d.%d.%d/%s", m, n, d, time_str);
-
-    return true;
-}
-
-
-/**
- * @brief Creates the full proleptic POSIX TZ string for ESP-IDF/newlib.
- * @param std_abbr Standard Time Abbreviation (e.g., "GMT").
- * @param std_offset_sec Raw Standard Offset from UTC in seconds (e.g., 0).
- * @param dst_abbr DST Abbreviation (e.g., "BST").
- * @param dst_offset_sec Raw DST Offset from UTC in seconds (e.g., 3600).
- * @param dst_start_epoch Epoch time when DST BEGINS (e.g., M3.5.0/1:00:00).
- * @param dst_end_epoch Epoch time when DST ENDS (e.g., M10.5.0/2:00:00).
- * @return A dynamically allocated string containing the TZ setting, or NULL on failure.
- * The caller is responsible for freeing the returned string.
- */
-char *create_posix_tz_string(const char *std_abbr, long std_offset_sec, const char *dst_abbr, long dst_offset_sec, time_t dst_start_epoch,
-                             time_t dst_end_epoch)
-{
-    char *tz_string = (char *)malloc(TZ_MAX_LEN);
-    if(tz_string == NULL) {
-        return NULL;    // Allocation failure
-    }
-
-    char std_offset_buffer[16];
-    char dst_offset_buffer[16];
-    char start_rule_buffer[64];
-    char end_rule_buffer[64];
-
-    // 1. Format Standard Time Offset
-    format_offset(std_offset_sec, std_offset_buffer, sizeof(std_offset_buffer));
-
-    // Check if DST is applicable (both start and end rules provided)
-    if(dst_start_epoch > 0 && dst_end_epoch > 0 && dst_abbr != NULL && strlen(dst_abbr) > 0) {
-
-        // 2. Format DST Start and End Rules
-        // Note: The POSIX format requires the start rule first, then the end rule.
-        if(!format_posix_rule(dst_start_epoch, start_rule_buffer, sizeof(start_rule_buffer)) ||
-           !format_posix_rule(dst_end_epoch, end_rule_buffer, sizeof(end_rule_buffer))) {
-            free(tz_string);
-            return NULL;    // Rule formatting failed
+    zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin, zone_offset_t const *end)
+    {
+        if(begin == end) {
+            return end;
         }
-
-        // 3. Format DST Offset (if needed)
-        format_offset(dst_offset_sec, dst_offset_buffer, sizeof(dst_offset_buffer));
-
-        // The DST offset is OPTIONAL if it's exactly 1 hour different from the standard offset (3600 seconds).
-        // Since StdOffset is UTC - Local, the DST offset must be 3600 seconds different on the raw offset.
-        bool is_default_dst_offset = (dst_offset_sec == (std_offset_sec + 3600));
-
-        // 4. Assemble the full TZ string with DST
-        // Format: StdAbbr StdOffset DstAbbr [DstOffset],StartRule,EndRule
-        snprintf(tz_string, TZ_MAX_LEN, "%s%s%s%s,%s,%s", std_abbr, std_offset_buffer, dst_abbr,
-                 is_default_dst_offset ? "" : dst_offset_buffer,    // Omit if default 1 hour difference
-                 start_rule_buffer, end_rule_buffer);
-    } else {
-        // 4. Assemble the Standard Time only string (no DST rule)
-        // Format: StdAbbr StdOffset
-        snprintf(tz_string, TZ_MAX_LEN, "%s%s", std_abbr, std_offset_buffer);
+        end -= 1;
+        int64_t end_seconds = get_epoch_seconds(end);
+        if(end_seconds <= now) {
+            return end;
+        }
+        zone_offset_t const *low = begin;
+        zone_offset_t const *high = end;
+        zone_offset_t const *result = nullptr;
+        while(low < high) {
+            zone_offset_t const *mid = low + (high - low) / 2;
+            if(get_epoch_seconds(mid) < now) {
+                result = mid;
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+        return result;
     }
 
-    return tz_string;
-}
+    //////////////////////////////////////////////////////////////////////
+    // Find the tz_node_t for a given timezone location (e.g. Europe/London, America/Argentina/Buenos_Aires)
+
+    tz_node_t const *find_location(const char *path)
+    {
+        if(path == nullptr) {
+            return nullptr;
+        }
+        tz_node_t const *current_node = &TZ_NODES[0];
+        char const *segment_start = path;
+        while(*segment_start != '\0') {
+            char const *segment_end = strchr(segment_start, '/');
+            size_t segment_len = segment_end != nullptr ? segment_end - segment_start : strlen(segment_start);
+            if(current_node->num_children == 0) {
+                return nullptr;
+            }
+            bool match_found = false;
+            uint16_t child_start_idx = current_node->children_index;
+            uint16_t child_count = current_node->num_children;
+            for(uint16_t i = 0; i < child_count; ++i) {
+                tz_node_t const *child = &TZ_NODES[child_start_idx + i];
+                char const *child_name = get_node_name(child);
+                if(strncmp(segment_start, child_name, segment_len) == 0 && child_name[segment_len] == '\0') {
+                    current_node = child;
+                    match_found = true;
+                    break;
+                }
+            }
+            if(!match_found) {
+                return nullptr;    // Path segment not found in current children
+            }
+            if(segment_end != nullptr) {
+                segment_start = segment_end + 1;
+                if(*segment_start == '\0') {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        return current_node;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    struct location_t
+    {
+        uint16_t index;     // top node
+        uint16_t offset;    // where in the list of nodes
+        uint16_t parent;    // parent node
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    int current_index = 0;
+    simplestack_t<location_t, 3> parent_index{};
+    int node_parent = 0;
+    int node_count = 0;
+    int node_index = 0;
+    int name_x = 0;
+
+    zone_offset_t const *zone_offset_start{};
+    zone_offset_t const *zone_offset_end{};
+
+    //////////////////////////////////////////////////////////////////////
+
+    esp_err_t set_timezone(tz_node_t const *node)
+    {
+        if(node == nullptr) {
+            return ESP_ERR_INVALID_ARG;
+        }
+        tz_details_t const *details = get_node_details(node);
+        if(details == nullptr) {
+            return ESP_ERR_NOT_SUPPORTED;    // non-leaf path
+        }
+        zone_offset_start = &ZONE_OFFSETS[details->offset_start_index];
+        zone_offset_end = &ZONE_OFFSETS[details->offset_start_index + details->offset_count];
+        return ESP_OK;
+    }
+
+}    // namespace
+
+int timezone_offset_seconds = 0;
+
+//////////////////////////////////////////////////////////////////////
+
 void timezone_select_init()
 {
+    tz_node_t const &root_node = TZ_NODES[0];
+    node_parent = 0;
+    current_index = root_node.children_index;
+    node_count = root_node.num_children;
+    node_index = 0;
+    parent_index.clear();
 }
+
+//////////////////////////////////////////////////////////////////////
+
 void timezone_select_update()
 {
+    tz_node_t const *current = &TZ_NODES[current_index + node_index];
+    char const *name = get_node_name(current);
+    int width = font_5x7_narrow_font.measure_string(name);
+    int min_name_x = (screen_width - width) * 2;
+    gfx.clear();
+    font_5x7_narrow_font.draw_long_string(gfx, name, name_x / 2, 0, 1.0f, 0.5f);
+    gfx.display();
+
+    // control is lagged by 1 frame, whevs
+    if(button_select.pressed) {
+        if(current->num_children != 0) {
+            parent_index.push({ (uint16_t)current_index, (uint16_t)node_index, (uint16_t)node_parent });
+            tz_node_t const *current = &TZ_NODES[current_index + node_index];
+            current_index = current->children_index;
+            node_index = 0;
+            name_x = 0;
+            node_count = current->num_children;
+        } else {
+            LOG_INFO("%s selected!", get_node_name(current));
+            set_timezone(current);
+            state_set(clock_state);
+        }
+    }
+    if(button_up.pressed && node_index != 0) {
+        node_index -= 1;
+    }
+    if(button_down.pressed && node_index < node_count - 1) {
+        node_index += 1;
+    }
+    if(button_right.held && name_x > min_name_x) {
+        name_x -= 1;
+    }
+    if(button_left.held && name_x < 0) {
+        name_x += 1;
+    } else if(button_left.pressed && name_x == 0) {
+        if(parent_index.empty()) {
+            state_set(clock_state);
+        } else {
+            location_t parent = parent_index.pop();
+            current_index = parent.index;
+            node_index = parent.offset;
+            node_parent = parent.parent;
+            tz_node_t const *current = &TZ_NODES[current_index];
+            node_count = TZ_NODES[node_parent].num_children;
+            name_x = 0;
+        }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+esp_err_t timezone_set(char const *location)
+{
+    LOG_INFO("Looking for timezone location %s", location);
+    tz_node_t const *node = find_location(location);
+    if(node == nullptr) {
+        LOG_ERROR("Can't find timezone location %s", location);
+        return ESP_ERR_NOT_FOUND;
+    }
+    LOG_INFO("Found timezone location %s", get_node_name(node));
+    return set_timezone(node);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+esp_err_t timezone_update(timeval &current_time, int &offset_seconds)
+{
+    if(zone_offset_start == nullptr) {
+        offset_seconds = 0;
+        return ESP_ERR_INVALID_STATE;
+    }
+    zone_offset_t const *found = find_timezone(current_time.tv_sec, zone_offset_start, zone_offset_end);
+    if(!found) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    offset_seconds = get_offset_seconds(found);
+    return ESP_OK;
 }
