@@ -10,6 +10,7 @@ idf_component_register(
         settings.cpp
         ota.cpp
         util.cpp
+        http.cpp
         state.cpp
         console.cpp
         ping.cpp
@@ -34,6 +35,7 @@ idf_component_register(
     INCLUDE_DIRS
         .
 )
+
 target_compile_options(
     ${COMPONENT_LIB}
     PRIVATE

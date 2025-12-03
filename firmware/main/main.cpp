@@ -25,7 +25,7 @@ LOG_CONTEXT("main");
 
 EventGroupHandle_t system_events;
 
-timeval wall_time;
+timeval local_wall_time;
 
 //////////////////////////////////////////////////////////////////////
 
@@ -95,8 +95,8 @@ extern "C" void app_main()
         timeval now;
         gettimeofday(&now, NULL);
         timezone_update(now, timezone_offset_seconds);
-        wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
-        wall_time.tv_usec = now.tv_usec;
+        local_wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
+        local_wall_time.tv_usec = now.tv_usec;
 
         button_update();
         int ambient = lux_update();

@@ -212,33 +212,29 @@ esp_err_t do_ota_firmware_update(const char *latest)
 }
 
 //////////////////////////////////////////////////////////////////////
-// Check if running latest firmware, if not, flash the latest and reboot
-
-esp_err_t check_firmware_version()
-{
-    char latest[16];
-    esp_err_t err = get_latest_firmware_version(latest, sizeof(latest));
-    if(err != ESP_OK) {
-        return err;
-    }
-    LOG_INFO("FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
-    if(strcmp(latest, VERSION_STR) != 0) {
-        state_set(ota_state);
-        do_ota_firmware_update(latest);
-    } else {
-        ota_mark_app_valid();
-    }
-    return ESP_OK;
-}
-
-//////////////////////////////////////////////////////////////////////
 
 void ota_task(void *)
 {
     while(true) {
         xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
         delay_secs(30);
-        check_firmware_version();
+        LOG_INFO("Checking firmware version");
+        char latest[16];
+        esp_err_t err = get_latest_firmware_version(latest, sizeof(latest));
+        if(err == ESP_OK) {
+            LOG_INFO("FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
+            if(strcmp(latest, VERSION_STR) != 0) {
+                state_set(ota_state);
+                err = do_ota_firmware_update(latest);
+                if(err != ESP_OK) {
+                    // OTA update failed, wait 30 seconds and try again?
+                    continue;
+                }
+            } else {
+                ota_mark_app_valid();
+            }
+        }
+        // wait 24 hours before checking again
         int64_t one_day_seconds = 60 * 60 * 24;
         int64_t one_day_millis = one_day_seconds * 1000;
         int64_t ticks = one_day_millis / configTICK_RATE_HZ;

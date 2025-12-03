@@ -209,7 +209,7 @@ void clock_state_t::on_update()
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
     float second_snap{ 0.0f };
-    suseconds_t usecs = wall_time.tv_usec;
+    suseconds_t usecs = local_wall_time.tv_usec;
     float fade = 0.0f;
     switch(settings.clock_fade_mode) {
     case clock_fade_mode_t::off:
@@ -230,11 +230,11 @@ void clock_state_t::on_update()
         break;
     }
 
-    gfx.draw_clock(wall_time.tv_sec, clock_color);
+    gfx.draw_clock(local_wall_time.tv_sec, clock_color);
     if(settings.clock_fade_mode == clock_fade_mode_t::off) {
         gfx.display();
     } else {
-        gfx2.draw_clock(wall_time.tv_sec + 1, clock_color);
+        gfx2.draw_clock(local_wall_time.tv_sec + 1, clock_color);
         gfx.fade_to(gfx2, fade);
     }
 

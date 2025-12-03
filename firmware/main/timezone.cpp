@@ -10,6 +10,7 @@
 #include "util.h"
 #include "button.h"
 #include "state.h"
+#include "settings.h"
 #include "timezone_data.h"
 
 LOG_CONTEXT("timezone");
@@ -65,23 +66,19 @@ namespace
             return end;
         }
         end -= 1;
-        int64_t end_seconds = end->epoch_start();
-        if(end_seconds <= now) {
+        if(end->epoch_start() <= now) {
             return end;
         }
-        zone_offset const *low = begin;
-        zone_offset const *high = end;
-        zone_offset const *result = nullptr;
-        while(low < high) {
-            zone_offset const *mid = low + (high - low) / 2;
+        zone_offset const *mid = begin;
+        while(begin < end) {
+            mid = begin + ((end - begin) + 1) / 2;
             if(mid->epoch_start() < now) {
-                result = mid;
-                low = mid + 1;
+                begin = mid + 1;
             } else {
-                high = mid - 1;
+                end = mid - 1;
             }
         }
-        return result;
+        return mid;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -184,7 +181,8 @@ void timezone_select_init()
 
 void timezone_select_update()
 {
-    tz_node const *current = &tz_nodes[current_index + node_index];
+    int actual_node = current_index + node_index;
+    tz_node const *current = &tz_nodes[actual_node];
     char const *name = current->name();
     int width = font_5x7_narrow_font.measure_string(name);
     int min_name_x = (screen_width - width) * 2;
@@ -196,13 +194,15 @@ void timezone_select_update()
     if(button_select.pressed) {
         if(current->num_children != 0) {
             parent_index.push({ (uint16_t)current_index, (uint16_t)node_index, (uint16_t)node_parent });
-            tz_node const *current = &tz_nodes[current_index + node_index];
+            tz_node const *current = &tz_nodes[actual_node];
             current_index = current->children_index;
             node_index = 0;
             name_x = 0;
             node_count = current->num_children;
         } else {
             LOG_INFO("%s selected!", current->name());
+            settings.timezone_mode = timezone_mode_t::selected;
+            settings.selected_timezone_node = actual_node;
             set_timezone(current);
             state_set(clock_state);
         }
@@ -244,6 +244,18 @@ esp_err_t timezone_set(char const *location)
         return ESP_ERR_NOT_FOUND;
     }
     LOG_INFO("Found timezone location %s", node->name());
+    return set_timezone(node);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+esp_err_t timezone_node_set(int node_index)
+{
+    if(node_index < 0 || node_index < countof(TZ_NODES)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    tz_node const *node = tz_nodes + node_index;
+    LOG_INFO("Setting timezone from node %s", node->name());
     return set_timezone(node);
 }
 

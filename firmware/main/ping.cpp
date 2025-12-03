@@ -1,3 +1,5 @@
+//////////////////////////////////////////////////////////////////////
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_ping.h"
@@ -9,28 +11,42 @@
 
 LOG_CONTEXT("ping");
 
-static bool done;
-static int pings;
-static int fails;
+//////////////////////////////////////////////////////////////////////
 
-void ping_end(esp_ping_handle_t hdl, void *args)
+namespace
 {
-    done += 1;
-    LOG_INFO("END %d");
-}
+    bool done;
+    int pings;
+    int fails;
 
-void ping_success(esp_ping_handle_t hdl, void *args)
-{
-    pings += 1;
-    LOG_INFO("SUCCESS %d", pings);
-    xEventGroupSetBits(system_events, SYS_EVENT_NETWORK_CONNECTED);
-}
+    //////////////////////////////////////////////////////////////////////
 
-void ping_timeout(esp_ping_handle_t hdl, void *args)
-{
-    fails += 1;
-    LOG_INFO("TIMEOUT %d", fails);
-}
+    void ping_end(esp_ping_handle_t hdl, void *args)
+    {
+        done += 1;
+        LOG_INFO("END %d");
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void ping_success(esp_ping_handle_t hdl, void *args)
+    {
+        pings += 1;
+        LOG_INFO("SUCCESS %d", pings);
+        xEventGroupSetBits(system_events, SYS_EVENT_NETWORK_CONNECTED);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
+    void ping_timeout(esp_ping_handle_t hdl, void *args)
+    {
+        fails += 1;
+        LOG_INFO("TIMEOUT %d", fails);
+    }
+
+}    // namespace
+
+//////////////////////////////////////////////////////////////////////
 
 esp_err_t do_ping_check()
 {

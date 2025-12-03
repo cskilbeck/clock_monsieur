@@ -18,7 +18,7 @@
     X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::medium) \
     X(6, clock_font, clock_font_t, clock_font_t::modern)                \
     X(7, timezone_mode, timezone_mode_t, timezone_mode_t::automatic)    \
-    X(8, selected_timezone_node, uint16_t, 1)
+    X(8, selected_timezone_node, uint16_t, 0)
 
 //////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display

@@ -3,11 +3,7 @@
 #include <cstring>
 #include <cstdio>
 
-#include "../timezone_data.h"
-
-// NOTE: This must equal MIN_EPOCH from zone_munger/main.py
-
-constexpr int64_t MIN_EPOCH = 1735689600; //int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025
+#include "../../firmware/main/timezone_data.h"
 
 std::string format_time(int64_t time)
 {
@@ -68,12 +64,18 @@ zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin,
     if(end_seconds <= now) {
         return end;
     }
+    auto id = [](zone_offset_t const *m) -> int {
+        return (int)(m - ZONE_OFFSETS);
+    };
+    printf("Range: %d - %d\n", id(begin), id(end));
     zone_offset_t const *low = begin;
     zone_offset_t const *high = end;
     zone_offset_t const *result = nullptr;
     while(low < high) {
-        zone_offset_t const *mid = low + (high - low) / 2;
-        if(get_epoch_seconds(mid) < now) {
+        zone_offset_t const *mid = low + ((high - low) + 1) / 2;
+        int64_t mid_seconds = get_epoch_seconds(mid);
+        printf("Low = %d, High = %d, Mid = %d, Is %s < now?\n", id(low), id(high), id(mid), format_time(mid_seconds).c_str());
+        if(mid_seconds < now) {
             result = mid;
             low = mid + 1;
         } else {
@@ -175,15 +177,15 @@ int main()
 
     char const *locations[] = {
         "Europe/London",
-        "Africa/Cairo",
-        "Asia/Tokyo",
-        "Australia/Sydney",
-        "America/Argentina/Buenos_Aires",
-        "Europe",
-        "Europe/",
-        "Europe//",
-        "Africa/FOO",
-        "Foo/Nah",
+        // "Africa/Cairo",
+        // "Asia/Tokyo",
+        // "Australia/Sydney",
+        // "America/Argentina/Buenos_Aires",
+        // "Europe",
+        // "Europe/",
+        // "Europe//",
+        // "Africa/FOO",
+        // "Foo/Nah",
     };
 
     for(char const *location : locations) {
@@ -194,12 +196,18 @@ int main()
         }
         tz_details_t const *details = get_node_details(node);
         if(details != nullptr) {
+            for(int i=0; i<details->offset_count; ++i) {
+                int o = details->offset_start_index + i;
+                zone_offset_t const &zone = ZONE_OFFSETS[o];
+                printf("Zone [%4d]: %s (%d)\n", o, format_time(get_epoch_seconds(zone)).c_str(), get_offset_seconds(zone));
+            }
             zone_offset_t const *start = &ZONE_OFFSETS[details->offset_start_index];
             zone_offset_t const *end = &ZONE_OFFSETS[details->offset_start_index + details->offset_count];
             zone_offset_t const *found = find_timezone(now, start, end);
             if(!found) {
                 printf("ERROR: Can't get current time offset for %s\n", location);
             } else {
+                printf("End: %s\n", format_time(get_epoch_seconds(found)).c_str());
                 printf("Currently %s GMT offset is %d seconds\n", location, found->offset_seconds_10 * 10);
             }
         }

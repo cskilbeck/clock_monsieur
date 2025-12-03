@@ -3,12 +3,15 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "build_release",
-      "sdkconfigDefaults": [],
-      "sdkconfigFilePath": ""
+      "buildDirectoryPath": "e:\\dev\\clock_monsieur\\firmware\\build_release",
+      "sdkconfigDefaults": [
+        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.release",
+        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.defaults"
+      ],
+      "sdkconfigFilePath": "e:\\dev\\clock_monsieur\\firmware\\build_release\\sdkconfig"
     },
     "env": {
-      "DEBUG": "1"
+      "NDEBUG": "1"
     },
     "idfTarget": "esp32s3",
     "flashBaudRate": "",
@@ -29,12 +32,17 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "build_debug",
-      "sdkconfigDefaults": [],
-      "sdkconfigFilePath": ""
+      "buildDirectoryPath": "e:\\dev\\clock_monsieur\\firmware\\build_debug",
+      "sdkconfigDefaults": [
+        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.debug",
+        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.defaults"
+      ],
+      "sdkconfigFilePath": "e:\\dev\\clock_monsieur\\firmware\\build_debug\\sdkconfig"
     },
-    "env": {},
-    "idfTarget": "",
+    "env": {
+      "DEBUG": "1"
+    },
+    "idfTarget": "esp32s3",
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {

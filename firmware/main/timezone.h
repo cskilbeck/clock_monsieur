@@ -12,6 +12,7 @@ void timezone_select_init();
 void timezone_select_update();
 
 esp_err_t timezone_set(char const *location);
+esp_err_t timezone_node_set(int node_index);
 esp_err_t timezone_update(timeval &current_time, int &offset_seconds);
 
 extern int timezone_offset_seconds;
