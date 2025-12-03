@@ -1,0 +1,52 @@
+{
+  "release": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "build_release",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {
+      "DEBUG": "1"
+    },
+    "idfTarget": "esp32s3",
+    "flashBaudRate": "",
+    "monitorBaudRate": "",
+    "openOCD": {
+      "debugLevel": -1,
+      "configs": [],
+      "args": []
+    },
+    "tasks": {
+      "preBuild": "",
+      "preFlash": "",
+      "postBuild": "",
+      "postFlash": ""
+    }
+  },
+  "debug": {
+    "build": {
+      "compileArgs": [],
+      "ninjaArgs": [],
+      "buildDirectoryPath": "build_debug",
+      "sdkconfigDefaults": [],
+      "sdkconfigFilePath": ""
+    },
+    "env": {},
+    "idfTarget": "",
+    "flashBaudRate": "",
+    "monitorBaudRate": "",
+    "openOCD": {
+      "debugLevel": -1,
+      "configs": [],
+      "args": []
+    },
+    "tasks": {
+      "preBuild": "",
+      "preFlash": "",
+      "postBuild": "",
+      "postFlash": ""
+    }
+  }
+}

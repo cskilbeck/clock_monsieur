@@ -1,6 +1,16 @@
 import re
 import csv
+import sys
 from datetime import datetime
+from pathlib import Path
+
+# epoch times are stored as seconds since 2025/Jan/1 00:00:00
+# using uint32_t we can go up to 2161/Feb/2 06:28:15 [ 6027436800 - 1735689600 = 4291747200 (0xffcedd80) ]
+# but that's a lot of data so we'll go up to 2075
+
+MIN_EPOCH = int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025 = 1735689600
+MAX_EPOCH = int(datetime(2075, 1, 1).timestamp())  # Jan 1 2075
+
 
 def decimal_from_tz_coord(coord_str: str) -> float:
     """convert tz coordinate to decimal coordinate"""
@@ -67,7 +77,7 @@ def build_timezone_tree(zone_tab_data: str) -> dict:
         path_components = name.split('/')
         current_node = tree_root
         for i, component in enumerate(path_components):
-            #name = component.replace('_', ' ')
+            # name = component.replace('_', ' ')
             name = component
             # If the component is not in the current node's children, create it
             if name not in current_node['children']:
@@ -110,7 +120,7 @@ def flatten_tree(root_node: dict) -> tuple[dict, list[dict], list[str]]:
     node_index = 0
     name_offset = 0
     name_list = []  # Stores names as a list of strings
-    flattened_nodes = [ ]
+    flattened_nodes = []
 
     # The queue holds (node) tuples
     queue = [root_node]
@@ -209,11 +219,6 @@ def format_string_literal_concatenated(name_list: list[str], max_len: int = 80) 
     # Join all literals using the C++ concatenation format: \n"..." \
     return ' \\\n'.join(output_lines)
 
-
-MIN_EPOCH = int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025 = 1735689600
-MAX_EPOCH = int(datetime(2089, 1, 1).timestamp())
-
-
 def parse_timezone_csv(csv_file_path: str) -> dict:
     """
     Parse the timezone CSV file and return a dictionary mapping locations to their timezone data.
@@ -259,10 +264,13 @@ def parse_timezone_csv(csv_file_path: str) -> dict:
             if MIN_EPOCH < entry['epoch_time'] < MAX_EPOCH:
                 new_data.append(entry)
         if len(new_data) == 0:
-            new_data.append(max(location_data[location][-1], MIN_EPOCH))
+            entry = location_data[location][-1].copy()
+            entry['epoch_time'] = max(entry['epoch_time'], MIN_EPOCH)
+            new_data.append(entry)
         location_data[location] = new_data
 
     return location_data
+
 
 def build_timezone_tree_with_offsets(zone_tab_data: str, csv_file_path: str = 'zones.csv') -> dict:
     """
@@ -290,6 +298,7 @@ def build_timezone_tree_with_offsets(zone_tab_data: str, csv_file_path: str = 'z
 
     add_timezone_data(tree_root)
     return tree_root
+
 
 def generate_cpp_header(tree_root: dict) -> tuple[str, str]:
     """
@@ -342,6 +351,8 @@ def generate_cpp_header(tree_root: dict) -> tuple[str, str]:
 #include <cstdint>
 #include <cstddef>
 
+constexpr int64_t MIN_EPOCH = {MIN_EPOCH}; // Jan 1st 2025
+
 // timezone offset data
 struct zone_offset_t
 {{
@@ -374,6 +385,7 @@ extern const tz_node_t TZ_NODES[{num_nodes}];
     # 4. Generate the Name String literal (up to 80 chars per line)
     formatted_string_literals = format_string_literal_concatenated(name_list, max_len=80)
     cpp_content = f'''
+#include <cstdint>
 #include "timezone_data.h"
 const char TZ_NAME_STRING[{name_string_total_len}] = '''
 
@@ -392,7 +404,7 @@ const char TZ_NAME_STRING[{name_string_total_len}] = '''
             absolute_epoch_time = offset['epoch_start_time_seconds']
             epoch_time = absolute_epoch_time - MIN_EPOCH
             epoch_time_u = epoch_time & 0xffffffff
-            epoch_time_low =  epoch_time_u & 0xffff
+            epoch_time_low = epoch_time_u & 0xffff
             epoch_time_high = (epoch_time_u >> 16) & 0xffff
             offset_seconds = offset['offset_seconds']
             cpp_content += f"    {{ 0x{epoch_time_high:04x}U, 0x{epoch_time_low:04x}U, {offset_seconds // 10} }}, // [{count}] = {absolute_epoch_time}, {offset_seconds}\n"
@@ -446,44 +458,23 @@ const char TZ_NAME_STRING[{name_string_total_len}] = '''
 
     return header_content, cpp_content
 
-
-# --- Original Example Usage (Modified to call the new function) ---
-
-# Read the zone.tab content (assumes 'zone.tab' exists)
-try:
-    with open('zone.tab', 'r') as zone_file:
-        zone_data = zone_file.read()
-except FileNotFoundError:
-    # If zone.tab isn't available for testing, use a small sample
-    print("Warning: 'zone.tab' not found. Using sample data for demonstration.")
-    # Added more entries to test the 80-char wrapping
-    zone_data = """
-#version=2024b
-# Last updated: 2024-03-09
-#
-# Country Code	Coordinates	TZ	Comments
-US	+4046-07400	America/New_York
-US	+4151-08739	America/Chicago
-RU	+5957+03018	Europe/Moscow
-DE	+5230+01322	Europe/Berlin
-UK	+5130-00007	Europe/London
-FR	+4852+00220	Europe/Paris
-JP	+3541+13944	Asia/Tokyo
-CN	+3954+11623	Asia/Shanghai
-TZ	+0648+03917	Africa/Dar_es_Salaam
-KE	+0117+03649	Africa/Nairobi
-BR	-1547-04753	America/Sao_Paulo
-AR	-3436-05822	America/Argentina/Buenos_Aires
-CL	-3327-07040	America/Santiago
-"""
+with open('zone.tab', 'r') as zone_file:
+    zone_data = zone_file.read()
 
 root = build_timezone_tree_with_offsets(zone_data)
-# print_node(root) # Uncomment to see the tree structure
-
 header, cpp = generate_cpp_header(root)
 
-with open("timezone_data.h", "w") as f:
+output_path = Path("../firmware/main")
+if len(sys.argv) == 2:
+    output_path = Path(sys.argv[1])
+
+header_path = output_path / "timezone_data.h"
+cpp_path = output_path / "timezone_data.cpp"
+
+with open(header_path, "w") as f:
     f.write(header)
-with open("timezone_data.cpp", "w") as f:
+    print(f"Header written to {header_path}")
+
+with open(cpp_path, "w") as f:
     f.write(cpp)
-print("\nData successfully written to timezone_data.h")
+    print(f"CPP written to {cpp_path}")

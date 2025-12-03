@@ -23,6 +23,7 @@ X small font for menus
 - frosted glass/gel problem
 - back compatible settings format changes
 - button auto-repeat
+- save timezone in settings
 
 - menus
     X 12/24

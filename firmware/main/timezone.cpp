@@ -1,10 +1,12 @@
 //////////////////////////////////////////////////////////////////////
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <time.h>
-#include <string.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstdbool>
+#include <ctime>
+#include <cstring>
+
 #include "util.h"
 #include "button.h"
 #include "state.h"
@@ -17,62 +19,62 @@ LOG_CONTEXT("timezone");
 namespace
 {
     //////////////////////////////////////////////////////////////////////
-    // NOTE: This must equal MIN_EPOCH from zone_munger/main.py
 
-    constexpr int64_t MIN_EPOCH = 1735689600;    // int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025
-
-    //////////////////////////////////////////////////////////////////////
-
-    int get_offset_seconds(zone_offset_t const *zone_offset)
+    struct zone_offset : zone_offset_t
     {
-        return zone_offset->offset_seconds_10 * 10;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    int64_t get_epoch_seconds(zone_offset_t const *zone_offset)
-    {
-        uint16_t low = zone_offset->epoch_start_low;
-        uint16_t high = zone_offset->epoch_start_high;
-        return ((int32_t)high << 16 | low) + MIN_EPOCH;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    char const *get_node_name(tz_node_t const *node)
-    {
-        return &TZ_NAME_STRING[node->name_offset];
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    tz_details_t const *get_node_details(const tz_node_t *node)
-    {
-        if(node->num_children != 0) {
-            return nullptr;
+        int offset_seconds() const
+        {
+            return offset_seconds_10 * 10;
         }
-        return &TZ_DETAILS[node->children_index];
-    }
+
+        int64_t epoch_start() const
+        {
+            uint16_t low = epoch_start_low;
+            uint16_t high = epoch_start_high;
+            return ((uint32_t)high << 16 | low) + MIN_EPOCH;
+        }
+    };
+
+    //////////////////////////////////////////////////////////////////////
+
+    struct tz_node : tz_node_t
+    {
+        char const *name() const
+        {
+            return &TZ_NAME_STRING[name_offset];
+        }
+
+        tz_details_t const *details() const
+        {
+            if(num_children != 0) {
+                return nullptr;
+            }
+            return &TZ_DETAILS[children_index];
+        }
+    };
+
+    zone_offset const *zone_offsets = reinterpret_cast<zone_offset const *>(ZONE_OFFSETS);
+    tz_node const *tz_nodes = reinterpret_cast<tz_node const *>(TZ_NODES);
 
     //////////////////////////////////////////////////////////////////////
     // Find the most recent timezone which started before now (i.e. the current one)
 
-    zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin, zone_offset_t const *end)
+    zone_offset const *find_timezone(time_t const now, zone_offset const *begin, zone_offset const *end)
     {
         if(begin == end) {
             return end;
         }
         end -= 1;
-        int64_t end_seconds = get_epoch_seconds(end);
+        int64_t end_seconds = end->epoch_start();
         if(end_seconds <= now) {
             return end;
         }
-        zone_offset_t const *low = begin;
-        zone_offset_t const *high = end;
-        zone_offset_t const *result = nullptr;
+        zone_offset const *low = begin;
+        zone_offset const *high = end;
+        zone_offset const *result = nullptr;
         while(low < high) {
-            zone_offset_t const *mid = low + (high - low) / 2;
-            if(get_epoch_seconds(mid) < now) {
+            zone_offset const *mid = low + (high - low) / 2;
+            if(mid->epoch_start() < now) {
                 result = mid;
                 low = mid + 1;
             } else {
@@ -83,14 +85,14 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // Find the tz_node_t for a given timezone location (e.g. Europe/London, America/Argentina/Buenos_Aires)
+    // Find the tz_node for a given timezone location (e.g. Europe/London, America/Argentina/Buenos_Aires)
 
-    tz_node_t const *find_location(const char *path)
+    tz_node const *find_location(const char *path)
     {
         if(path == nullptr) {
             return nullptr;
         }
-        tz_node_t const *current_node = &TZ_NODES[0];
+        tz_node const *current_node = &tz_nodes[0];
         char const *segment_start = path;
         while(*segment_start != '\0') {
             char const *segment_end = strchr(segment_start, '/');
@@ -102,8 +104,8 @@ namespace
             uint16_t child_start_idx = current_node->children_index;
             uint16_t child_count = current_node->num_children;
             for(uint16_t i = 0; i < child_count; ++i) {
-                tz_node_t const *child = &TZ_NODES[child_start_idx + i];
-                char const *child_name = get_node_name(child);
+                tz_node const *child = &tz_nodes[child_start_idx + i];
+                char const *child_name = child->name();
                 if(strncmp(segment_start, child_name, segment_len) == 0 && child_name[segment_len] == '\0') {
                     current_node = child;
                     match_found = true;
@@ -143,22 +145,22 @@ namespace
     int node_index = 0;
     int name_x = 0;
 
-    zone_offset_t const *zone_offset_start{};
-    zone_offset_t const *zone_offset_end{};
+    zone_offset const *zone_offset_start{};
+    zone_offset const *zone_offset_end{};
 
     //////////////////////////////////////////////////////////////////////
 
-    esp_err_t set_timezone(tz_node_t const *node)
+    esp_err_t set_timezone(tz_node const *node)
     {
         if(node == nullptr) {
             return ESP_ERR_INVALID_ARG;
         }
-        tz_details_t const *details = get_node_details(node);
+        tz_details_t const *details = node->details();
         if(details == nullptr) {
             return ESP_ERR_NOT_SUPPORTED;    // non-leaf path
         }
-        zone_offset_start = &ZONE_OFFSETS[details->offset_start_index];
-        zone_offset_end = &ZONE_OFFSETS[details->offset_start_index + details->offset_count];
+        zone_offset_start = &zone_offsets[details->offset_start_index];
+        zone_offset_end = &zone_offsets[details->offset_start_index + details->offset_count];
         return ESP_OK;
     }
 
@@ -170,7 +172,7 @@ int timezone_offset_seconds = 0;
 
 void timezone_select_init()
 {
-    tz_node_t const &root_node = TZ_NODES[0];
+    tz_node const &root_node = tz_nodes[0];
     node_parent = 0;
     current_index = root_node.children_index;
     node_count = root_node.num_children;
@@ -182,8 +184,8 @@ void timezone_select_init()
 
 void timezone_select_update()
 {
-    tz_node_t const *current = &TZ_NODES[current_index + node_index];
-    char const *name = get_node_name(current);
+    tz_node const *current = &tz_nodes[current_index + node_index];
+    char const *name = current->name();
     int width = font_5x7_narrow_font.measure_string(name);
     int min_name_x = (screen_width - width) * 2;
     gfx.clear();
@@ -194,13 +196,13 @@ void timezone_select_update()
     if(button_select.pressed) {
         if(current->num_children != 0) {
             parent_index.push({ (uint16_t)current_index, (uint16_t)node_index, (uint16_t)node_parent });
-            tz_node_t const *current = &TZ_NODES[current_index + node_index];
+            tz_node const *current = &tz_nodes[current_index + node_index];
             current_index = current->children_index;
             node_index = 0;
             name_x = 0;
             node_count = current->num_children;
         } else {
-            LOG_INFO("%s selected!", get_node_name(current));
+            LOG_INFO("%s selected!", current->name());
             set_timezone(current);
             state_set(clock_state);
         }
@@ -224,8 +226,8 @@ void timezone_select_update()
             current_index = parent.index;
             node_index = parent.offset;
             node_parent = parent.parent;
-            tz_node_t const *current = &TZ_NODES[current_index];
-            node_count = TZ_NODES[node_parent].num_children;
+            tz_node const *current = &tz_nodes[current_index];
+            node_count = tz_nodes[node_parent].num_children;
             name_x = 0;
         }
     }
@@ -236,12 +238,12 @@ void timezone_select_update()
 esp_err_t timezone_set(char const *location)
 {
     LOG_INFO("Looking for timezone location %s", location);
-    tz_node_t const *node = find_location(location);
+    tz_node const *node = find_location(location);
     if(node == nullptr) {
         LOG_ERROR("Can't find timezone location %s", location);
         return ESP_ERR_NOT_FOUND;
     }
-    LOG_INFO("Found timezone location %s", get_node_name(node));
+    LOG_INFO("Found timezone location %s", node->name());
     return set_timezone(node);
 }
 
@@ -253,10 +255,10 @@ esp_err_t timezone_update(timeval &current_time, int &offset_seconds)
         offset_seconds = 0;
         return ESP_ERR_INVALID_STATE;
     }
-    zone_offset_t const *found = find_timezone(current_time.tv_sec, zone_offset_start, zone_offset_end);
+    zone_offset const *found = find_timezone(current_time.tv_sec, zone_offset_start, zone_offset_end);
     if(!found) {
         return ESP_ERR_NOT_FOUND;
     }
-    offset_seconds = get_offset_seconds(found);
+    offset_seconds = found->offset_seconds();
     return ESP_OK;
 }
