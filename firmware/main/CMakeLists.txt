@@ -16,13 +16,13 @@ idf_component_register(
         ping.cpp
         timezone.cpp
         timezone_data.cpp
-        font_5x7.cpp
-        font_5x7_narrow.cpp
-        font_5x6.cpp
-        square_font.cpp
-        big_caps.cpp
         menu.cpp
         timezone_data.cpp
+        fonts/font_5x7.cpp
+        fonts/font_5x7_narrow.cpp
+        fonts/font_5x6.cpp
+        fonts/square_font.cpp
+        fonts/big_caps.cpp
     PRIV_REQUIRES
         driver
         bt
@@ -33,7 +33,7 @@ idf_component_register(
         app_update
         esp_http_client
     INCLUDE_DIRS
-        .
+        . fonts/
 )
 if (CONFIG_PROJECT_BUILD_DEBUG)
     # Define the macro 'DEBUG' for all C/C++ files in your components
