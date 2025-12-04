@@ -1,10 +1,6 @@
-//////////////////////////////////////////////////////////////////////
-
-#include <esp_sntp.h>
-
 #include <freertos/FreeRTOS.h>
-
-#include "nvs_flash.h"
+#include <sys/time.h>
+#include <nvs_flash.h>
 
 #include "main.h"
 #include "util.h"
@@ -24,42 +20,6 @@
 LOG_CONTEXT("main");
 
 EventGroupHandle_t system_events;
-
-timeval local_wall_time;
-
-//////////////////////////////////////////////////////////////////////
-
-struct : console_command_t<"mem", "show stack and heap usage", "">
-{
-    void on_command(int argc, char **argv) override
-    {
-        char buffer[512];
-        vTaskList(buffer);
-        printf("%s\n", buffer);
-        auto x = esp_get_minimum_free_heap_size();
-        printf("HEAP: %lu\n", x);
-    }
-} cmd_mem;
-
-//////////////////////////////////////////////////////////////////////
-
-struct : console_command_t<"factory", "erase NVS partition", "">
-{
-    void on_command(int argc, char **argv) override
-    {
-        state_set(factory_reset_state);
-    }
-} cmd_factory;
-
-//////////////////////////////////////////////////////////////////////
-
-struct : console_command_t<"reset", "reset the ESP32", "">
-{
-    void on_command(int argc, char **argv) override
-    {
-        esp_restart();
-    }
-} cmd_reset;
 
 //////////////////////////////////////////////////////////////////////
 
@@ -91,16 +51,9 @@ extern "C" void app_main()
 
     while(true) {
         display_update();
-
-        timeval now;
-        gettimeofday(&now, NULL);
-        timezone_update(now, timezone_offset_seconds);
-        local_wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
-        local_wall_time.tv_usec = now.tv_usec;
-
+        clock_update();
         button_update();
-        int ambient = lux_update();
-        display->set_ambient(ambient);
+        lux_update();
         state_update();
         display->update_ambient();
     }

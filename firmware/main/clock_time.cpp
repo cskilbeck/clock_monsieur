@@ -77,13 +77,12 @@ namespace
         return true;
     }
 
+    char http_buffer[MAX_HTTP_OUTPUT_BUFFER];
+    http_data_context_t context(http_buffer, sizeof(http_buffer));
+
 }    // namespace
 
-//////////////////////////////////////////////////////////////////////
-// Context structure to hold response data for an HTTP request
-
-char http_buffer[MAX_HTTP_OUTPUT_BUFFER];
-http_data_context_t context(http_buffer, sizeof(http_buffer));
+timeval local_wall_time;
 
 //////////////////////////////////////////////////////////////////////
 // request to ip-api.com to get lat/lon.
@@ -209,7 +208,7 @@ void sntp_task(void *)
 void clock_init()
 {
     LOG_INFO("init");
-    
+
     xTaskCreatePinnedToCore(sntp_task, "sntp", 1024 * 4, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 4, NULL, 1, NULL, 0);
 
@@ -219,4 +218,15 @@ void clock_init()
         LOG_INFO("Setting timezone to node %d", settings.selected_timezone_node);
         timezone_node_set(settings.selected_timezone_node);
     }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void clock_update()
+{
+    timeval now;
+    gettimeofday(&now, NULL);
+    timezone_get_offset_seconds(now, timezone_offset_seconds);
+    local_wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
+    local_wall_time.tv_usec = now.tv_usec;
 }

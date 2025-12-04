@@ -6,8 +6,6 @@
 
 extern EventGroupHandle_t system_events;
 
-extern timeval local_wall_time;
-
 #define SYS_EVENT_BOOT_MSG_COMPLETE BIT0
 #define SYS_EVENT_WIFI_CONNECTED BIT1
 #define SYS_EVENT_NETWORK_CONNECTED BIT2

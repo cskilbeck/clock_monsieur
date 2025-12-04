@@ -8,6 +8,7 @@
 #include "nvs_flash.h"
 
 #include "util.h"
+#include "state.h"
 #include "settings.h"
 #include "console.h"
 
@@ -172,3 +173,37 @@ struct : console_command_t<"help", "show commands", "command">
         }
     }
 } cmd_help;
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"mem", "show stack and heap usage", "">
+{
+    void on_command(int argc, char **argv) override
+    {
+        char buffer[512];
+        vTaskList(buffer);
+        printf("%s\n", buffer);
+        auto x = esp_get_minimum_free_heap_size();
+        printf("HEAP: %lu\n", x);
+    }
+} cmd_mem;
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"factory", "erase NVS partition", "">
+{
+    void on_command(int argc, char **argv) override
+    {
+        state_set(factory_reset_state);
+    }
+} cmd_factory;
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"reset", "reset the ESP32", "">
+{
+    void on_command(int argc, char **argv) override
+    {
+        esp_restart();
+    }
+} cmd_reset;

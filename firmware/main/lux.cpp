@@ -6,6 +6,7 @@
 #include "freertos/task.h"
 
 #include "gpio_defs.h"
+#include "display.h"
 #include "lux.h"
 #include "settings.h"
 #include "util.h"
@@ -193,8 +194,10 @@ void lux_init()
 
 //////////////////////////////////////////////////////////////////////
 
-int lux_update()
+void lux_update()
 {
+    int lux = 128;
+
     // ambient light response
     float ambient = (float)brightness * (1.0f / 65535);
 
@@ -209,8 +212,9 @@ int lux_update()
         int base = (settings.brightness + 1) / 64;
         int max = settings.brightness;
         int range = max - base;
-        return (int)(t * range) + base;
+        lux = (int)(t * range) + base;
     } else {
-        return settings.brightness;
+        lux = settings.brightness;
     }
+    display->set_ambient(lux);
 }

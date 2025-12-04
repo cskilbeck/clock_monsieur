@@ -262,7 +262,7 @@ esp_err_t timezone_node_set(int node_index)
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t timezone_update(timeval &current_time, int &offset_seconds)
+esp_err_t timezone_get_offset_seconds(timeval &current_time, int &offset_seconds)
 {
     if(zone_offset_start == nullptr) {
         offset_seconds = 0;
