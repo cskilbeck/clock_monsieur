@@ -107,18 +107,18 @@ esp_err_t get_location()
     }
     DEFER(cJSON_Delete(root));
 
-    char const *location = json_string(root, "timezone");
-    if(location == nullptr) {
-        LOG_ERROR("No timezone in ip-api response");
-    } else {
-        timezone_set(location);
-    }
-
     char const *status = json_string(root, "status", "no status?");
     if(strcmp(status, "success") != 0) {
         char const *message = json_string(root, "message", "no message?");
         LOG_ERROR("Failed: %s (%s)", status, message);
         return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    char const *location = json_string(root, "timezone");
+    if(location == nullptr) {
+        LOG_ERROR("No timezone in ip-api response");
+    } else {
+        timezone_set(location);
     }
 
     double lat;
@@ -132,6 +132,7 @@ esp_err_t get_location()
 
     xEventGroupSetBits(system_events, SYS_EVENT_GOT_LOCATION);
     xEventGroupClearBits(system_events, SYS_EVENT_NEED_LOCATION);
+
     LOG_INFO("Location: Lat=%.4f, Lon=%.4f", current_lat, current_lon);
     return ESP_OK;
 }
@@ -207,12 +208,15 @@ void sntp_task(void *)
 
 void clock_init()
 {
+    LOG_INFO("init");
+    
     xTaskCreatePinnedToCore(sntp_task, "sntp", 1024 * 4, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 4, NULL, 1, NULL, 0);
 
     if(settings.timezone_mode == timezone_mode_t::automatic) {
         xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
     } else {
+        LOG_INFO("Setting timezone to node %d", settings.selected_timezone_node);
         timezone_node_set(settings.selected_timezone_node);
     }
 }

@@ -1,0 +1,10 @@
+menu "Configuration"
+    
+    config PROJECT_BUILD_DEBUG
+    bool "Enable debug build features (defines DEBUG macro)"
+    default n
+    help
+        Enables extra debug checks, logging, and defines the C/C++ 
+        preprocessor macro 'DEBUG' for conditional compilation.
+
+endmenu

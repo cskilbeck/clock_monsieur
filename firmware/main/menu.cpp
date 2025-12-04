@@ -288,9 +288,10 @@ namespace
 
     item_t timezone_menu{ "Timezone", &root_menu };
     item_t timezone_auto_menu{ "Auto", &timezone_menu, [] {
+                                  LOG_INFO("Auto timezone");
                                   settings.timezone_mode = timezone_mode_t::automatic;
                                   xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
-                                  go(&timezone_menu);
+                                  state_set(clock_state);
                               } };
     item_t timezone_select_menu{ "Select", &timezone_menu, [] { state_set(timezone_select_state); } };
 

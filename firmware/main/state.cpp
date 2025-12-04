@@ -105,11 +105,16 @@ void boot_state_t::on_start()
 
 void boot_state_t::on_update()
 {
+#if defined(DEBUG)
+    int const slowness = 1;
+#else
+    int const slowness = 3;
+#endif
     const font_t &font = big_caps_font;
     factory_reset &= button_left.held && button_right.held;
     int content_width = font.measure_string(boot_msg);
-    int max_x = content_width - screen_width;
-    int x = screen_width - 1 - frames;
+    int max_x = (content_width - screen_width) * slowness;
+    int x = screen_width - 1 - frames / slowness;
     display->set_ambient(160);
     gfx.clear();
     font.draw_string(gfx, boot_msg, x, 0, 0.6);

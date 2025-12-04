@@ -35,6 +35,14 @@ idf_component_register(
     INCLUDE_DIRS
         .
 )
+if (CONFIG_PROJECT_BUILD_DEBUG)
+    # Define the macro 'DEBUG' for all C/C++ files in your components
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC "DEBUG")
+    message(STATUS "Build Configuration: DEBUG is defined")
+else()
+    message(STATUS "Build Configuration: DEBUG is NOT defined")
+endif()
+
 
 target_compile_options(
     ${COMPONENT_LIB}

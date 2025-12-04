@@ -251,7 +251,8 @@ esp_err_t timezone_set(char const *location)
 
 esp_err_t timezone_node_set(int node_index)
 {
-    if(node_index < 0 || node_index < countof(TZ_NODES)) {
+    if(node_index < 0 || node_index >= countof(TZ_NODES)) {
+        LOG_ERROR("BAD timezone node");
         return ESP_ERR_INVALID_ARG;
     }
     tz_node const *node = tz_nodes + node_index;

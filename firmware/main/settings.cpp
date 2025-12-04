@@ -69,6 +69,10 @@ esp_err_t settings_t::load()
     }
     *this = temp_settings;
     LOG_INFO("Settings loaded OK");
+
+#undef X
+#define X(ID, NAME, TYPE, VALUE) LOG_INFO("%s = %d", #NAME, settings.NAME);
+    SETTINGS_FIELDS
     return err;
 }
 
