@@ -59,7 +59,8 @@ esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
     esp_http_client_config_t config{};
     config.url = LATEST_URL;
     config.crt_bundle_attach = esp_crt_bundle_attach;
-    config.timeout_ms = 5000;
+    config.timeout_ms = 10000;
+    config.max_authorization_retries = 10;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if(client == NULL) {

@@ -1,4 +1,4 @@
-X add reset button
+ add reset button
 X use GPIO0 for one of the buttons
 X fix usb/jtag
 X half-bridge driver for anodes + n channel level shifter
@@ -15,21 +15,10 @@ X measure/tweak cc drain capacitors
 X save/load settings in NVS
 X small font for menus
 X diagnose esp-prog boot / reset problem
-
-- put ambient light sensor on the front
-- tweak Ambient light sensor gamma ramp
-- bigger less ridiculous buttons
-
-- frosted glass/gel problem
-
-- back compatible settings format changes
-- save timezone in settings
-
-- button auto-repeat
-
-- fancy menu scrolling
-
-- menus
+X back compatible settings format changes
+X save timezone in settings
+X Fix factory reset UI
+X menus
     X 12/24
     X Seconds mode
     X Colon mode
@@ -37,6 +26,13 @@ X diagnose esp-prog boot / reset problem
     X Clock font
     X Brightness
     X Set timezone
-    - Setup WiFi
-    - Reset WiFi
-    - Undo last OTA update?
+
+- button auto-repeat
+- fancy menu scrolling
+? AM/PM font for 12 hour clock
+
+- put ambient light sensor on the front
+- tweak Ambient light sensor gamma ramp
+- bigger less ridiculous buttons
+
+- frosted glass/gel problem
