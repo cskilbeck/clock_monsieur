@@ -111,7 +111,10 @@ void boot_state_t::on_update()
     int const slowness = 3;
 #endif
     const font_t &font = big_caps_font;
-    factory_reset &= button_left.held && button_right.held;
+    bool any_button_held = button_select.held || button_right.held || button_left.held || button_up.held || button_down.held;
+    if(!any_button_held) {
+        factory_reset = false;
+    }
     int content_width = font.measure_string(boot_msg);
     int max_x = (content_width - screen_width) * slowness;
     int x = screen_width - 1 - frames / slowness;
@@ -153,6 +156,7 @@ void wifi_check_state_t::on_update()
     }
     bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
     bool provisioning = (sys_events & SYS_EVENT_PROVISIONING) != 0;
+    bool in_progress = (sys_events & SYS_EVENT_PROVISIONING_IN_PROGRESS) != 0;
     bool connected = (sys_events & SYS_EVENT_BLE_CONNECTED) != 0;
     bool error = (sys_events & SYS_EVENT_PROVISIONING_ERROR) != 0;
     bool done = (sys_events & SYS_EVENT_PROVISIONING_DONE) != 0;
@@ -164,13 +168,17 @@ void wifi_check_state_t::on_update()
     }
     char const *msg = "Network?";
     if(!wifi_up) {
-        msg = "WiFi?";
+        msg = "WiFi connecting...";
     }
     if(provisioning) {
-        msg = "Searching...";
+        msg = "Use app: ESP BLE Provisioning";
     }
-    if(connected) {
-        msg = provisioning_pop();
+    char buffer[16];
+    if(in_progress) {
+        msg = "Enter WiFi details";
+    } else if(connected) {
+        snprintf(buffer, sizeof(buffer) - 1, "PIN:%s", provisioning_pop());
+        msg = buffer;
     }
     if(error) {
         msg = "Error...";
@@ -186,20 +194,46 @@ void wifi_check_state_t::on_update()
 }
 
 //////////////////////////////////////////////////////////////////////
+// Show the message for 10 seconds
+// If they hold UP for 3 or more seconds during that time, factory reset
+// Else just go wifi_check_state (i.e. continue boot process)
+
+void factory_reset_state_t::on_start()
+{
+    released_time = 0.0;
+    held_time = 0.0;
+}
 
 void factory_reset_state_t::on_update()
 {
-    char const *msg = "Factory Reset!";
-    int x = 30 - frames / 2;
     display->set_ambient(255);
     gfx.clear();
-    int width = font_5x7_font.draw_string(gfx, msg, x, 0, 1);
-    gfx.display();
-    if(x < -width) {
-        ESP_LOG_ERR(nvs_flash_erase());
-        ESP_LOG_ERR(nvs_flash_init());
-        esp_restart();
+    if(button_up.held) {
+        char buffer[2];
+        float held = state_elapsed_seconds - held_time;
+        if(held >= 3.0) {
+            ESP_LOG_ERR(nvs_flash_erase());
+            ESP_LOG_ERR(nvs_flash_init());
+            esp_restart();
+        }
+        sprintf(buffer, "%d", (int)(4 - held));
+        font_5x7_font.draw_string(gfx, buffer, 0, 0, 1);
+    } else {
+        held_time = state_elapsed_seconds;
+        if(button_up.released) {
+            released_time = state_elapsed_seconds;
+        }
+        char const *msg = "Hold UP to Factory Reset!";
+        int width = font_5x7_font.measure_string(msg);
+        int max_width = width + screen_width;
+        double t = state_elapsed_seconds - released_time;
+        int x = ((int)(t * screen_width)) % max_width;
+        font_5x7_font.draw_string(gfx, msg, screen_width - x, 0, 1);
+        if(t > 10) {
+            state_set(wifi_check_state);
+        }
     }
+    gfx.display();
 }
 
 //////////////////////////////////////////////////////////////////////

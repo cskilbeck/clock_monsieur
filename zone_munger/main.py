@@ -296,6 +296,9 @@ def build_timezone_tree_with_offsets(zone_tab_data: str, csv_file_path: str = 'z
             else:
                 node['timezone_offsets'] = []  # No timezone data available
 
+    longest_key = max(timezone_data.keys(), key=len)
+    print(f"Longest location name: {longest_key} is {len(longest_key)}")
+
     add_timezone_data(tree_root)
     return tree_root
 

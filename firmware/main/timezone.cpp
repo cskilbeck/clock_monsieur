@@ -21,6 +21,8 @@ namespace
 {
     //////////////////////////////////////////////////////////////////////
 
+    int constexpr LONGEST_LOCATION_NAME = 30;    // America/Argentina/Buenos_Aires is 30
+
     struct zone_offset : zone_offset_t
     {
         int offset_seconds() const
@@ -48,6 +50,9 @@ namespace
         tz_details_t const *details() const
         {
             if(num_children != 0) {
+                return nullptr;
+            }
+            if(children_index > countof(TZ_DETAILS)) {
                 return nullptr;
             }
             return &TZ_DETAILS[children_index];
@@ -131,6 +136,11 @@ namespace
         uint16_t index;     // top node
         uint16_t offset;    // where in the list of nodes
         uint16_t parent;    // parent node
+
+        char const *name() const
+        {
+            return tz_nodes[index + offset].name();
+        }
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -200,9 +210,19 @@ void timezone_select_update()
             name_x = 0;
             node_count = current->num_children;
         } else {
-            LOG_INFO("%s selected!", current->name());
             settings.timezone_mode = timezone_mode_t::selected;
-            settings.selected_timezone_node = actual_node;
+
+            auto concat = [](char const *s) { strncat(settings.location.name, s, sizeof(settings.location.name) - 1); };
+
+            // Construct name of timezone location for settings
+            settings.location.name[0] = 0;
+            for(size_t i = 0; i < parent_index.size; ++i) {
+                concat(parent_index.buffer[i].name());
+                concat("/");
+            }
+            concat(current->name());
+            LOG_INFO("SELECTED: %s", settings.location.name);
+
             set_timezone(current);
             state_set(clock_state);
         }

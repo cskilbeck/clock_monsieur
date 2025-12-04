@@ -215,8 +215,8 @@ void clock_init()
     if(settings.timezone_mode == timezone_mode_t::automatic) {
         xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
     } else {
-        LOG_INFO("Setting timezone to node %d", settings.selected_timezone_node);
-        timezone_node_set(settings.selected_timezone_node);
+        LOG_INFO("Setting timezone to %s", settings.location.name);
+        timezone_set(settings.location.name);
     }
 }
 

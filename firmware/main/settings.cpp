@@ -1,9 +1,9 @@
 //////////////////////////////////////////////////////////////////////
 
 #include <cstdio>
+#include <cstdio>
 
-#include "nvs_flash.h"
-#include "nvs.h"
+#include "nvs_handle.hpp"
 
 #include "settings.h"
 #include "console.h"
@@ -14,7 +14,37 @@ LOG_CONTEXT("settings");
 #define SETTINGS_NAMESPACE "settings"
 #define SETTINGS_KEY "data"
 
+settings_t const default_settings;
+
+settings_t loaded_settings;
 settings_t settings;
+
+using nvs::NVSHandle;
+
+//////////////////////////////////////////////////////////////////////
+
+namespace
+{
+    template <typename T> esp_err_t save_setting(NVSHandle *nvs_handle, char const *key, char const *name, T const &value)
+    {
+        return nvs_handle->set_item(key, value);
+    }
+
+    template <> esp_err_t save_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_str_t const &value)
+    {
+        return nvs_handle->set_string(key, value.name);
+    }
+
+    template <typename T> esp_err_t load_setting(NVSHandle *nvs_handle, char const *key, char const *name, T &value)
+    {
+        return nvs_handle->get_item(key, value);
+    }
+
+    template <> esp_err_t load_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_str_t &value)
+    {
+        return nvs_handle->get_string(key, value.name, sizeof(value.name));
+    }
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 
@@ -22,26 +52,32 @@ esp_err_t settings_t::save()
 {
     LOG_INFO("Saving settings");
 
-    nvs_handle_t nvs_handle;
-
-    esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READWRITE, &nvs_handle);
+    esp_err_t err;
+    std::unique_ptr<NVSHandle> nvs_handle = nvs::open_nvs_handle(SETTINGS_NAMESPACE, NVS_READWRITE, &err);
     if(err != ESP_OK) {
         LOG_ERROR("Error (%s) opening NVS handle!", esp_err_to_name(err));
         return err;
     }
-    DEFER(nvs_close(nvs_handle));
 
-    err = nvs_set_blob(nvs_handle, SETTINGS_KEY, &settings, sizeof(settings));
-    if(err != ESP_OK) {
-        LOG_ERROR("Failed to write settings: %s", esp_err_to_name(err));
-        return err;
+    char key_name[5];
+
+#undef X
+#define X(ID, NAME, TYPE, VALUE)                                                    \
+    if(settings.NAME != loaded_settings.NAME) {                                     \
+        sprintf(key_name, "%d", ID);                                                \
+        LOG_INFO("  Save [%s] %s (%s)", key_name, #NAME, to_string(settings.NAME)); \
+        save_setting(nvs_handle.get(), key_name, #NAME, settings.NAME);             \
+        loaded_settings.NAME = settings.NAME;                                       \
     }
 
-    err = nvs_commit(nvs_handle);
+    SETTINGS_FIELDS
+
+    err = nvs_handle->commit();
     if(err != ESP_OK) {
         LOG_ERROR("Failed to commit settings to NVS: %s", esp_err_to_name(err));
+    } else {
+        LOG_INFO("Settings saved OK");
     }
-    LOG_INFO("Settings saved OK");
     return err;
 }
 
@@ -51,28 +87,30 @@ esp_err_t settings_t::load()
 {
     LOG_INFO("Loading settings");
 
-    nvs_handle_t nvs_handle;
-
-    esp_err_t err = nvs_open(SETTINGS_NAMESPACE, NVS_READONLY, &nvs_handle);
+    esp_err_t err;
+    auto nvs_handle = nvs::open_nvs_handle(SETTINGS_NAMESPACE, NVS_READONLY, &err);
     if(err != ESP_OK) {
         LOG_ERROR("Can't find saved settings: (%s)", esp_err_to_name(err));
         return err;
     }
-    DEFER(nvs_close(nvs_handle));
 
-    settings_t temp_settings;
-    size_t size = sizeof(temp_settings);
-    err = nvs_get_blob(nvs_handle, SETTINGS_KEY, &temp_settings, &size);
-    if(err != ESP_OK) {
-        LOG_ERROR("Failed to load settings: %s", esp_err_to_name(err));
-        return err;
-    }
-    *this = temp_settings;
-    LOG_INFO("Settings loaded OK");
+    char key_name[5];
 
 #undef X
-#define X(ID, NAME, TYPE, VALUE) LOG_INFO("%s = %d", #NAME, settings.NAME);
+#define X(ID, NAME, TYPE, VALUE)                                                                 \
+    {                                                                                            \
+        sprintf(key_name, "%d", ID);                                                             \
+        if(load_setting(nvs_handle.get(), key_name, #NAME, loaded_settings.NAME) == ESP_OK) {    \
+            LOG_INFO("  Loaded [%s] %s = %s", key_name, #NAME, to_string(loaded_settings.NAME)); \
+        }                                                                                        \
+    }
+
     SETTINGS_FIELDS
+
+    settings = loaded_settings;
+
+    LOG_INFO("Settings loaded OK");
+
     return err;
 }
 

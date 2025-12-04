@@ -14,16 +14,20 @@ X OTA firmware update
 X measure/tweak cc drain capacitors
 X save/load settings in NVS
 X small font for menus
+X diagnose esp-prog boot / reset problem
 
 - put ambient light sensor on the front
 - tweak Ambient light sensor gamma ramp
 - bigger less ridiculous buttons
-- diagnose esp-prog boot / reset problem
 
 - frosted glass/gel problem
+
 - back compatible settings format changes
-- button auto-repeat
 - save timezone in settings
+
+- button auto-repeat
+
+- fancy menu scrolling
 
 - menus
     X 12/24

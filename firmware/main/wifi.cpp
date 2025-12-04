@@ -232,7 +232,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
 
         case WIFI_PROV_END:
             /* De-initialize manager once provisioning is finished */
-            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING | SYS_EVENT_BLE_CONNECTED);
+            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING | SYS_EVENT_BLE_CONNECTED | SYS_EVENT_PROVISIONING_IN_PROGRESS);
             wifi_prov_mgr_deinit();
             break;
 
@@ -272,7 +272,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             ESP_LOGI(TAG, "BLE transport: Connected!");
             break;
         case PROTOCOMM_TRANSPORT_BLE_DISCONNECTED:
-            xEventGroupClearBits(system_events, SYS_EVENT_BLE_CONNECTED);
+            xEventGroupClearBits(system_events, SYS_EVENT_BLE_CONNECTED | SYS_EVENT_PROVISIONING_IN_PROGRESS);
             ESP_LOGI(TAG, "BLE transport: Disconnected!");
             break;
         default:
@@ -282,6 +282,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         switch(event_id) {
         case PROTOCOMM_SECURITY_SESSION_SETUP_OK:
             ESP_LOGI(TAG, "Secured session established!");
+            xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_IN_PROGRESS);
             break;
         case PROTOCOMM_SECURITY_SESSION_INVALID_SECURITY_PARAMS:
             ESP_LOGE(TAG, "Received invalid security parameters for establishing secure session!");

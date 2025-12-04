@@ -40,7 +40,11 @@ struct wifi_check_state_t : state_handler_t
 
 struct factory_reset_state_t : state_handler_t
 {
+    void on_start() override;
     void on_update() override;
+
+    float held_time;
+    float released_time;
 };
 
 //////////////////////////////////////////////////////////////////////
