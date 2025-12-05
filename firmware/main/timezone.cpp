@@ -229,9 +229,11 @@ void timezone_select_update()
     }
     if(button_up.pressed && node_index != 0) {
         node_index -= 1;
+        name_x = 0;
     }
     if(button_down.pressed && node_index < node_count - 1) {
         node_index += 1;
+        name_x = 0;
     }
     if(button_right.held && name_x > min_name_x) {
         name_x -= 1;

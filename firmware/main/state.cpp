@@ -156,6 +156,7 @@ void wifi_check_state_t::on_update()
     }
     bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
     bool provisioning = (sys_events & SYS_EVENT_PROVISIONING) != 0;
+    bool got_ssid = (sys_events & SYS_EVENT_PROVISIONING_GOT_SSID) != 0;
     bool in_progress = (sys_events & SYS_EVENT_PROVISIONING_IN_PROGRESS) != 0;
     bool connected = (sys_events & SYS_EVENT_BLE_CONNECTED) != 0;
     bool error = (sys_events & SYS_EVENT_PROVISIONING_ERROR) != 0;
@@ -174,7 +175,9 @@ void wifi_check_state_t::on_update()
         msg = "Use app: ESP BLE Provisioning";
     }
     char buffer[16];
-    if(in_progress) {
+    if(got_ssid) {
+        msg = "Connecting...";
+    } else if(in_progress) {
         msg = "Enter WiFi details";
     } else if(connected) {
         snprintf(buffer, sizeof(buffer) - 1, "PIN:%s", provisioning_pop());

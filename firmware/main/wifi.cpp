@@ -32,6 +32,13 @@ static char const *TAG = "wifi";
 #define SEC_PARTITION_LABEL "prov_dat"
 #define SEC_PARTITION_SUBTYPE ((esp_partition_subtype_t)0x40)
 
+/* What is the Device Service Name that we want
+ * This translates to :
+ *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
+ *     - device name when scheme is wifi_prov_scheme_ble
+ */
+#define SERVICE_NAME "Clock Monsieur"
+
 esp_err_t start_provisioning();
 
 int wifi_retries = 0;
@@ -202,6 +209,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
 
         case WIFI_PROV_CRED_RECV: {
+            xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_GOT_SSID);
             wifi_sta_config_t *wifi_sta_cfg = (wifi_sta_config_t *)event_data;
             ESP_LOGI(TAG, "Received Wi-Fi credentials:");
             ESP_LOGI(TAG, "    SSID     : %s", (const char *)wifi_sta_cfg->ssid);
@@ -232,7 +240,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
 
         case WIFI_PROV_END:
             /* De-initialize manager once provisioning is finished */
-            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING | SYS_EVENT_BLE_CONNECTED | SYS_EVENT_PROVISIONING_IN_PROGRESS);
+            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
             wifi_prov_mgr_deinit();
             break;
 
@@ -260,7 +268,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
         }
     } else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING);
+        xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
@@ -272,7 +280,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             ESP_LOGI(TAG, "BLE transport: Connected!");
             break;
         case PROTOCOMM_TRANSPORT_BLE_DISCONNECTED:
-            xEventGroupClearBits(system_events, SYS_EVENT_BLE_CONNECTED | SYS_EVENT_PROVISIONING_IN_PROGRESS);
+            xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
             ESP_LOGI(TAG, "BLE transport: Disconnected!");
             break;
         default:
@@ -296,13 +304,6 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
         }
     }
-}
-
-//////////////////////////////////////////////////////////////////////
-
-static void get_device_service_name(char *service_name, size_t max)
-{
-    snprintf(service_name, max, "Clock Monsieur");
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -334,14 +335,6 @@ esp_err_t start_provisioning()
 {
     ESP_LOGI(TAG, "Starting provisioning");
     xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING);
-
-    /* What is the Device Service Name that we want
-     * This translates to :
-     *     - Wi-Fi SSID when scheme is wifi_prov_scheme_softap
-     *     - device name when scheme is wifi_prov_scheme_ble
-     */
-    char service_name[16];
-    get_device_service_name(service_name, sizeof(service_name));
 
     wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
     /* The username must be the same one, which has been used in the generation of salt and verifier */
@@ -388,7 +381,7 @@ esp_err_t start_provisioning()
     ESP_ERROR_CHECK(wifi_prov_mgr_disable_auto_stop(1000));
 
     /* Start provisioning service */
-    ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, service_name, service_key));
+    ESP_ERROR_CHECK(wifi_prov_mgr_start_provisioning(security, (const void *)sec_params, SERVICE_NAME, service_key));
     return ESP_OK;
 }
 

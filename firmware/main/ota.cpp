@@ -238,10 +238,9 @@ void ota_task(void *)
         }
         // wait 24 hours before checking again
         int64_t one_day_seconds = 60 * 60 * 24;
-        int64_t one_day_millis = one_day_seconds * 1000;
-        int64_t ticks = one_day_millis / configTICK_RATE_HZ;
-        LOG_INFO("Waiting 24 hours (%u ticks) before checking OTA version again", (TickType_t)ticks);
-        vTaskDelay((TickType_t)ticks);
+        int64_t one_day_ticks = one_day_seconds * configTICK_RATE_HZ;
+        LOG_INFO("Waiting 24 hours (%u ticks) before checking OTA version again", (TickType_t)one_day_ticks);
+        vTaskDelay((TickType_t)one_day_ticks);
     }
 }
 
