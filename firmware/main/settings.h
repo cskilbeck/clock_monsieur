@@ -5,33 +5,29 @@
 #include <cstdint>
 #include <cstring>
 
-// Thus far, settings are all either uint8_t (possibly via an enum class) or a timezone_str_t
+#include "timezone_data.h"
 
-struct timezone_str_t
+// Thus far, settings are all either uint8_t (possibly via an enum class) or a timezone_location_t
+
+struct timezone_location_t
 {
-    // max timezone location name length is currently 30 (America/Argentina/Buenos_Aires)
-    char name[32] = { 0 };
+    char name[LONGEST_TZ_LOCATION_NAME + 1] = { 0 };
 };
 
-inline bool operator==(timezone_str_t a, timezone_str_t b)
+inline bool operator==(timezone_location_t a, timezone_location_t b)
 {
     return strcmp(a.name, b.name) == 0;
 }
 
-inline char const *to_string(timezone_str_t const &a)
-{
-    return a.name;
-}
-
 // !!!! returns a static buffer !!!!
-template <typename T> inline char const *to_string(T a)
+template <typename T> inline char const *to_string(T const &a)
 {
     static char buffer[8];
     sprintf(buffer, "%u", (uint8_t)a);
     return buffer;
 }
 
-template <> inline char const *to_string(timezone_str_t const &a)
+template <> inline char const *to_string(timezone_location_t const &a)
 {
     return a.name;
 }
@@ -50,7 +46,7 @@ template <> inline char const *to_string(timezone_str_t const &a)
     X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::medium) \
     X(6, clock_font, clock_font_t, clock_font_t::modern)                \
     X(7, timezone_mode, timezone_mode_t, timezone_mode_t::automatic)    \
-    X(8, location, timezone_str_t, 0)
+    X(8, location, timezone_location_t, 0)
 
 //////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display

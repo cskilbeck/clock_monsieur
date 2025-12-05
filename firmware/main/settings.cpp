@@ -30,7 +30,7 @@ namespace
         return nvs_handle->set_item(key, value);
     }
 
-    template <> esp_err_t save_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_str_t const &value)
+    template <> esp_err_t save_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_location_t const &value)
     {
         return nvs_handle->set_string(key, value.name);
     }
@@ -40,7 +40,7 @@ namespace
         return nvs_handle->get_item(key, value);
     }
 
-    template <> esp_err_t load_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_str_t &value)
+    template <> esp_err_t load_setting(NVSHandle *nvs_handle, char const *key, char const *name, timezone_location_t &value)
     {
         return nvs_handle->get_string(key, value.name, sizeof(value.name));
     }

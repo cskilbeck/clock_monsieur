@@ -1,4 +1,4 @@
- add reset button
+X add reset button
 X use GPIO0 for one of the buttons
 X fix usb/jtag
 X half-bridge driver for anodes + n channel level shifter
@@ -26,9 +26,11 @@ X menus
     X Clock font
     X Brightness
     X Set timezone
+X Auto-save settings
 
 - button auto-repeat
 - fancy menu scrolling
+
 ? AM/PM font for 12 hour clock
 
 - put ambient light sensor on the front

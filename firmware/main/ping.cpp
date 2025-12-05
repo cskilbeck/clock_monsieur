@@ -15,7 +15,6 @@ LOG_CONTEXT("ping");
 
 namespace
 {
-    bool done;
     int pings;
     int fails;
 
@@ -23,8 +22,7 @@ namespace
 
     void ping_end(esp_ping_handle_t hdl, void *args)
     {
-        done += 1;
-        LOG_INFO("END %d");
+        LOG_INFO("PING END");
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -76,7 +74,6 @@ esp_err_t do_ping_check()
 
     DEFER(esp_ping_delete_session(ping_handle));
 
-    done = false;
     pings = 0;
     fails = 0;
 

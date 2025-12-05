@@ -212,25 +212,32 @@ void factory_reset_state_t::on_update()
     display->set_ambient(255);
     gfx.clear();
     if(button_up.held) {
+        int constexpr RESET_HOLD_TIME = 5;
         char buffer[2];
         float held = state_elapsed_seconds - held_time;
-        if(held >= 3.0) {
+        if(held >= RESET_HOLD_TIME) {
             ESP_LOG_ERR(nvs_flash_erase());
             ESP_LOG_ERR(nvs_flash_init());
             esp_restart();
         }
-        sprintf(buffer, "%d", (int)(4 - held));
-        font_5x7_font.draw_string(gfx, buffer, 0, 0, 1);
+        sprintf(buffer, "%d", (int)((RESET_HOLD_TIME + 1) - held));
+        font_5x7_font.draw_string(gfx, buffer, 11, 0, 1);
+        int seconds = (int)(held * 60 / RESET_HOLD_TIME);
+        float scale = 1.0f / seconds;
+        gfx.set_second_only(1.0f, 0);
+        for(int i = 1; i < seconds; ++i) {
+            gfx.set_second_only(i * scale, i);
+        }
     } else {
         held_time = state_elapsed_seconds;
         if(button_up.released) {
             released_time = state_elapsed_seconds;
         }
-        char const *msg = "Hold UP to Factory Reset!";
+        char const *msg = "Press UP to Factory Reset!";
         int width = font_5x7_font.measure_string(msg);
         int max_width = width + screen_width;
         double t = state_elapsed_seconds - released_time;
-        int x = ((int)(t * screen_width)) % max_width;
+        int x = ((int)(t * 2 * screen_width)) % max_width;
         font_5x7_font.draw_string(gfx, msg, screen_width - x, 0, 1);
         if(t > 10) {
             state_set(wifi_check_state);

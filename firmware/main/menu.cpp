@@ -27,6 +27,7 @@ namespace
     item_t *current_item{ nullptr };
 
     void go(item_t *where);
+    void menu_exit();
 
     struct item_t
     {
@@ -82,12 +83,14 @@ namespace
                 name_x -= 1;
 
             } else if(button_left.pressed && name_x == 0) {
+                // LEFT PRESS (if at 0) go up to parent
                 if(parent != nullptr) {
-                    // LEFT PRESS (if at 0) go up to parent
-                    go(parent);
-                } else {
-                    // or back to clock if no parent
-                    state_set(clock_state);
+                    if(parent->name != nullptr) {
+                        go(parent);
+                    } else {
+                        // or back to clock if gone back to the root node (which has no name)
+                        menu_exit();
+                    }
                 }
 
             } else if(button_select.pressed) {
@@ -119,10 +122,13 @@ namespace
         current_item = where;
     }
 
-    item_t root_menu{ "Save", nullptr, [] {
-                         settings.save();
-                         state_set(clock_state);
-                     } };
+    void menu_exit()
+    {
+        settings.save();
+        state_set(clock_state);
+    }
+
+    item_t root_menu{ nullptr, nullptr };
 
     ///// Settings
 
@@ -291,14 +297,13 @@ namespace
                                   LOG_INFO("Auto timezone");
                                   settings.timezone_mode = timezone_mode_t::automatic;
                                   xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
-                                  state_set(clock_state);
+                                  menu_exit();
                               } };
     item_t timezone_select_menu{ "Select", &timezone_menu, [] { state_set(timezone_select_state); } };
 
     ///// System
 
     item_t system_menu{ "System", &root_menu };
-
     item_t version_menu{ "Version", &system_menu };
     item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { go(&system_menu); } };
 

@@ -21,8 +21,6 @@ namespace
 {
     //////////////////////////////////////////////////////////////////////
 
-    int constexpr LONGEST_LOCATION_NAME = 30;    // America/Argentina/Buenos_Aires is 30
-
     struct zone_offset : zone_offset_t
     {
         int offset_seconds() const
@@ -211,8 +209,18 @@ void timezone_select_update()
             node_count = current->num_children;
         } else {
             settings.timezone_mode = timezone_mode_t::selected;
+            settings.location.name[0] = 0;
+            ssize_t remain = sizeof(settings.location.name) - 1;
+            size_t offset = 0;
 
-            auto concat = [](char const *s) { strncat(settings.location.name, s, sizeof(settings.location.name) - 1); };
+            auto concat = [&remain, &offset](char const *s) {
+                if(remain > 0) {
+                    size_t len = strlen(s);
+                    strncat(settings.location.name + offset, s, remain);
+                    remain -= len;
+                    offset += len;
+                }
+            };
 
             // Construct name of timezone location for settings
             settings.location.name[0] = 0;
@@ -266,19 +274,6 @@ esp_err_t timezone_set(char const *location)
         return ESP_ERR_NOT_FOUND;
     }
     LOG_INFO("Found timezone location %s", node->name());
-    return set_timezone(node);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-esp_err_t timezone_node_set(int node_index)
-{
-    if(node_index < 0 || node_index >= countof(TZ_NODES)) {
-        LOG_ERROR("BAD timezone node");
-        return ESP_ERR_INVALID_ARG;
-    }
-    tz_node const *node = tz_nodes + node_index;
-    LOG_INFO("Setting timezone from node %s", node->name());
     return set_timezone(node);
 }
 

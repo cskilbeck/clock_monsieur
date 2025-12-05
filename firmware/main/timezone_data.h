@@ -4,6 +4,7 @@
 #include <cstddef>
 
 constexpr int64_t MIN_EPOCH = 1735689600; // Jan 1st 2025
+constexpr size_t LONGEST_TZ_LOCATION_NAME = 30;
 
 // timezone offset data
 struct zone_offset_t

@@ -23,8 +23,8 @@ LOG_CONTEXT("ota");
 
 #define OTA_RECV_BUF_SIZE 1024
 
-#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW "/latest.txt";
-#define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW "/%s.bin"
+#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW_STR "/latest.txt";
+#define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW_STR "/%s.bin"
 
 //////////////////////////////////////////////////////////////////////
 // Mark the current app as valid.
@@ -32,7 +32,7 @@ LOG_CONTEXT("ota");
 // to prevent rolling back to the previous version on the next reboot.
 // Only necessary if CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE is set.
 
-void ota_mark_app_valid(void)
+void ota_mark_app_valid()
 {
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_img_states_t ota_state;
@@ -216,31 +216,39 @@ esp_err_t do_ota_firmware_update(const char *latest)
 
 void ota_task(void *)
 {
+    // mark this version as valid if we got wifi connected
+    xEventGroupWaitBits(system_events, SYS_EVENT_WIFI_CONNECTED, false, true, portMAX_DELAY);
+    ota_mark_app_valid();
+
+    int one_day_seconds = 60 * 60 * 24;
+    int retry_seconds = 30;
+    int pause_seconds = 10;
+
+    // loop checking for new firmware version
     while(true) {
         xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, portMAX_DELAY);
-        delay_secs(30);
+        // if the network just came up, give others a chance to do stuff
+        delay_secs(pause_seconds);
+        int delay_seconds = one_day_seconds - pause_seconds;
         LOG_INFO("Checking firmware version");
         char latest[16];
         esp_err_t err = get_latest_firmware_version(latest, sizeof(latest));
         if(err != ESP_OK) {
-            continue;
-        }
-        LOG_INFO("FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
-        if(strcmp(latest, VERSION_STR) != 0) {
-            state_set(ota_state);
-            err = do_ota_firmware_update(latest);
-            if(err != ESP_OK) {
-                // OTA update failed, wait 30 seconds and try again?
-                continue;
-            }
+            delay_seconds = retry_seconds - pause_seconds;
         } else {
-            ota_mark_app_valid();
+            LOG_INFO("FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
+            if(strcmp(latest, VERSION_STR) != 0) {
+                state_set(ota_state);
+                err = do_ota_firmware_update(latest);
+                if(err != ESP_OK) {
+                    // OTA update failed, wait 30 seconds and try again?
+                    delay_seconds = retry_seconds - pause_seconds;
+                }
+            }
         }
-        // wait 24 hours before checking again
-        int64_t one_day_seconds = 60 * 60 * 24;
-        int64_t one_day_ticks = one_day_seconds * configTICK_RATE_HZ;
-        LOG_INFO("Waiting 24 hours (%u ticks) before checking OTA version again", (TickType_t)one_day_ticks);
-        vTaskDelay((TickType_t)one_day_ticks);
+        // wait 24 hours (or 30 seconds in case of an error) before checking again
+        LOG_INFO("Waiting %d seconds before checking OTA version again", delay_seconds + pause_seconds);
+        delay_secs(delay_seconds);
     }
 }
 

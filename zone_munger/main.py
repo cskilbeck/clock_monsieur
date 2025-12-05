@@ -11,6 +11,7 @@ from pathlib import Path
 MIN_EPOCH = int(datetime(2025, 1, 1).timestamp())  # Jan 1 2025 = 1735689600
 MAX_EPOCH = int(datetime(2075, 1, 1).timestamp())  # Jan 1 2075
 
+max_location_name_length: int
 
 def decimal_from_tz_coord(coord_str: str) -> float:
     """convert tz coordinate to decimal coordinate"""
@@ -296,8 +297,8 @@ def build_timezone_tree_with_offsets(zone_tab_data: str, csv_file_path: str = 'z
             else:
                 node['timezone_offsets'] = []  # No timezone data available
 
-    longest_key = max(timezone_data.keys(), key=len)
-    print(f"Longest location name: {longest_key} is {len(longest_key)}")
+    global max_location_name_length
+    max_location_name_length = len(max(timezone_data.keys(), key=len))
 
     add_timezone_data(tree_root)
     return tree_root
@@ -355,6 +356,7 @@ def generate_cpp_header(tree_root: dict) -> tuple[str, str]:
 #include <cstddef>
 
 constexpr int64_t MIN_EPOCH = {MIN_EPOCH}; // Jan 1st 2025
+constexpr size_t LONGEST_TZ_LOCATION_NAME = {max_location_name_length};
 
 // timezone offset data
 struct zone_offset_t

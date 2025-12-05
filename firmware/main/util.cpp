@@ -6,10 +6,10 @@
 
 void delay_ms(int ms)
 {
-    vTaskDelay(pdMS_TO_TICKS(ms));
+    vTaskDelay(ms * (1000 / configTICK_RATE_HZ));
 }
 
 void delay_secs(int seconds)
 {
-    delay_ms(seconds * 1000);
+    vTaskDelay(seconds * configTICK_RATE_HZ);
 }
