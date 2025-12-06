@@ -182,6 +182,7 @@ void timezone_select_init()
     current_index = root_node.children_index;
     node_count = root_node.num_children;
     node_index = 0;
+    name_x = 0;
     parent_index.clear();
 }
 

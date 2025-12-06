@@ -81,7 +81,7 @@ namespace
         item_t *children = nullptr;
         select_function on_select;
 
-        virtual char const *text()
+        virtual char const *text() const
         {
             return name;
         }
@@ -116,13 +116,27 @@ namespace
             font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / 2, 0, 1.0f, 0.5f);
             gfx.display();
 
-            if(button_up.pressed && prev != nullptr) {
-                // UP previous menu item
-                go(prev);
+            if(button_up.pressed) {
+                if(prev != nullptr) {
+                    // UP previous menu item
+                    go(prev);
+                } else {
+                    item_t *n = next;
+                    while(n != nullptr && n->next != nullptr) {
+                        n = n->next;
+                    }
+                    if(n != nullptr) {
+                        go(n);
+                    }
+                }
 
-            } else if(button_down.pressed && next != nullptr) {
+            } else if(button_down.pressed) {
                 // DOWN next menu item
-                go(next);
+                if(next != nullptr) {
+                    go(next);
+                } else {
+                    go(parent->children);
+                }
 
             } else if(button_left.held && name_x < 0) {
                 // LEFT scroll left
@@ -179,6 +193,18 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+#if defined(DEBUG)
+    void show_menu(item_t const *m, int indent = 0)
+    {
+        LOG_INFO("%*s%s", indent, "", m->text());
+        for(item_t const *c = m->children; c != nullptr; c = c->next) {
+            show_menu(c, indent + 2);
+        }
+    }
+#endif
+
+    //////////////////////////////////////////////////////////////////////
+
     void menu_exit()
     {
         settings.save();
@@ -194,7 +220,7 @@ namespace
     direction_t item_t::direction{ direction_t::none };
     int item_t::transition_pos;
 
-    item_t root_menu{ nullptr, nullptr };
+    item_t root_menu{ "root", nullptr };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -204,10 +230,8 @@ namespace
 
     /////     Mode
 
-    extern item_t mode_menu;
-
-    item_t mode_12_menu{ "12 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_12_hour; } };
-    item_t mode_24_menu{ "24 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_24_hour; } };
+    extern item_t mode_12_menu;
+    extern item_t mode_24_menu;
 
     item_t mode_menu{ "Mode", &settings_menu, [] {
                          if(settings.clock_mode == clock_mode_t::clock_24_hour) {
@@ -217,14 +241,15 @@ namespace
                          }
                      } };
 
+    item_t mode_12_menu{ "12 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_12_hour; } };
+    item_t mode_24_menu{ "24 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_24_hour; } };
+
     /////     Brightness
 
     item_t brightness_menu{ "Brightness", &settings_menu };
 
-    extern item_t brightness_auto_menu;
-
-    item_t brightness_auto_on_menu{ "On", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::on; } };
-    item_t brightness_auto_off_menu{ "Off", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::off; } };
+    extern item_t brightness_auto_on_menu;
+    extern item_t brightness_auto_off_menu;
 
     item_t brightness_auto_menu{ "Auto", &brightness_menu, [] {
                                     switch(settings.auto_brightness) {
@@ -237,12 +262,13 @@ namespace
                                     }
                                 } };
 
-    extern item_t brightness_level_menu;
+    item_t brightness_auto_on_menu{ "On", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::on; } };
+    item_t brightness_auto_off_menu{ "Off", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::off; } };
 
-    item_t brightness_low_menu{ "Low", &brightness_level_menu, [] { settings.brightness = 32; } };
-    item_t brightness_medium_menu{ "Medium", &brightness_level_menu, [] { settings.brightness = 64; } };
-    item_t brightness_high_menu{ "High", &brightness_level_menu, [] { settings.brightness = 128; } };
-    item_t brightness_max_menu{ "Max", &brightness_level_menu, [] { settings.brightness = 255; } };
+    extern item_t brightness_low_menu;
+    extern item_t brightness_medium_menu;
+    extern item_t brightness_high_menu;
+    extern item_t brightness_max_menu;
 
     item_t brightness_level_menu{ "Level", &brightness_menu, [] {
                                      switch(settings.brightness) {
@@ -261,15 +287,18 @@ namespace
                                      }
                                  } };
 
+    item_t brightness_low_menu{ "Low", &brightness_level_menu, [] { settings.brightness = 32; } };
+    item_t brightness_medium_menu{ "Medium", &brightness_level_menu, [] { settings.brightness = 64; } };
+    item_t brightness_high_menu{ "High", &brightness_level_menu, [] { settings.brightness = 128; } };
+    item_t brightness_max_menu{ "Max", &brightness_level_menu, [] { settings.brightness = 255; } };
+
     /////     Seconds
 
-    extern item_t seconds_menu;
-
-    item_t seconds_single_menu{ "Single", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::single; } };
-    item_t seconds_fixed_menu{ "Fixed", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::fixed; } };
-    item_t seconds_long_menu{ "Long", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_long; } };
-    item_t seconds_medium_menu{ "Medium", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_medium; } };
-    item_t seconds_short_menu{ "Short", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_short; } };
+    extern item_t seconds_single_menu;
+    extern item_t seconds_fixed_menu;
+    extern item_t seconds_long_menu;
+    extern item_t seconds_medium_menu;
+    extern item_t seconds_short_menu;
 
     item_t seconds_menu{ "Seconds", &settings_menu, [] {
                             switch(settings.seconds_mode) {
@@ -291,14 +320,18 @@ namespace
                             }
                         } };
 
+    item_t seconds_single_menu{ "Single", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::single; } };
+    item_t seconds_fixed_menu{ "Fixed", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::fixed; } };
+    item_t seconds_long_menu{ "Long", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_long; } };
+    item_t seconds_medium_menu{ "Medium", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_medium; } };
+    item_t seconds_short_menu{ "Short", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_short; } };
+
     /////     Colon
 
-    extern item_t colon_menu;
-
-    item_t colon_off_menu{ "Off", &colon_menu, [] { settings.colon_mode = colon_mode_t::off; } };
-    item_t colon_on_menu{ "On", &colon_menu, [] { settings.colon_mode = colon_mode_t::on; } };
-    item_t colon_dim_menu{ "Dim", &colon_menu, [] { settings.colon_mode = colon_mode_t::dim; } };
-    item_t colon_pulse_menu{ "Pulse", &colon_menu, [] { settings.colon_mode = colon_mode_t::pulse; } };
+    extern item_t colon_off_menu;
+    extern item_t colon_on_menu;
+    extern item_t colon_dim_menu;
+    extern item_t colon_pulse_menu;
 
     item_t colon_menu{ "Colon", &settings_menu, [] {
                           switch(settings.colon_mode) {
@@ -317,12 +350,15 @@ namespace
                           }
                       } };
 
+    item_t colon_off_menu{ "Off", &colon_menu, [] { settings.colon_mode = colon_mode_t::off; } };
+    item_t colon_on_menu{ "On", &colon_menu, [] { settings.colon_mode = colon_mode_t::on; } };
+    item_t colon_dim_menu{ "Dim", &colon_menu, [] { settings.colon_mode = colon_mode_t::dim; } };
+    item_t colon_pulse_menu{ "Pulse", &colon_menu, [] { settings.colon_mode = colon_mode_t::pulse; } };
+
     /////     Font
 
-    extern item_t font_menu;
-
-    item_t font_normal_menu{ "Normal", &font_menu, [] { settings.clock_font = clock_font_t::normal; } };
-    item_t font_modern_menu{ "Modern", &font_menu, [] { settings.clock_font = clock_font_t::modern; } };
+    extern item_t font_normal_menu;
+    extern item_t font_modern_menu;
 
     item_t font_menu{ "Font", &settings_menu, [] {
                          if(settings.clock_font == clock_font_t::normal) {
@@ -332,14 +368,15 @@ namespace
                          }
                      } };
 
+    item_t font_normal_menu{ "Normal", &font_menu, [] { settings.clock_font = clock_font_t::normal; } };
+    item_t font_modern_menu{ "Modern", &font_menu, [] { settings.clock_font = clock_font_t::modern; } };
+
     /////     Fade
 
-    extern item_t fade_menu;
-
-    item_t fade_low_menu{ "Low", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::low; } };
-    item_t fade_medium_menu{ "Medium", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::medium; } };
-    item_t fade_high_menu{ "High", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::high; } };
-    item_t fade_off_menu{ "Off", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::off; } };
+    extern item_t fade_low_menu;
+    extern item_t fade_medium_menu;
+    extern item_t fade_high_menu;
+    extern item_t fade_off_menu;
 
     item_t fade_menu{ "Fade", &settings_menu, [] {
                          switch(settings.clock_fade_mode) {
@@ -357,6 +394,11 @@ namespace
                              break;
                          }
                      } };
+
+    item_t fade_low_menu{ "Low", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::low; } };
+    item_t fade_medium_menu{ "Medium", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::medium; } };
+    item_t fade_high_menu{ "High", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::high; } };
+    item_t fade_off_menu{ "Off", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::off; } };
 
     ///// Timezone
 
@@ -380,7 +422,7 @@ namespace
     struct ip_addr_item_t : item_t
     {
         using item_t::item_t;
-        char const *text() override
+        char const *text() const override
         {
             return wifi_ip_address();
         }
@@ -400,6 +442,9 @@ namespace
 
 void menu_init()
 {
+#if defined(DEBUG)
+    // show_menu(&root_menu);
+#endif
     item_t::current_item = &settings_menu;
 }
 
