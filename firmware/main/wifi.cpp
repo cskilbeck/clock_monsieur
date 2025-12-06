@@ -127,6 +127,7 @@ static sec_info_t sec_info{};
 
 //////////////////////////////////////////////////////////////////////
 
+#if defined(DEBUG)
 void dump_hex(char *data, size_t len)
 {
     char const *sep = "";
@@ -140,6 +141,7 @@ void dump_hex(char *data, size_t len)
     }
     printf("\n");
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////
 // Load the sec_info_t from the 'prov_dat' partition

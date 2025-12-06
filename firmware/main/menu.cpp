@@ -7,6 +7,7 @@
 
 #include "util.h"
 #include "main.h"
+#include "clock_time.h"
 #include "graphics.h"
 #include "graphics.h"
 #include "button.h"
@@ -36,6 +37,8 @@ namespace
     };
 
     struct item_t;
+
+    time_t last_menu_activity_timestamp{ 0 };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -183,12 +186,13 @@ namespace
 
     void go(item_t *where, direction_t direction)
     {
-        LOG_INFO("GO to %s", where->name);
+        LOG_DEBUG("GO to %s", where->name);
         item_t::direction = direction;
         item_t::transition_pos = 0;
         item_t::name_x = 0;
         item_t::previous_item = item_t::current_item;
         item_t::current_item = where;
+        last_menu_activity_timestamp = utc_wall_time.tv_sec;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -445,6 +449,7 @@ void menu_init()
 #if defined(DEBUG)
     // show_menu(&root_menu);
 #endif
+    last_menu_activity_timestamp = utc_wall_time.tv_sec;
     item_t::current_item = &settings_menu;
 }
 
@@ -452,5 +457,10 @@ void menu_init()
 
 void menu_update()
 {
-    item_t::current_item->on_update();
+    // menu goes away automatically after 10 minutes of inactivity
+    if((utc_wall_time.tv_sec - last_menu_activity_timestamp) > 10 * 60) {
+        menu_exit();
+    } else {
+        item_t::current_item->on_update();
+    }
 }

@@ -83,6 +83,7 @@ namespace
 }    // namespace
 
 timeval local_wall_time;
+timeval utc_wall_time;
 
 //////////////////////////////////////////////////////////////////////
 // request to ip-api.com to get lat/lon.
@@ -227,6 +228,8 @@ void clock_update()
     timeval now;
     gettimeofday(&now, NULL);
     timezone_get_offset_seconds(now, timezone_offset_seconds);
+    utc_wall_time.tv_sec = now.tv_sec;
+    utc_wall_time.tv_usec = now.tv_usec;
     local_wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
     local_wall_time.tv_usec = now.tv_usec;
 }

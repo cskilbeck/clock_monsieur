@@ -27,14 +27,11 @@ X menus
     X Brightness
     X Set timezone
 X Auto-save settings
+X bigger less ridiculous buttons
+X put ambient light sensor on the front
+X tweak Ambient light sensor gamma ramp
 
 - button auto-repeat
 - fancy menu scrolling
-
-? AM/PM font for 12 hour clock
-
-- put ambient light sensor on the front
-- tweak Ambient light sensor gamma ramp
-- bigger less ridiculous buttons
-
+- AM/PM font for 12 hour clock
 - frosted glass/gel problem

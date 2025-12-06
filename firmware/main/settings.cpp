@@ -60,6 +60,7 @@ esp_err_t settings_t::save()
     }
 
     char key_name[5];
+    int saved = 0;
 
 #undef X
 #define X(ID, NAME, TYPE, VALUE)                                                    \
@@ -68,6 +69,7 @@ esp_err_t settings_t::save()
         LOG_INFO("  Save [%s] %s (%s)", key_name, #NAME, to_string(settings.NAME)); \
         save_setting(nvs_handle.get(), key_name, #NAME, settings.NAME);             \
         loaded_settings.NAME = settings.NAME;                                       \
+        saved += 1;                                                                 \
     }
 
     SETTINGS_FIELDS
@@ -76,7 +78,7 @@ esp_err_t settings_t::save()
     if(err != ESP_OK) {
         LOG_ERROR("Failed to commit settings to NVS: %s", esp_err_to_name(err));
     } else {
-        LOG_INFO("Settings saved OK");
+        LOG_INFO("%d settings saved");
     }
     return err;
 }

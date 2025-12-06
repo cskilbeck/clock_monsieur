@@ -218,14 +218,11 @@ IRAM_ATTR int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, f
 
 IRAM_ATTR int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const
 {
-    int width = 0;
-    while(*str) {
-        int w = draw_char(gfx, *str, x, y, color) + 1;
-        str += 1;
-        x += w;
-        width += w;
+    int left = x;
+    while(int c = *str++) {
+        x += draw_char(gfx, c, x, y, color) + 1;
     }
-    return width - 1;
+    return x - left - 1;
 }
 
 //////////////////////////////////////////////////////////////////////
