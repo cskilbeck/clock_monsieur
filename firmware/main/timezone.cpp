@@ -192,10 +192,10 @@ void timezone_select_update()
     int actual_node = current_index + node_index;
     tz_node const *current = &tz_nodes[actual_node];
     char const *name = current->name();
-    int width = font_5x7_narrow_font.measure_string(name);
+    int width = font_5x7_narrow_modern_font.measure_string(name);
     int min_name_x = (screen_width - width) * 2;
     gfx.clear();
-    font_5x7_narrow_font.draw_long_string(gfx, name, name_x / 2, 0, 1.0f, 0.5f);
+    font_5x7_narrow_modern_font.draw_long_string(gfx, name, name_x / 2, 0, 1.0f, 0.5f);
     gfx.display();
 
     // control is lagged by 1 frame, whevs
@@ -232,6 +232,7 @@ void timezone_select_update()
             LOG_INFO("SELECTED: %s", settings.location.name);
 
             set_timezone(current);
+            settings.save();
             state_set(clock_state);
         }
     }

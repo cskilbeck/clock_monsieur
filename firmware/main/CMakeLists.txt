@@ -20,6 +20,7 @@ idf_component_register(
         timezone_data.cpp
         fonts/font_5x7.cpp
         fonts/font_5x7_narrow.cpp
+        fonts/font_5x7_narrow_modern.cpp
         fonts/font_5x6.cpp
         fonts/square_font.cpp
         fonts/big_caps.cpp

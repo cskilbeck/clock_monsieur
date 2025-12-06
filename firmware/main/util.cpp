@@ -6,10 +6,11 @@
 
 void delay_ms(int ms)
 {
-    vTaskDelay(ms * (1000 / configTICK_RATE_HZ));
+    int64_t ticks = (int64_t)ms * configTICK_RATE_HZ / 1000LLU;
+    vTaskDelay((TickType_t)ticks);
 }
 
 void delay_secs(int seconds)
 {
-    vTaskDelay(seconds * configTICK_RATE_HZ);
+    vTaskDelay((TickType_t)seconds * configTICK_RATE_HZ);
 }

@@ -11,6 +11,7 @@
 #include "graphics.h"
 #include "button.h"
 #include "menu.h"
+#include "wifi.h"
 #include "state.h"
 #include "settings.h"
 #include "version.h"
@@ -21,17 +22,57 @@ LOG_CONTEXT("menu");
 
 namespace
 {
+    // up, down for moving through a list of menu items
+    // left for going 'up' to parent menu
+    // right for going 'down into' child menu
+
+    enum class direction_t : int
+    {
+        none = 0,
+        up,
+        down,
+        left,
+        right
+    };
+
     struct item_t;
 
-    int name_x = 0;
-    item_t *current_item{ nullptr };
+    //////////////////////////////////////////////////////////////////////
 
-    void go(item_t *where);
+    void go(item_t *where, direction_t direction = direction_t::none);
     void menu_exit();
+
+    //////////////////////////////////////////////////////////////////////
+
+    // for direction up, down, it's simple:
+    // draw previous_item at +transition_pos or -transition_pos
+    // draw current_item at transition_pos (+ screen_height) or (- screen height)
+    // transition_pos += 1
+    // if transition_pos == screen_height, we're done
+
+    // for left, right it's more complicated
+
+
+    //////////////////////////////////////////////////////////////////////
 
     struct item_t
     {
         using select_function = std::function<void()>;
+
+        // current menu item
+        static item_t *current_item;
+
+        // previous menu item (or null)
+        static item_t *previous_item;
+
+        // direction for scrolling new menu item into view
+        static direction_t direction;
+
+        // transition from previous to current item in pixels
+        static int transition_pos;
+
+        // manual panning x
+        static int name_x;
 
         char const *name;
         item_t *parent = nullptr;
@@ -39,6 +80,13 @@ namespace
         item_t *next = nullptr;
         item_t *children = nullptr;
         select_function on_select;
+
+        virtual char const *text()
+        {
+            return name;
+        }
+
+        //////////////////////////////////////////////////////////////////////
 
         item_t(char const *name, item_t *_parent, select_function const &select_fn = select_function{})
             : name(name), parent(_parent), prev(nullptr), next(nullptr), children(nullptr), on_select(select_fn)
@@ -58,12 +106,14 @@ namespace
             }
         }
 
+        //////////////////////////////////////////////////////////////////////
+
         virtual void on_update()
         {
-            int width = font_5x7_narrow_font.measure_string(name);
+            int width = font_5x7_narrow_modern_font.measure_string(text());
             int min_name_x = (screen_width - width) * 2;
             gfx.clear();
-            font_5x7_narrow_font.draw_long_string(gfx, name, name_x / 2, 0, 1.0f, 0.5f);
+            font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / 2, 0, 1.0f, 0.5f);
             gfx.display();
 
             if(button_up.pressed && prev != nullptr) {
@@ -85,7 +135,7 @@ namespace
             } else if(button_left.pressed && name_x == 0) {
                 // LEFT PRESS (if at 0) go up to parent
                 if(parent != nullptr) {
-                    if(parent->name != nullptr) {
+                    if(parent->parent != nullptr) {
                         go(parent);
                     } else {
                         // or back to clock if gone back to the root node (which has no name)
@@ -97,10 +147,10 @@ namespace
                 // SELECT go into child menu or call on_select()
                 item_t *old_item = current_item;
                 if(on_select) {
-                    LOG_INFO("%s selected!", name);
+                    LOG_INFO("%s selected!", text());
                     on_select();
                     if(old_item != current_item) {
-                        LOG_INFO("went to %s!", current_item->name);
+                        LOG_INFO("went to %s!", current_item->text());
                     }
                     if(parent != nullptr && old_item == current_item) {
                         go(parent);
@@ -115,12 +165,19 @@ namespace
         }
     };
 
-    void go(item_t *where)
+    //////////////////////////////////////////////////////////////////////
+
+    void go(item_t *where, direction_t direction)
     {
         LOG_INFO("GO to %s", where->name);
-        name_x = 0;
-        current_item = where;
+        item_t::direction = direction;
+        item_t::transition_pos = 0;
+        item_t::name_x = 0;
+        item_t::previous_item = item_t::current_item;
+        item_t::current_item = where;
     }
+
+    //////////////////////////////////////////////////////////////////////
 
     void menu_exit()
     {
@@ -128,7 +185,18 @@ namespace
         state_set(clock_state);
     }
 
+
+    //////////////////////////////////////////////////////////////////////
+
+    item_t *item_t::current_item{ nullptr };
+    item_t *item_t::previous_item{ nullptr };
+    int item_t::name_x{ 0 };
+    direction_t item_t::direction{ direction_t::none };
+    int item_t::transition_pos;
+
     item_t root_menu{ nullptr, nullptr };
+
+    //////////////////////////////////////////////////////////////////////
 
     ///// Settings
 
@@ -307,8 +375,22 @@ namespace
     item_t version_menu{ "Version", &system_menu };
     item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { go(&system_menu); } };
 
+    item_t ip_address_menu{ "IP Address", &system_menu };
+
+    struct ip_addr_item_t : item_t
+    {
+        using item_t::item_t;
+        char const *text() override
+        {
+            return wifi_ip_address();
+        }
+    };
+
+
+    ip_addr_item_t show_ip_menu{ "192.168.0.1", &ip_address_menu };
+
     item_t factory_reset_menu{ "Factory reset", &system_menu };
-    item_t factory_reset_are_you_sure_menu{ "You sure?", &factory_reset_menu };
+    item_t factory_reset_are_you_sure_menu{ "Really?", &factory_reset_menu };
     item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { go(&settings_menu); } };
     item_t factory_reset_yes{ "Yes", &factory_reset_are_you_sure_menu, [] { state_set(factory_reset_state); } };
 
@@ -318,12 +400,12 @@ namespace
 
 void menu_init()
 {
-    current_item = &settings_menu;
+    item_t::current_item = &settings_menu;
 }
 
 //////////////////////////////////////////////////////////////////////
 
 void menu_update()
 {
-    current_item->on_update();
+    item_t::current_item->on_update();
 }

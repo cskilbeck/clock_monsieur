@@ -45,6 +45,15 @@ int wifi_retries = 0;
 
 //////////////////////////////////////////////////////////////////////
 
+static char ip_addr[16] = "0.0.0.0";
+
+char const *wifi_ip_address()
+{
+    return ip_addr;
+}
+
+//////////////////////////////////////////////////////////////////////
+
 #if CONFIG_EXAMPLE_PROV_SEC2_DEV_MODE
 
 #define EXAMPLE_PROV_SEC2_USERNAME "wifiprov"
@@ -271,6 +280,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
+        sprintf(ip_addr, IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
         xEventGroupSetBits(system_events, SYS_EVENT_WIFI_CONNECTED);
     } else if(event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {

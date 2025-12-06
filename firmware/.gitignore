@@ -1,5 +1,5 @@
 *.old
-build_*/
+build*/
 .vscode/
 .devcontainer/
 .DS_Store
@@ -7,3 +7,4 @@ build_*/
 CMakeCache.txt
 CMakeFiles/
 managed_components/
+sdkconfig
