@@ -29,7 +29,6 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void go(item_t *where, int xvel = -2, int yvel = 0);
     void menu_exit();
 
     //////////////////////////////////////////////////////////////////////
@@ -53,6 +52,8 @@ namespace
 
         // manual panning x
         static int name_x;
+
+        static void go(item_t *where, int xvel = -2, int yvel = 0);
 
         char const *name;
         item_t *parent = nullptr;
@@ -92,23 +93,25 @@ namespace
 
         virtual void on_update()
         {
+            int constexpr pan_speed = 2;
+            int constexpr transition_speed = 2;
+
             gfx.clear();
 
             int offset_x = 0;
             int offset_y = 0;
 
             int width = font_5x7_narrow_modern_font.measure_string(text());
-            int min_name_x = (screen_width - width) * 2;
+            int min_name_x = (screen_width - width) * pan_speed;
 
             int x_gap = 3;
             int y_gap = 1;
 
             if(previous_item != nullptr) {
-                int speed = 2;
                 transition_x += transition_xvel;
                 transition_y += transition_yvel;
-                int x = transition_x / speed;
-                int y = transition_y / speed;
+                int x = transition_x / transition_speed;
+                int y = transition_y / transition_speed;
                 int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, previous_item->text(), x, y, 1.0f);
                 offset_x = (transition_xvel == 0) ? 0 : (transition_xvel < 0) ? x + prev_width + x_gap : x - (width + x_gap);
                 offset_y = (transition_yvel == 0) ? 0 : (transition_yvel < 0) ? y + screen_height + y_gap : y - (screen_height + y_gap);
@@ -117,17 +120,14 @@ namespace
                    (transition_yvel > 0 && offset_y >= 0) ||    //
                    (transition_yvel < 0 && offset_y <= 0)) {
                     previous_item = nullptr;
+                } else {
+                    font_5x7_narrow_modern_font.draw_string(gfx, text(), offset_x, offset_y, 1.0f);
                 }
             }
 
-            if(previous_item != nullptr) {
-                font_5x7_narrow_modern_font.draw_string(gfx, text(), offset_x, offset_y, 1.0f);
-            } else {
-                float scrollbar_color = 0.5f;
-                font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / 2, 0, 1.0f, scrollbar_color);
-            }
-
             if(previous_item == nullptr) {
+                float scrollbar_color = 0.5f;
+                font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / pan_speed, 0, 1.0f, scrollbar_color);
 
                 if(button_up.pressed) {
                     if(prev != nullptr) {
@@ -196,18 +196,20 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void go(item_t *where, int xvel, int yvel)
+    void item_t::go(item_t *where, int xvel, int yvel)
     {
+        if(where == item_t::current_item) {
+            return;
+        }
         LOG_DEBUG("GO to %s", where->name);
 
-        item_t::transition_x = item_t::name_x;
-        item_t::transition_y = 0;
-        item_t::transition_xvel = xvel;
-        item_t::transition_yvel = yvel;
-        item_t::previous_item = item_t::current_item;
-
-        item_t::name_x = 0;
-        item_t::current_item = where;
+        transition_x = item_t::name_x;
+        transition_y = 0;
+        transition_xvel = xvel;
+        transition_yvel = yvel;
+        previous_item = item_t::current_item;
+        name_x = 0;
+        current_item = where;
         last_menu_activity_timestamp = utc_wall_time.tv_sec;
     }
 
@@ -258,9 +260,9 @@ namespace
 
     item_t mode_menu{ "Mode", &settings_menu, [] {
                          if(settings.clock_mode == clock_mode_t::clock_24_hour) {
-                             go(&mode_24_menu);
+                             item_t::go(&mode_24_menu);
                          } else {
-                             go(&mode_12_menu);
+                             item_t::go(&mode_12_menu);
                          }
                      } };
 
@@ -277,10 +279,10 @@ namespace
     item_t brightness_auto_menu{ "Auto", &brightness_menu, [] {
                                     switch(settings.auto_brightness) {
                                     case auto_brightness_t::on:
-                                        go(&brightness_auto_on_menu);
+                                        item_t::go(&brightness_auto_on_menu);
                                         break;
                                     case auto_brightness_t::off:
-                                        go(&brightness_auto_off_menu);
+                                        item_t::go(&brightness_auto_off_menu);
                                         break;
                                     }
                                 } };
@@ -296,16 +298,16 @@ namespace
     item_t brightness_level_menu{ "Level", &brightness_menu, [] {
                                      switch(settings.brightness) {
                                      case 32:
-                                         go(&brightness_low_menu);
+                                         item_t::go(&brightness_low_menu);
                                          break;
                                      default:
-                                         go(&brightness_medium_menu);
+                                         item_t::go(&brightness_medium_menu);
                                          break;
                                      case 128:
-                                         go(&brightness_high_menu);
+                                         item_t::go(&brightness_high_menu);
                                          break;
                                      case 255:
-                                         go(&brightness_max_menu);
+                                         item_t::go(&brightness_max_menu);
                                          break;
                                      }
                                  } };
@@ -326,19 +328,19 @@ namespace
     item_t seconds_menu{ "Seconds", &settings_menu, [] {
                             switch(settings.seconds_mode) {
                             case seconds_mode_t::tail_long:
-                                go(&seconds_long_menu);
+                                item_t::go(&seconds_long_menu);
                                 break;
                             case seconds_mode_t::tail_medium:
-                                go(&seconds_medium_menu);
+                                item_t::go(&seconds_medium_menu);
                                 break;
                             case seconds_mode_t::tail_short:
-                                go(&seconds_short_menu);
+                                item_t::go(&seconds_short_menu);
                                 break;
                             case seconds_mode_t::fixed:
-                                go(&seconds_fixed_menu);
+                                item_t::go(&seconds_fixed_menu);
                                 break;
                             case seconds_mode_t::single:
-                                go(&seconds_single_menu);
+                                item_t::go(&seconds_single_menu);
                                 break;
                             }
                         } };
@@ -359,16 +361,16 @@ namespace
     item_t colon_menu{ "Colon", &settings_menu, [] {
                           switch(settings.colon_mode) {
                           case colon_mode_t::off:
-                              go(&colon_off_menu);
+                              item_t::go(&colon_off_menu);
                               break;
                           case colon_mode_t::on:
-                              go(&colon_on_menu);
+                              item_t::go(&colon_on_menu);
                               break;
                           case colon_mode_t::dim:
-                              go(&colon_dim_menu);
+                              item_t::go(&colon_dim_menu);
                               break;
                           case colon_mode_t::pulse:
-                              go(&colon_pulse_menu);
+                              item_t::go(&colon_pulse_menu);
                               break;
                           }
                       } };
@@ -385,9 +387,9 @@ namespace
 
     item_t font_menu{ "Font", &settings_menu, [] {
                          if(settings.clock_font == clock_font_t::normal) {
-                             go(&font_normal_menu);
+                             item_t::go(&font_normal_menu);
                          } else {
-                             go(&font_modern_menu);
+                             item_t::go(&font_modern_menu);
                          }
                      } };
 
@@ -404,16 +406,16 @@ namespace
     item_t fade_menu{ "Fade", &settings_menu, [] {
                          switch(settings.clock_fade_mode) {
                          case clock_fade_mode_t::off:
-                             go(&fade_off_menu);
+                             item_t::go(&fade_off_menu);
                              break;
                          case clock_fade_mode_t::low:
-                             go(&fade_low_menu);
+                             item_t::go(&fade_low_menu);
                              break;
                          case clock_fade_mode_t::medium:
-                             go(&fade_medium_menu);
+                             item_t::go(&fade_medium_menu);
                              break;
                          case clock_fade_mode_t::high:
-                             go(&fade_high_menu);
+                             item_t::go(&fade_high_menu);
                              break;
                          }
                      } };
@@ -438,7 +440,7 @@ namespace
 
     item_t system_menu{ "System", &root_menu };
     item_t version_menu{ "Version", &system_menu };
-    item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { go(&system_menu); } };
+    item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { item_t::go(&system_menu); } };
 
     item_t ip_address_menu{ "IP Address", &system_menu };
 
@@ -456,7 +458,7 @@ namespace
 
     item_t factory_reset_menu{ "Factory reset", &system_menu };
     item_t factory_reset_are_you_sure_menu{ "Really?", &factory_reset_menu };
-    item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { go(&settings_menu); } };
+    item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { item_t::go(&settings_menu); } };
     item_t factory_reset_yes{ "Yes", &factory_reset_are_you_sure_menu, [] { state_set(factory_reset_state); } };
 
 }    // namespace
