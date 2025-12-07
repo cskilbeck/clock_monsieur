@@ -63,13 +63,13 @@ esp_err_t settings_t::save()
     int saved = 0;
 
 #undef X
-#define X(ID, NAME, TYPE, VALUE)                                                    \
-    if(settings.NAME != loaded_settings.NAME) {                                     \
-        sprintf(key_name, "%d", ID);                                                \
-        LOG_INFO("  Save [%s] %s (%s)", key_name, #NAME, to_string(settings.NAME)); \
-        save_setting(nvs_handle.get(), key_name, #NAME, settings.NAME);             \
-        loaded_settings.NAME = settings.NAME;                                       \
-        saved += 1;                                                                 \
+#define X(ID, NAME, TYPE, VALUE)                                                            \
+    if(settings.NAME != loaded_settings.NAME) {                                             \
+        sprintf(key_name, "%d", ID);                                                        \
+        LOG_INFO("  Save [%s] %s (%s)", key_name, #NAME, setting_to_string(settings.NAME)); \
+        save_setting(nvs_handle.get(), key_name, #NAME, settings.NAME);                     \
+        loaded_settings.NAME = settings.NAME;                                               \
+        saved += 1;                                                                         \
     }
 
     SETTINGS_FIELDS
@@ -99,12 +99,12 @@ esp_err_t settings_t::load()
     char key_name[5];
 
 #undef X
-#define X(ID, NAME, TYPE, VALUE)                                                                 \
-    {                                                                                            \
-        sprintf(key_name, "%d", ID);                                                             \
-        if(load_setting(nvs_handle.get(), key_name, #NAME, loaded_settings.NAME) == ESP_OK) {    \
-            LOG_INFO("  Loaded [%s] %s = %s", key_name, #NAME, to_string(loaded_settings.NAME)); \
-        }                                                                                        \
+#define X(ID, NAME, TYPE, VALUE)                                                                         \
+    {                                                                                                    \
+        sprintf(key_name, "%d", ID);                                                                     \
+        if(load_setting(nvs_handle.get(), key_name, #NAME, loaded_settings.NAME) == ESP_OK) {            \
+            LOG_INFO("  Loaded [%s] %s = %s", key_name, #NAME, setting_to_string(loaded_settings.NAME)); \
+        }                                                                                                \
     }
 
     SETTINGS_FIELDS

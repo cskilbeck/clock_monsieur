@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <cstring>
 
+#include "esp_err.h"
+
 #include "timezone_data.h"
 
 // Thus far, settings are all either uint8_t (possibly via an enum class) or a timezone_location_t
@@ -20,14 +22,14 @@ inline bool operator==(timezone_location_t a, timezone_location_t b)
 }
 
 // !!!! returns a static buffer !!!!
-template <typename T> inline char const *to_string(T const &a)
+template <typename T> inline char const *setting_to_string(T const &a)
 {
     static char buffer[8];
     sprintf(buffer, "%u", (uint8_t)a);
     return buffer;
 }
 
-template <> inline char const *to_string(timezone_location_t const &a)
+template <> inline char const *setting_to_string(timezone_location_t const &a)
 {
     return a.name;
 }

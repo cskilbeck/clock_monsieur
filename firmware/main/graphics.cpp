@@ -12,9 +12,6 @@
 #include "button.h"
 #include "util.h"
 #include "settings.h"
-#include "font_5x6.h"
-#include "font_5x7.h"
-#include "square_font.h"
 
 LOG_CONTEXT("graphics");
 
