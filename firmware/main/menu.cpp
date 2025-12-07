@@ -23,38 +23,14 @@ LOG_CONTEXT("menu");
 
 namespace
 {
-    // up, down for moving through a list of menu items
-    // left for going 'up' to parent menu
-    // right for going 'down into' child menu
-
-    enum class direction_t : int
-    {
-        none = 0,
-        up,
-        down,
-        left,
-        right
-    };
-
     struct item_t;
 
     time_t last_menu_activity_timestamp{ 0 };
 
     //////////////////////////////////////////////////////////////////////
 
-    void go(item_t *where, direction_t direction = direction_t::none);
+    void go(item_t *where, int xvel = -2, int yvel = 0);
     void menu_exit();
-
-    //////////////////////////////////////////////////////////////////////
-
-    // for direction up, down, it's simple:
-    // draw previous_item at +transition_pos or -transition_pos
-    // draw current_item at transition_pos (+ screen_height) or (- screen height)
-    // transition_pos += 1
-    // if transition_pos == screen_height, we're done
-
-    // for left, right it's more complicated
-
 
     //////////////////////////////////////////////////////////////////////
 
@@ -68,11 +44,12 @@ namespace
         // previous menu item (or null)
         static item_t *previous_item;
 
-        // direction for scrolling new menu item into view
-        static direction_t direction;
-
         // transition from previous to current item in pixels
-        static int transition_pos;
+        static int transition_x;
+        static int transition_y;
+
+        static int transition_xvel;
+        static int transition_yvel;
 
         // manual panning x
         static int name_x;
@@ -83,6 +60,8 @@ namespace
         item_t *next = nullptr;
         item_t *children = nullptr;
         select_function on_select;
+
+        item_t *old_item = nullptr;
 
         virtual char const *text() const
         {
@@ -113,84 +92,121 @@ namespace
 
         virtual void on_update()
         {
+            gfx.clear();
+
+            int offset_x = 0;
+            int offset_y = 0;
+
             int width = font_5x7_narrow_modern_font.measure_string(text());
             int min_name_x = (screen_width - width) * 2;
-            gfx.clear();
-            font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / 2, 0, 1.0f, 0.5f);
-            gfx.display();
 
-            if(button_up.pressed) {
-                if(prev != nullptr) {
-                    // UP previous menu item
-                    go(prev);
-                } else {
-                    item_t *n = next;
-                    while(n != nullptr && n->next != nullptr) {
-                        n = n->next;
-                    }
-                    if(n != nullptr) {
-                        go(n);
-                    }
-                }
+            int x_gap = 3;
+            int y_gap = 1;
 
-            } else if(button_down.pressed) {
-                // DOWN next menu item
-                if(next != nullptr) {
-                    go(next);
-                } else {
-                    go(parent->children);
-                }
-
-            } else if(button_left.held && name_x < 0) {
-                // LEFT scroll left
-                name_x += 1;
-
-            } else if(button_right.held && name_x > min_name_x) {
-                // RIGHT scroll right
-                name_x -= 1;
-
-            } else if(button_left.pressed && name_x == 0) {
-                // LEFT PRESS (if at 0) go up to parent
-                if(parent != nullptr) {
-                    if(parent->parent != nullptr) {
-                        go(parent);
-                    } else {
-                        // or back to clock if gone back to the root node (which has no name)
-                        menu_exit();
-                    }
-                }
-
-            } else if(button_select.pressed) {
-                // SELECT go into child menu or call on_select()
-                item_t *old_item = current_item;
-                if(on_select) {
-                    LOG_INFO("%s selected!", text());
-                    on_select();
-                    if(old_item != current_item) {
-                        LOG_INFO("went to %s!", current_item->text());
-                    }
-                    if(parent != nullptr && old_item == current_item) {
-                        go(parent);
-                        return;
-                    }
-                }
-                // only go into children if on_select didn't call go()
-                if(children != nullptr && old_item == current_item) {
-                    go(children);
+            if(previous_item != nullptr) {
+                int speed = 2;
+                transition_x += transition_xvel;
+                transition_y += transition_yvel;
+                int x = transition_x / speed;
+                int y = transition_y / speed;
+                int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, previous_item->text(), x, y, 1.0f);
+                offset_x = (transition_xvel == 0) ? 0 : (transition_xvel < 0) ? x + prev_width + x_gap : x - (width + x_gap);
+                offset_y = (transition_yvel == 0) ? 0 : (transition_yvel < 0) ? y + screen_height + y_gap : y - (screen_height + y_gap);
+                if((transition_xvel > 0 && offset_x >= 0) ||    //
+                   (transition_xvel < 0 && offset_x <= 0) ||    //
+                   (transition_yvel > 0 && offset_y >= 0) ||    //
+                   (transition_yvel < 0 && offset_y <= 0)) {
+                    previous_item = nullptr;
                 }
             }
+
+            if(previous_item != nullptr) {
+                font_5x7_narrow_modern_font.draw_string(gfx, text(), offset_x, offset_y, 1.0f);
+            } else {
+                float scrollbar_color = 0.5f;
+                font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / 2, 0, 1.0f, scrollbar_color);
+            }
+
+            if(previous_item == nullptr) {
+
+                if(button_up.pressed) {
+                    if(prev != nullptr) {
+                        // UP previous menu item
+                        go(prev, 0, 1);
+                    } else {
+                        item_t *n = next;
+                        while(n != nullptr && n->next != nullptr) {
+                            n = n->next;
+                        }
+                        if(n != nullptr) {
+                            go(n, 0, 1);
+                        }
+                    }
+
+                } else if(button_down.pressed) {
+                    // DOWN next menu item
+                    if(next != nullptr) {
+                        go(next, 0, -1);
+                    } else {
+                        go(parent->children, 0, -1);
+                    }
+
+                } else if(button_left.held && name_x < 0) {
+                    // LEFT scroll left
+                    name_x += 1;
+
+                } else if(button_right.held && name_x > min_name_x) {
+                    // RIGHT scroll right
+                    name_x -= 1;
+
+                } else if(button_left.pressed && name_x == 0) {
+                    // LEFT PRESS (if at 0) go up to parent
+                    if(parent != nullptr) {
+                        if(parent->parent != nullptr) {
+                            go(parent, 2, 0);
+                        } else {
+                            // or back to clock if gone back to the root node (which has no name)
+                            menu_exit();
+                        }
+                    }
+
+                } else if(button_select.pressed) {
+                    // SELECT go into child menu or call on_select()
+                    item_t *old_item = current_item;
+                    if(on_select) {
+                        LOG_INFO("%s selected!", text());
+                        on_select();
+                        if(old_item != current_item) {
+                            LOG_INFO("went to %s!", current_item->text());
+                        }
+                        if(parent != nullptr && old_item == current_item) {
+                            go(parent, 2, 0);
+                            return;
+                        }
+                    }
+                    // only go into children if on_select didn't call go()
+                    if(children != nullptr && old_item == current_item) {
+                        go(children, -2, 0);
+                    }
+                }
+            }
+            gfx.display();
         }
     };
 
     //////////////////////////////////////////////////////////////////////
 
-    void go(item_t *where, direction_t direction)
+    void go(item_t *where, int xvel, int yvel)
     {
         LOG_DEBUG("GO to %s", where->name);
-        item_t::direction = direction;
-        item_t::transition_pos = 0;
-        item_t::name_x = 0;
+
+        item_t::transition_x = item_t::name_x;
+        item_t::transition_y = 0;
+        item_t::transition_xvel = xvel;
+        item_t::transition_yvel = yvel;
         item_t::previous_item = item_t::current_item;
+
+        item_t::name_x = 0;
         item_t::current_item = where;
         last_menu_activity_timestamp = utc_wall_time.tv_sec;
     }
@@ -218,11 +234,14 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    item_t *item_t::previous_item = nullptr;
+    int item_t::transition_x;
+    int item_t::transition_y;
+    int item_t::transition_xvel;
+    int item_t::transition_yvel;
+
     item_t *item_t::current_item{ nullptr };
-    item_t *item_t::previous_item{ nullptr };
     int item_t::name_x{ 0 };
-    direction_t item_t::direction{ direction_t::none };
-    int item_t::transition_pos;
 
     item_t root_menu{ "root", nullptr };
 
