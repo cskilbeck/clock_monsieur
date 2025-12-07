@@ -6,6 +6,9 @@
 #include "freertos/task.h"
 
 #include "gpio_defs.h"
+#include "console.h"
+#include "state.h"
+#include "button.h"
 #include "display.h"
 #include "lux.h"
 #include "settings.h"
@@ -171,10 +174,7 @@ namespace
 
             uint16_t lux_value[2];
             if(READ_LUX(lux_value) == ESP_OK) {
-                if(lux_value[1] > lux_value[0]) {
-                    lux_value[0] = lux_value[1];
-                }
-                brightness = lux_value[0];
+                brightness = max(lux_value[0], lux_value[1]);
             }
             delay_ms(200);
         }
@@ -189,7 +189,7 @@ namespace
 
 void lux_init()
 {
-    xTaskCreatePinnedToCore(i2c_task, "i2c_task", 2560, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(i2c_task, "i2c_task", 2560, NULL, 2, NULL, 0);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -217,4 +217,33 @@ void lux_update()
         lux = settings.brightness;
     }
     display->set_ambient(lux);
+}
+
+//////////////////////////////////////////////////////////////////////
+
+struct : console_command_t<"lux", "show lux", "">
+{
+    void on_command(int argc, char **argv) override
+    {
+        state_set(lux_state);
+    }
+} lux_command;
+
+//////////////////////////////////////////////////////////////////////
+
+void lux_state_t::on_update()
+{
+    if(button_select.pressed) {
+        state_set(clock_state);
+    }
+    char hex[5];
+    sprintf(hex, "%04X", brightness);
+    gfx.clear();
+    font_5x7_font.draw_string(gfx, hex, 0, 0, 1.0f);
+    int b = brightness * 60 >> 16;
+    for(int i = 0; i <= b; ++i) {
+        gfx.set_second_only(1.0f, i);
+    }
+    gfx.display();
+    display->set_ambient(255);
 }

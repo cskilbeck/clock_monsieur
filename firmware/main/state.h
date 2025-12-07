@@ -79,6 +79,13 @@ struct timezone_select_state_t : state_handler_t
 
 //////////////////////////////////////////////////////////////////////
 
+struct lux_state_t : state_handler_t
+{
+    void on_update() override;
+};
+
+//////////////////////////////////////////////////////////////////////
+
 extern boot_state_t boot_state;
 extern wifi_check_state_t wifi_check_state;
 extern clock_state_t clock_state;
@@ -86,3 +93,4 @@ extern menu_state_t menu_state;
 extern timezone_select_state_t timezone_select_state;
 extern ota_state_t ota_state;
 extern factory_reset_state_t factory_reset_state;
+extern lux_state_t lux_state;

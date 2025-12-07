@@ -30,6 +30,7 @@ clock_state_t clock_state;
 menu_state_t menu_state;
 timezone_select_state_t timezone_select_state;
 ota_state_t ota_state;
+lux_state_t lux_state;
 
 //////////////////////////////////////////////////////////////////////
 
