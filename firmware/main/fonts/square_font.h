@@ -1,5 +1,5 @@
 
-// Generated C++ Header for Bitmap Font: square
+// Generated C++ Header for Bitmap Font: square_font
 // Character Range: ASCII 32 to 127
 #include <stdint.h>
 
@@ -15,5 +15,5 @@ struct font_t {
 };
 */
 
-// Declaration of the font structure instance defined in square.cpp
-extern const struct font_t square_font;
+// Declaration of the font structure instance defined in square_font.cpp
+extern const struct font_t square_font_font;

@@ -174,12 +174,13 @@ namespace
                     // SELECT go into child menu or call on_select()
                     item_t *old_item = current_item;
                     if(on_select) {
-                        LOG_INFO("%s selected!", text());
+                        LOG_DEBUG("%s selected", text());
                         on_select();
                         if(old_item != current_item) {
-                            LOG_INFO("went to %s!", current_item->text());
+                            LOG_DEBUG("went to %s!", current_item->text());
                         }
-                        if(parent != nullptr && old_item == current_item) {
+                        // Only go to parent if this entry is not a single child
+                        if(parent != nullptr && old_item == current_item && next != nullptr && prev != nullptr) {
                             go(parent, 2, 0);
                             return;
                         }
@@ -249,181 +250,211 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    template <typename T> void cycle_enum(T &x)
+    {
+        int y = static_cast<int>(x) + 1;
+        if(y == static_cast<int>(T::max)) {
+            y = 0;
+        }
+        x = static_cast<T>(y);
+    }
+
+    //////////////////////////////////////////////////////////////////////
+
     ///// Settings
 
     item_t settings_menu{ "Settings", &root_menu };
 
     /////     Mode
 
-    extern item_t mode_12_menu;
-    extern item_t mode_24_menu;
+    item_t mode_menu{ "Mode", &settings_menu };
 
-    item_t mode_menu{ "Mode", &settings_menu, [] {
-                         if(settings.clock_mode == clock_mode_t::clock_24_hour) {
-                             item_t::go(&mode_24_menu);
-                         } else {
-                             item_t::go(&mode_12_menu);
-                         }
-                     } };
-
-    item_t mode_12_menu{ "12 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_12_hour; } };
-    item_t mode_24_menu{ "24 hr", &mode_menu, [] { settings.clock_mode = clock_mode_t::clock_24_hour; } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.clock_mode) {
+            case clock_mode_t::clock_12_hour:
+                return "12 Hour";
+            case clock_mode_t::clock_24_hour:
+                return "24 Hour";
+            default:
+                return "?";
+            }
+        }
+    } clock_mode_setting_menu{ "?", &mode_menu, [] { cycle_enum(settings.clock_mode); } };
 
     /////     Brightness
 
     item_t brightness_menu{ "Brightness", &settings_menu };
 
-    extern item_t brightness_auto_on_menu;
-    extern item_t brightness_auto_off_menu;
+    struct brightness_auto_menu_t : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.auto_brightness) {
+            case auto_brightness_t::on:
+                return "Auto";
+            case auto_brightness_t::off:
+                return "Fixed";
+            default:
+                return "?";
+            }
+        }
+    } brightness_auto_menu{ "?", &brightness_menu, [] { cycle_enum(settings.auto_brightness); } };
 
-    item_t brightness_auto_menu{ "Auto", &brightness_menu, [] {
-                                    switch(settings.auto_brightness) {
-                                    case auto_brightness_t::on:
-                                        item_t::go(&brightness_auto_on_menu);
-                                        break;
-                                    case auto_brightness_t::off:
-                                        item_t::go(&brightness_auto_off_menu);
-                                        break;
-                                    }
-                                } };
-
-    item_t brightness_auto_on_menu{ "On", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::on; } };
-    item_t brightness_auto_off_menu{ "Off", &brightness_auto_menu, [] { settings.auto_brightness = auto_brightness_t::off; } };
-
-    extern item_t brightness_low_menu;
-    extern item_t brightness_medium_menu;
-    extern item_t brightness_high_menu;
-    extern item_t brightness_max_menu;
-
-    item_t brightness_level_menu{ "Level", &brightness_menu, [] {
-                                     switch(settings.brightness) {
-                                     case 32:
-                                         item_t::go(&brightness_low_menu);
-                                         break;
-                                     default:
-                                         item_t::go(&brightness_medium_menu);
-                                         break;
-                                     case 128:
-                                         item_t::go(&brightness_high_menu);
-                                         break;
-                                     case 255:
-                                         item_t::go(&brightness_max_menu);
-                                         break;
-                                     }
-                                 } };
-
-    item_t brightness_low_menu{ "Low", &brightness_level_menu, [] { settings.brightness = 32; } };
-    item_t brightness_medium_menu{ "Medium", &brightness_level_menu, [] { settings.brightness = 64; } };
-    item_t brightness_high_menu{ "High", &brightness_level_menu, [] { settings.brightness = 128; } };
-    item_t brightness_max_menu{ "Max", &brightness_level_menu, [] { settings.brightness = 255; } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.brightness) {
+            case 32:
+                return "Low";
+            default:
+                return "Medium";
+            case 128:
+                return "High";
+            case 255:
+                return "Max";
+            }
+        }
+    } brightness_level_menu{ "?", &brightness_menu, [] {
+                                switch(settings.brightness) {
+                                case 32:
+                                    settings.brightness = 64;
+                                    break;
+                                default:
+                                    settings.brightness = 128;
+                                    break;
+                                case 128:
+                                    settings.brightness = 255;
+                                    break;
+                                case 255:
+                                    settings.brightness = 32;
+                                    break;
+                                }
+                            } };
 
     /////     Seconds
 
-    extern item_t seconds_single_menu;
-    extern item_t seconds_fixed_menu;
-    extern item_t seconds_long_menu;
-    extern item_t seconds_medium_menu;
-    extern item_t seconds_short_menu;
+    item_t seconds_menu{ "Seconds", &settings_menu };
 
-    item_t seconds_menu{ "Seconds", &settings_menu, [] {
-                            switch(settings.seconds_mode) {
-                            case seconds_mode_t::tail_long:
-                                item_t::go(&seconds_long_menu);
-                                break;
-                            case seconds_mode_t::tail_medium:
-                                item_t::go(&seconds_medium_menu);
-                                break;
-                            case seconds_mode_t::tail_short:
-                                item_t::go(&seconds_short_menu);
-                                break;
-                            case seconds_mode_t::fixed:
-                                item_t::go(&seconds_fixed_menu);
-                                break;
-                            case seconds_mode_t::single:
-                                item_t::go(&seconds_single_menu);
-                                break;
-                            }
-                        } };
-
-    item_t seconds_single_menu{ "Single", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::single; } };
-    item_t seconds_fixed_menu{ "Fixed", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::fixed; } };
-    item_t seconds_long_menu{ "Long", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_long; } };
-    item_t seconds_medium_menu{ "Medium", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_medium; } };
-    item_t seconds_short_menu{ "Short", &seconds_menu, [] { settings.seconds_mode = seconds_mode_t::tail_short; } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.seconds_mode) {
+            case seconds_mode_t::Long:
+                return "Long";
+            case seconds_mode_t::Medium:
+                return "Medium";
+            case seconds_mode_t::Short:
+                return "Short";
+            case seconds_mode_t::Fixed:
+                return "Fixed";
+            case seconds_mode_t::Single:
+                return "Single";
+            default:
+                return "?";
+            }
+        }
+    } seconds_type_menu{ "", &seconds_menu, [] { cycle_enum(settings.seconds_mode); } };
 
     /////     Colon
 
-    extern item_t colon_off_menu;
-    extern item_t colon_on_menu;
-    extern item_t colon_dim_menu;
-    extern item_t colon_pulse_menu;
+    item_t colon_menu{ "Colon", &settings_menu };
 
-    item_t colon_menu{ "Colon", &settings_menu, [] {
-                          switch(settings.colon_mode) {
-                          case colon_mode_t::off:
-                              item_t::go(&colon_off_menu);
-                              break;
-                          case colon_mode_t::on:
-                              item_t::go(&colon_on_menu);
-                              break;
-                          case colon_mode_t::dim:
-                              item_t::go(&colon_dim_menu);
-                              break;
-                          case colon_mode_t::pulse:
-                              item_t::go(&colon_pulse_menu);
-                              break;
-                          }
-                      } };
-
-    item_t colon_off_menu{ "Off", &colon_menu, [] { settings.colon_mode = colon_mode_t::off; } };
-    item_t colon_on_menu{ "On", &colon_menu, [] { settings.colon_mode = colon_mode_t::on; } };
-    item_t colon_dim_menu{ "Dim", &colon_menu, [] { settings.colon_mode = colon_mode_t::dim; } };
-    item_t colon_pulse_menu{ "Pulse", &colon_menu, [] { settings.colon_mode = colon_mode_t::pulse; } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.colon_mode) {
+            case colon_mode_t::off:
+                return "Off";
+            case colon_mode_t::on:
+                return "On";
+            case colon_mode_t::dim:
+                return "Dim";
+            case colon_mode_t::pulse:
+                return "Pulse";
+            default:
+                return "?";
+            }
+        }
+    } colon_setting_menu{ "?", &colon_menu, [] { cycle_enum(settings.colon_mode); } };
 
     /////     Font
 
-    extern item_t font_normal_menu;
-    extern item_t font_modern_menu;
+    item_t font_menu{ "Font", &settings_menu };
 
-    item_t font_menu{ "Font", &settings_menu, [] {
-                         if(settings.clock_font == clock_font_t::normal) {
-                             item_t::go(&font_normal_menu);
-                         } else {
-                             item_t::go(&font_modern_menu);
-                         }
-                     } };
-
-    item_t font_normal_menu{ "Normal", &font_menu, [] { settings.clock_font = clock_font_t::normal; } };
-    item_t font_modern_menu{ "Modern", &font_menu, [] { settings.clock_font = clock_font_t::modern; } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.clock_font) {
+            case clock_font_t::normal:
+                return "Normal";
+            case clock_font_t::modern:
+                return "Square";
+            default:
+                return "?";
+            }
+        }
+    } font_setting_menu{ "?", &font_menu, [] { cycle_enum(settings.clock_font); } };
 
     /////     Fade
 
-    extern item_t fade_low_menu;
-    extern item_t fade_medium_menu;
-    extern item_t fade_high_menu;
-    extern item_t fade_off_menu;
+    item_t fade_menu{ "Fade", &settings_menu };
 
-    item_t fade_menu{ "Fade", &settings_menu, [] {
-                         switch(settings.clock_fade_mode) {
-                         case clock_fade_mode_t::off:
-                             item_t::go(&fade_off_menu);
-                             break;
-                         case clock_fade_mode_t::low:
-                             item_t::go(&fade_low_menu);
-                             break;
-                         case clock_fade_mode_t::medium:
-                             item_t::go(&fade_medium_menu);
-                             break;
-                         case clock_fade_mode_t::high:
-                             item_t::go(&fade_high_menu);
-                             break;
-                         }
-                     } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.clock_fade_mode) {
+            case clock_fade_mode_t::off:
+                return "Off";
+            case clock_fade_mode_t::low:
+                return "Low";
+            case clock_fade_mode_t::medium:
+                return "Medium";
+            case clock_fade_mode_t::high:
+                return "High";
+            default:
+                return "?";
+            }
+        }
+    } fade_setting_menu{ "?", &fade_menu, [] { cycle_enum(settings.clock_fade_mode); } };
 
-    item_t fade_low_menu{ "Low", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::low; } };
-    item_t fade_medium_menu{ "Medium", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::medium; } };
-    item_t fade_high_menu{ "High", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::high; } };
-    item_t fade_off_menu{ "Off", &fade_menu, [] { settings.clock_fade_mode = clock_fade_mode_t::off; } };
+    /////     Ticks
+
+    item_t ticks_menu{ "Ticks", &settings_menu };
+
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            switch(settings.ticks) {
+            case tick_mode_t::off:
+                return "Off";
+            case tick_mode_t::on:
+                return "On";
+            case tick_mode_t::dim:
+                return "Dim";
+            case tick_mode_t::track:
+                return "Track";
+            default:
+                return "?";
+            }
+        }
+    } ticks_setting_menu{ "?", &ticks_menu, [] { cycle_enum(settings.ticks); } };
 
     ///// Timezone
 
@@ -434,15 +465,29 @@ namespace
                                   xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
                                   menu_exit();
                               } };
-    item_t timezone_select_menu{ "Select", &timezone_menu, [] { state_set(timezone_select_state); } };
+
+    struct timezone_select_menu_t : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            if(settings.timezone_mode == timezone_mode_t::selected && settings.location.name[0] != 0) {
+                return settings.location.name;
+            }
+            return "Select";
+        }
+    };
+
+    timezone_select_menu_t timezone_select_menu{ "ZONE", &timezone_menu, [] { state_set(timezone_select_state); } };
 
     ///// System
 
     item_t system_menu{ "System", &root_menu };
     item_t version_menu{ "Version", &system_menu };
-    item_t show_version_menu{ "V" VERSION_STR, &version_menu, [] { item_t::go(&system_menu); } };
+    item_t show_version_menu{ "V" VERSION_STR, &version_menu };
 
     item_t ip_address_menu{ "IP Address", &system_menu };
+    item_t mac_address_menu{ "MAC Address", &system_menu };
 
     struct ip_addr_item_t : item_t
     {
@@ -451,10 +496,16 @@ namespace
         {
             return wifi_ip_address();
         }
-    };
+    } show_ip_menu{ "192.168.0.1", &ip_address_menu };
 
-
-    ip_addr_item_t show_ip_menu{ "192.168.0.1", &ip_address_menu };
+    struct mac_addr_item_t : item_t
+    {
+        using item_t::item_t;
+        char const *text() const override
+        {
+            return wifi_mac_address();
+        }
+    } show_mac_address_menu{ "?", &mac_address_menu };
 
     item_t factory_reset_menu{ "Factory reset", &system_menu };
     item_t factory_reset_are_you_sure_menu{ "Really?", &factory_reset_menu };
@@ -471,6 +522,7 @@ void menu_init()
     // show_menu(&root_menu);
 #endif
     last_menu_activity_timestamp = utc_wall_time.tv_sec;
+    item_t::previous_item = nullptr;
     item_t::current_item = &settings_menu;
 }
 

@@ -11,6 +11,7 @@
 #include <esp_wifi.h>
 #include <esp_event.h>
 #include <nvs_flash.h>
+#include "esp_mac.h"
 
 #include <wifi_provisioning/manager.h>
 #include <wifi_provisioning/scheme_ble.h>
@@ -46,6 +47,18 @@ int wifi_retries = 0;
 //////////////////////////////////////////////////////////////////////
 
 static char ip_addr[16] = "0.0.0.0";
+static char mac_addr[24] = "";
+
+char const *wifi_mac_address()
+{
+    if(mac_addr[0] == 0) {
+        uint8_t mac_address[6] = { 0, 0, 0, 0, 0, 0 };
+        esp_read_mac(mac_address, ESP_MAC_WIFI_STA);
+        sprintf(mac_addr, "%02X:%02X:%02X:%02X:%02X:%02X", mac_address[0], mac_address[1], mac_address[2], mac_address[3], mac_address[4],
+                mac_address[5]);
+    }
+    return mac_addr;
+}
 
 char const *wifi_ip_address()
 {

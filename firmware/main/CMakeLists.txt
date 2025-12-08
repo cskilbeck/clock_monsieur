@@ -34,14 +34,15 @@ idf_component_register(
     INCLUDE_DIRS
         . fonts/
 )
-if (CONFIG_PROJECT_BUILD_DEBUG)
-    # Define the macro 'DEBUG' for all C/C++ files in your components
-    target_compile_definitions(${COMPONENT_LIB} PUBLIC "DEBUG")
-    message(STATUS "Build Configuration: DEBUG is defined")
-else()
-    message(STATUS "Build Configuration: DEBUG is NOT defined")
-endif()
 
+if (CONFIG_PROJECT_BUILD_DEBUG)
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC "DEBUG")
+    message(STATUS "Build Configuration DEBUG")
+else()
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC "NDEBUG")
+    target_compile_definitions(${COMPONENT_LIB} PUBLIC "RELEASE")
+    message(STATUS "Build Configuration RELEASE")
+endif()
 
 target_compile_options(
     ${COMPONENT_LIB}

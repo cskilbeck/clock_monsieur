@@ -60,10 +60,20 @@ namespace
         184, 184, 217, 217, 216, 218, 201, 201, 202, 202, 200, 200, 232, 232, 233, 234, 224, 224, 239, 239, 238, 238, 237, 237,
     };
 
+    DRAM_ATTR uint8_t const seconds_seconds_lookup[120] = {
+        236, 236, 231, 231, 230, 230, 229, 229, 228, 228, 227, 227, 225, 225, 248, 248, 250, 250, 249, 249, 24,  24,  25,  25,
+        40,  40,  42,  42,  41,  41,  8,   8,   9,   9,   56,  56,  58,  58,  57,  57,  88,  88,  89,  89,  72,  72,  74,  74,
+        104, 104, 105, 105, 107, 107, 108, 108, 109, 109, 110, 110, 96,  96,  97,  97,  98,  98,  99,  99,  100, 100, 102, 102,
+        103, 103, 121, 121, 122, 122, 120, 120, 154, 154, 152, 152, 137, 137, 138, 138, 136, 136, 170, 170, 168, 168, 185, 185,
+        184, 184, 217, 217, 216, 216, 201, 201, 202, 202, 200, 200, 232, 232, 233, 233, 224, 224, 239, 239, 238, 238, 237, 237,
+    };
+
     uint8_t constexpr debug_led_0 = 0x49;
     uint8_t constexpr debug_led_1 = 0xBA;
 
-    static DRAM_ATTR bool debug_led[2] = { 0, 0 };
+    DRAM_ATTR bool debug_led[2] = { 0, 0 };
+
+    DRAM_ATTR uint8_t const *seconds_ticks_maybe_lookup = seconds_hours_lookup;
 
     //////////////////////////////////////////////////////////////////////
     // content_width is width of the content to show
@@ -291,7 +301,7 @@ IRAM_ATTR void graphics_t::set_second(float color, uint8_t second)
     if(second > 59) {
         second = 59;
     }
-    uint8_t const *s = seconds_hours_lookup + second * 2;
+    uint8_t const *s = seconds_ticks_maybe_lookup + second * 2;
     buffer[s[0]] = color;
     buffer[s[1]] = color;
 }
@@ -304,6 +314,16 @@ IRAM_ATTR void graphics_t::set_second_only(float color, uint8_t second)
         second = 59;
     }
     buffer[second_lookup[second]] = color;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+IRAM_ATTR void graphics_t::set_tick(float color, uint8_t tick)
+{
+    if(tick > 11) {
+        tick = 11;
+    }
+    buffer[hour_lookup[tick]] = color;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -324,7 +344,7 @@ IRAM_ATTR void graphics_t::draw_time(int hours, int minutes, float color)
     }
     char time_buffer[16];
     sprintf(time_buffer, fmt, hours, minutes);
-    font_t const &font = settings.clock_font == clock_font_t::modern ? square_font : font_5x7_font;
+    font_t const &font = settings.clock_font == clock_font_t::modern ? square_font_font : font_5x7_font;
     font.draw_char_centered(*this, time_buffer[0], 2, 0, color);
     font.draw_char_centered(*this, time_buffer[1], 8, 0, color);
     font.draw_char_centered(*this, time_buffer[2], 16, 0, color);
@@ -346,6 +366,7 @@ IRAM_ATTR void graphics_t::draw_colon(int seconds, float color)
     case colon_mode_t::dim:
         colon_color = color * 0.5f;
         break;
+    default:
     case colon_mode_t::pulse:
         colon_color = (seconds & 1) == 0 ? 0 : color * 0.75f;
         break;
@@ -371,29 +392,56 @@ IRAM_ATTR void graphics_t::draw_seconds(int current_second)
         }
     };
 
+    auto draw_ticks = [this](float color) {
+        for(int h = 0; h < 12; ++h) {
+            set_tick(color, h);
+        }
+    };
+
+    float constexpr dim_color = 0.25f;
+
+    // TICK MODE
+    seconds_ticks_maybe_lookup = seconds_seconds_lookup;
+    float tick_color = 0.0f;
+    switch(settings.ticks) {
+    case tick_mode_t::track:
+        seconds_ticks_maybe_lookup = seconds_hours_lookup;
+        break;
+    case tick_mode_t::off:
+        break;
+    case tick_mode_t::on:
+        draw_ticks(1.0f);
+        break;
+    default:
+    case tick_mode_t::dim:
+        draw_ticks(dim_color);
+        break;
+    }
+
     switch(settings.seconds_mode) {
-    case seconds_mode_t::fixed:
+    case seconds_mode_t::Fixed:
         for(int i = 0; i <= current_second; ++i) {
             set_second(1.0f, i);
         }
         for(int i = current_second + 1; i < 60; ++i) {
-            set_second(0.2f, i);
+            set_second(dim_color, i);
         }
         break;
-    case seconds_mode_t::single:
+    case seconds_mode_t::Single:
         for(int i = 0; i < 60; ++i) {
-            set_second(0.2f, i);
+            set_second(dim_color, i);
         }
         set_second(1.0f, current_second);
         break;
-    case seconds_mode_t::tail_short:
-        draw_tail(10);
+    case seconds_mode_t::Short:
+        draw_tail(15);
         break;
-    case seconds_mode_t::tail_medium:
+    case seconds_mode_t::Medium:
         draw_tail(30);
         break;
-    case seconds_mode_t::tail_long:
-        draw_tail(59);
+    default:
+    case seconds_mode_t::Long:
+        draw_tail(60);
         break;
     }
 }

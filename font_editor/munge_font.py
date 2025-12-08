@@ -85,7 +85,7 @@ def generate_c_files(font_data: Dict, font_name: str):
         rows = convert_to_uint8_t_rows(pixels, width, height, shift)
         all_bitmap_data.extend(rows)
 
-        widths_comments.append(f" /* '{chr(i)}' (Shift: {shift}, Width: {bits_wide}) */")
+        widths_comments.append(f" // '{chr(i)}' ({i})")
 
     # --- Generate .h Header File ---
 
@@ -126,7 +126,7 @@ extern const struct font_t {font_name}_font;
         char_data = all_bitmap_data[start_index:end_index]
         char_hex_data = ', '.join(f"0x{r:02X}" for r in char_data)
         char_code = START_CHAR + i
-        char_line = f"    {char_hex_data}, /* '{chr(char_code)}' (ASCII {char_code}) */"
+        char_line = f"    {char_hex_data}, // '{chr(char_code)}' ({char_code})"
         bitmap_lines.append(char_line)
 
     bitmap_array = f"""

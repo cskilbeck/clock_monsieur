@@ -57,6 +57,7 @@ struct graphics_t
     void set_pixel(float color, int x, int y);
     float get_pixel(int x, int y);
     void set_second(float color, uint8_t second);
+    void set_tick(float color, uint8_t tick);
     void set_second_only(float color, uint8_t second);
     void draw_time(int hours, int minutes, float color);
     void draw_colon(int seconds, float color);

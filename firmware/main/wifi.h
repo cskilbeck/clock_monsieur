@@ -10,6 +10,7 @@
 
 esp_err_t wifi_init();
 char const *wifi_ip_address();
+char const *wifi_mac_address();
 char const *provisioning_pop();
 
 //////////////////////////////////////////////////////////////////////

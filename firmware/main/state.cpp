@@ -273,6 +273,7 @@ void clock_state_t::on_update()
         usecs = max(0l, usecs - 500000);
         fade = min(usecs * second_snap, 1.0f);
         break;
+    default:
     case clock_fade_mode_t::low:
         second_snap = (one_second / 0.25f) / microseconds;
         usecs = max(0l, usecs - 750000);

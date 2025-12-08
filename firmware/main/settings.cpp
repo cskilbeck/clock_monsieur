@@ -78,7 +78,7 @@ esp_err_t settings_t::save()
     if(err != ESP_OK) {
         LOG_ERROR("Failed to commit settings to NVS: %s", esp_err_to_name(err));
     } else {
-        LOG_INFO("%d settings saved");
+        LOG_INFO("%d settings saved", saved);
     }
     return err;
 }
@@ -153,11 +153,11 @@ struct : console_command_t<"seconds", "show/set seconds display mode", "long|med
     void on_command(int argc, char **argv) override
     {
         enum_name<seconds_mode_t> names[] = {
-            "long",   seconds_mode_t::tail_long,      //
-            "medium", seconds_mode_t::tail_medium,    //
-            "short",  seconds_mode_t::tail_short,     //
-            "fixed",  seconds_mode_t::fixed,          //
-            "single", seconds_mode_t::single,
+            "long",   seconds_mode_t::Long,      //
+            "medium", seconds_mode_t::Medium,    //
+            "short",  seconds_mode_t::Short,     //
+            "fixed",  seconds_mode_t::Fixed,     //
+            "single", seconds_mode_t::Single,
         };
         if(argc == 1) {
             printf("%s\n", get_enum_name(names, settings.seconds_mode));

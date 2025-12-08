@@ -26,12 +26,15 @@ X menus
     X Clock font
     X Brightness
     X Set timezone
+    X Show mac address
+    X Tick mode on/off/dim/track
 X Auto-save settings
 X bigger less ridiculous buttons
 X put ambient light sensor on the front
 X tweak Ambient light sensor gamma ramp
+X fancy menu scrolling
 
+- fancy scrolling in timezone chooser
 - button auto-repeat
-- fancy menu scrolling
 - AM/PM font for 12 hour clock
 - frosted glass/gel problem

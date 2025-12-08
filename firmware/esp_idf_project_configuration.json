@@ -3,12 +3,12 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "e:\\dev\\clock_monsieur\\firmware\\build_release",
+      "buildDirectoryPath": "build_release",
       "sdkconfigDefaults": [
-        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.release",
-        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.defaults"
+        "sdkconfig.defaults",
+        "sdkconfig.release"
       ],
-      "sdkconfigFilePath": "e:\\dev\\clock_monsieur\\firmware\\build_release\\sdkconfig"
+      "sdkconfigFilePath": "build_release\\sdkconfig"
     },
     "env": {
       "NDEBUG": "1"
@@ -17,7 +17,7 @@
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
-      "debugLevel": -1,
+      "debugLevel": 2,
       "configs": [],
       "args": []
     },
@@ -32,12 +32,12 @@
     "build": {
       "compileArgs": [],
       "ninjaArgs": [],
-      "buildDirectoryPath": "e:\\dev\\clock_monsieur\\firmware\\build_debug",
+      "buildDirectoryPath": "build",
       "sdkconfigDefaults": [
-        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.debug",
-        "e:\\dev\\clock_monsieur\\firmware\\sdkconfig.defaults"
+        "sdkconfig.defaults",
+        "sdkconfig.debug"
       ],
-      "sdkconfigFilePath": "e:\\dev\\clock_monsieur\\firmware\\build_debug\\sdkconfig"
+      "sdkconfigFilePath": "build\\sdkconfig"
     },
     "env": {
       "DEBUG": "1"
@@ -46,7 +46,7 @@
     "flashBaudRate": "",
     "monitorBaudRate": "",
     "openOCD": {
-      "debugLevel": -1,
+      "debugLevel": 2,
       "configs": [],
       "args": []
     },

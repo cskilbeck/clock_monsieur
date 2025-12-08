@@ -43,12 +43,13 @@ template <> inline char const *setting_to_string(timezone_location_t const &a)
     X(0, clock_mode, clock_mode_t, clock_mode_t::clock_12_hour)         \
     X(1, auto_brightness, auto_brightness_t, auto_brightness_t::on)     \
     X(2, brightness, uint8_t, 128)                                      \
-    X(3, seconds_mode, seconds_mode_t, seconds_mode_t::tail_long)       \
+    X(3, seconds_mode, seconds_mode_t, seconds_mode_t::Long)            \
     X(4, colon_mode, colon_mode_t, colon_mode_t::on)                    \
     X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::medium) \
     X(6, clock_font, clock_font_t, clock_font_t::modern)                \
     X(7, timezone_mode, timezone_mode_t, timezone_mode_t::automatic)    \
-    X(8, location, timezone_location_t, 0)
+    X(8, location, timezone_location_t, 0)                              \
+    X(9, ticks, tick_mode_t, tick_mode_t::track)
 
 //////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display
@@ -56,7 +57,8 @@ template <> inline char const *setting_to_string(timezone_location_t const &a)
 enum class clock_mode_t : uint8_t
 {
     clock_12_hour = 0,
-    clock_24_hour = 1
+    clock_24_hour = 1,
+    max = 2
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -65,7 +67,8 @@ enum class clock_mode_t : uint8_t
 enum class auto_brightness_t : uint8_t
 {
     off = 0,
-    on = 1
+    on = 1,
+    max = 2
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -73,11 +76,24 @@ enum class auto_brightness_t : uint8_t
 
 enum class seconds_mode_t : uint8_t
 {
-    tail_long = 0,
-    tail_medium = 1,
-    tail_short = 2,
-    fixed = 3,
-    single = 4
+    Long = 0,
+    Medium = 1,
+    Short = 2,
+    Fixed = 3,
+    Single = 4,
+    max = 5
+};
+
+//////////////////////////////////////////////////////////////////////
+// How to display the hour ticks
+
+enum class tick_mode_t : uint8_t
+{
+    off = 0,
+    on = 1,
+    dim = 2,
+    track = 3,
+    max = 4
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -88,7 +104,8 @@ enum class colon_mode_t : uint8_t
     off = 0,
     on = 1,
     dim = 2,
-    pulse = 3
+    pulse = 3,
+    max = 4
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -99,7 +116,8 @@ enum class clock_fade_mode_t : uint8_t
     off = 0,
     low = 1,
     medium = 2,
-    high = 3
+    high = 3,
+    max = 4
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -107,7 +125,8 @@ enum class clock_fade_mode_t : uint8_t
 enum class clock_font_t : uint8_t
 {
     normal = 0,
-    modern = 1
+    modern = 1,
+    max = 2
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -115,7 +134,8 @@ enum class clock_font_t : uint8_t
 enum class timezone_mode_t : uint8_t
 {
     automatic = 0,
-    selected = 1
+    selected = 1,
+    max = 2
 };
 
 //////////////////////////////////////////////////////////////////////
