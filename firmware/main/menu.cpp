@@ -25,7 +25,7 @@ namespace
 {
     struct item_t;
 
-    time_t last_menu_activity_timestamp{ 0 };
+    timeval last_menu_activity_timestamp{ 0 };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -211,7 +211,7 @@ namespace
         previous_item = item_t::current_item;
         name_x = 0;
         current_item = where;
-        last_menu_activity_timestamp = utc_wall_time.tv_sec;
+        clock_get_time(nullptr, &last_menu_activity_timestamp);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -252,14 +252,20 @@ namespace
 
     template <typename T> void cycle_enum(T &x)
     {
-        int y = static_cast<int>(x) + 1;
+        int y = static_cast<int>(x);
         if(y == static_cast<int>(T::max)) {
             y = 0;
+        } else {
+            y += 1;
         }
         x = static_cast<T>(y);
     }
 
     //////////////////////////////////////////////////////////////////////
+
+#define ENAME(type, value) \
+    case type::value:      \
+        return #value
 
     ///// Settings
 
@@ -279,9 +285,8 @@ namespace
                 return "12 Hour";
             case clock_mode_t::clock_24_hour:
                 return "24 Hour";
-            default:
-                return "?";
             }
+            return "?";
         }
     } clock_mode_setting_menu{ "?", &mode_menu, [] { cycle_enum(settings.clock_mode); } };
 
@@ -295,13 +300,10 @@ namespace
         char const *text() const override
         {
             switch(settings.auto_brightness) {
-            case auto_brightness_t::on:
-                return "Auto";
-            case auto_brightness_t::off:
-                return "Fixed";
-            default:
-                return "?";
+                ENAME(auto_brightness_t, Fixed);
+                ENAME(auto_brightness_t, Auto);
             }
+            return "?";
         }
     } brightness_auto_menu{ "?", &brightness_menu, [] { cycle_enum(settings.auto_brightness); } };
 
@@ -348,19 +350,13 @@ namespace
         char const *text() const override
         {
             switch(settings.seconds_mode) {
-            case seconds_mode_t::Long:
-                return "Long";
-            case seconds_mode_t::Medium:
-                return "Medium";
-            case seconds_mode_t::Short:
-                return "Short";
-            case seconds_mode_t::Fixed:
-                return "Fixed";
-            case seconds_mode_t::Single:
-                return "Single";
-            default:
-                return "?";
+                ENAME(seconds_mode_t, Long);
+                ENAME(seconds_mode_t, Medium);
+                ENAME(seconds_mode_t, Short);
+                ENAME(seconds_mode_t, Fixed);
+                ENAME(seconds_mode_t, Single);
             }
+            return "?";
         }
     } seconds_type_menu{ "", &seconds_menu, [] { cycle_enum(settings.seconds_mode); } };
 
@@ -374,17 +370,12 @@ namespace
         char const *text() const override
         {
             switch(settings.colon_mode) {
-            case colon_mode_t::off:
-                return "Off";
-            case colon_mode_t::on:
-                return "On";
-            case colon_mode_t::dim:
-                return "Dim";
-            case colon_mode_t::pulse:
-                return "Pulse";
-            default:
-                return "?";
+                ENAME(colon_mode_t, Off);
+                ENAME(colon_mode_t, On);
+                ENAME(colon_mode_t, Dim);
+                ENAME(colon_mode_t, Pulse);
             }
+            return "?";
         }
     } colon_setting_menu{ "?", &colon_menu, [] { cycle_enum(settings.colon_mode); } };
 
@@ -398,13 +389,10 @@ namespace
         char const *text() const override
         {
             switch(settings.clock_font) {
-            case clock_font_t::normal:
-                return "Normal";
-            case clock_font_t::modern:
-                return "Square";
-            default:
-                return "?";
+                ENAME(clock_font_t, Normal);
+                ENAME(clock_font_t, Square);
             }
+            return "?";
         }
     } font_setting_menu{ "?", &font_menu, [] { cycle_enum(settings.clock_font); } };
 
@@ -418,17 +406,12 @@ namespace
         char const *text() const override
         {
             switch(settings.clock_fade_mode) {
-            case clock_fade_mode_t::off:
-                return "Off";
-            case clock_fade_mode_t::low:
-                return "Low";
-            case clock_fade_mode_t::medium:
-                return "Medium";
-            case clock_fade_mode_t::high:
-                return "High";
-            default:
-                return "?";
+                ENAME(clock_fade_mode_t, Off);
+                ENAME(clock_fade_mode_t, Low);
+                ENAME(clock_fade_mode_t, Medium);
+                ENAME(clock_fade_mode_t, High);
             }
+            return "?";
         }
     } fade_setting_menu{ "?", &fade_menu, [] { cycle_enum(settings.clock_fade_mode); } };
 
@@ -442,17 +425,12 @@ namespace
         char const *text() const override
         {
             switch(settings.ticks) {
-            case tick_mode_t::off:
-                return "Off";
-            case tick_mode_t::on:
-                return "On";
-            case tick_mode_t::dim:
-                return "Dim";
-            case tick_mode_t::track:
-                return "Track";
-            default:
-                return "?";
+                ENAME(tick_mode_t, Off);
+                ENAME(tick_mode_t, On);
+                ENAME(tick_mode_t, Dim);
+                ENAME(tick_mode_t, Track);
             }
+            return "?";
         }
     } ticks_setting_menu{ "?", &ticks_menu, [] { cycle_enum(settings.ticks); } };
 
@@ -461,7 +439,7 @@ namespace
     item_t timezone_menu{ "Timezone", &root_menu };
     item_t timezone_auto_menu{ "Auto", &timezone_menu, [] {
                                   LOG_INFO("Auto timezone");
-                                  settings.timezone_mode = timezone_mode_t::automatic;
+                                  settings.timezone_mode = timezone_mode_t::Auto;
                                   xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
                                   menu_exit();
                               } };
@@ -471,7 +449,7 @@ namespace
         using item_t::item_t;
         char const *text() const override
         {
-            if(settings.timezone_mode == timezone_mode_t::selected && settings.location.name[0] != 0) {
+            if(settings.timezone_mode == timezone_mode_t::Select && settings.location.name[0] != 0) {
                 return settings.location.name;
             }
             return "Select";
@@ -521,7 +499,7 @@ void menu_init()
 #if defined(DEBUG)
     // show_menu(&root_menu);
 #endif
-    last_menu_activity_timestamp = utc_wall_time.tv_sec;
+    clock_get_time(nullptr, &last_menu_activity_timestamp);
     item_t::previous_item = nullptr;
     item_t::current_item = &settings_menu;
 }
@@ -531,7 +509,9 @@ void menu_init()
 void menu_update()
 {
     // menu goes away automatically after 10 minutes of inactivity
-    if((utc_wall_time.tv_sec - last_menu_activity_timestamp) > 10 * 60) {
+    timeval utc;
+    clock_get_time(nullptr, &utc);
+    if((utc.tv_sec - last_menu_activity_timestamp.tv_sec) > 10 * 60) {
         menu_exit();
     } else {
         item_t::current_item->on_update();

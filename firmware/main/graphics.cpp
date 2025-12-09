@@ -344,7 +344,7 @@ IRAM_ATTR void graphics_t::draw_time(int hours, int minutes, float color)
     }
     char time_buffer[16];
     sprintf(time_buffer, fmt, hours, minutes);
-    font_t const &font = settings.clock_font == clock_font_t::modern ? square_font_font : font_5x7_font;
+    font_t const &font = settings.clock_font == clock_font_t::Square ? square_font_font : font_5x7_font;
     font.draw_char_centered(*this, time_buffer[0], 2, 0, color);
     font.draw_char_centered(*this, time_buffer[1], 8, 0, color);
     font.draw_char_centered(*this, time_buffer[2], 16, 0, color);
@@ -357,17 +357,17 @@ IRAM_ATTR void graphics_t::draw_colon(int seconds, float color)
 {
     float colon_color{};
     switch(settings.colon_mode) {
-    case colon_mode_t::off:
+    case colon_mode_t::Off:
         colon_color = 0.0f;
         break;
-    case colon_mode_t::on:
+    case colon_mode_t::On:
         colon_color = color;
         break;
-    case colon_mode_t::dim:
+    case colon_mode_t::Dim:
         colon_color = color * 0.5f;
         break;
     default:
-    case colon_mode_t::pulse:
+    case colon_mode_t::Pulse:
         colon_color = (seconds & 1) == 0 ? 0 : color * 0.75f;
         break;
     }
@@ -404,16 +404,16 @@ IRAM_ATTR void graphics_t::draw_seconds(int current_second)
     seconds_ticks_maybe_lookup = seconds_seconds_lookup;
     float tick_color = 0.0f;
     switch(settings.ticks) {
-    case tick_mode_t::track:
+    case tick_mode_t::Track:
         seconds_ticks_maybe_lookup = seconds_hours_lookup;
         break;
-    case tick_mode_t::off:
+    case tick_mode_t::Off:
         break;
-    case tick_mode_t::on:
+    case tick_mode_t::On:
         draw_ticks(1.0f);
         break;
     default:
-    case tick_mode_t::dim:
+    case tick_mode_t::Dim:
         draw_ticks(dim_color);
         break;
     }

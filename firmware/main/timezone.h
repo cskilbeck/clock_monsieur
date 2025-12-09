@@ -15,6 +15,4 @@ void timezone_select_init();
 void timezone_select_update();
 
 esp_err_t timezone_set(char const *location);
-esp_err_t timezone_get_offset_seconds(timeval &current_time, int &offset_seconds);
-
-extern int timezone_offset_seconds;
+int timezone_get_offset_seconds(timeval &current_time);

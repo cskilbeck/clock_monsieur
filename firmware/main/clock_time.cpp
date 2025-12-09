@@ -80,10 +80,10 @@ namespace
     char http_buffer[MAX_HTTP_OUTPUT_BUFFER];
     http_data_context_t context(http_buffer, sizeof(http_buffer));
 
-}    // namespace
+    timeval local_wall_time;
+    timeval utc_wall_time;
 
-timeval local_wall_time;
-timeval utc_wall_time;
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 // request to ip-api.com to get lat/lon.
@@ -213,7 +213,7 @@ void clock_init()
     xTaskCreatePinnedToCore(sntp_task, "sntp", 1024 * 4, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(timezone_task, "timezone", 1024 * 4, NULL, 1, NULL, 0);
 
-    if(settings.timezone_mode == timezone_mode_t::automatic) {
+    if(settings.timezone_mode == timezone_mode_t::Auto) {
         xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
     } else {
         LOG_INFO("Setting timezone to %s", settings.location.name);
@@ -223,13 +223,44 @@ void clock_init()
 
 //////////////////////////////////////////////////////////////////////
 
+// NOTE: uint32 is atomic on ESP32S3
+static volatile uint32_t time_updating = 0;
+
 void clock_update()
 {
-    timeval now;
-    gettimeofday(&now, NULL);
-    timezone_get_offset_seconds(now, timezone_offset_seconds);
-    utc_wall_time.tv_sec = now.tv_sec;
-    utc_wall_time.tv_usec = now.tv_usec;
-    local_wall_time.tv_sec = now.tv_sec + timezone_offset_seconds;
-    local_wall_time.tv_usec = now.tv_usec;
+    // goes odd
+    time_updating += 1;
+
+    gettimeofday(&utc_wall_time, NULL);
+
+    local_wall_time.tv_sec = utc_wall_time.tv_sec + timezone_get_offset_seconds(utc_wall_time);
+    local_wall_time.tv_usec = utc_wall_time.tv_usec;
+
+    // goes even
+    time_updating += 1;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void clock_get_time(timeval *local_time, timeval *utc_time)
+{
+    uint32_t start_flag = 0, end_flag = 0;
+    timeval local;
+    timeval utc;
+    do {
+        start_flag = time_updating;
+        if(start_flag & 0x1) {
+            taskYIELD();
+            continue;
+        }
+        local = local_wall_time;
+        utc = utc_wall_time;
+        end_flag = time_updating;
+    } while(start_flag != end_flag);
+    if(local_time != nullptr) {
+        *local_time = local;
+    }
+    if(utc_time != nullptr) {
+        *utc_time = utc;
+    }
 }

@@ -171,8 +171,6 @@ namespace
 
 }    // namespace
 
-int timezone_offset_seconds = 0;
-
 //////////////////////////////////////////////////////////////////////
 
 void timezone_select_init()
@@ -209,7 +207,7 @@ void timezone_select_update()
             name_x = 0;
             node_count = current->num_children;
         } else {
-            settings.timezone_mode = timezone_mode_t::selected;
+            settings.timezone_mode = timezone_mode_t::Select;
             settings.location.name[0] = 0;
             ssize_t remain = sizeof(settings.location.name) - 1;
             size_t offset = 0;
@@ -281,16 +279,14 @@ esp_err_t timezone_set(char const *location)
 
 //////////////////////////////////////////////////////////////////////
 
-esp_err_t timezone_get_offset_seconds(timeval &current_time, int &offset_seconds)
+int timezone_get_offset_seconds(timeval &current_time)
 {
     if(zone_offset_start == nullptr) {
-        offset_seconds = 0;
-        return ESP_ERR_INVALID_STATE;
+        return 0;
     }
     zone_offset const *found = find_timezone(current_time.tv_sec, zone_offset_start, zone_offset_end);
     if(!found) {
-        return ESP_ERR_NOT_FOUND;
+        return 0;
     }
-    offset_seconds = found->offset_seconds();
-    return ESP_OK;
+    return found->offset_seconds();
 }

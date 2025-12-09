@@ -259,33 +259,35 @@ void clock_state_t::on_update()
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
     float second_snap{ 0.0f };
-    suseconds_t usecs = local_wall_time.tv_usec;
+    timeval local_time;
+    clock_get_time(&local_time);
+    suseconds_t usecs = local_time.tv_usec;
     float fade = 0.0f;
     switch(settings.clock_fade_mode) {
-    case clock_fade_mode_t::off:
+    case clock_fade_mode_t::Off:
         break;
-    case clock_fade_mode_t::high:
+    case clock_fade_mode_t::High:
         second_snap = one_second / microseconds;
         fade = min(usecs * second_snap, 1.0f);
         break;
-    case clock_fade_mode_t::medium:
+    case clock_fade_mode_t::Medium:
         second_snap = (one_second / 0.5f) / microseconds;
         usecs = max(0l, usecs - 500000);
         fade = min(usecs * second_snap, 1.0f);
         break;
     default:
-    case clock_fade_mode_t::low:
+    case clock_fade_mode_t::Low:
         second_snap = (one_second / 0.25f) / microseconds;
         usecs = max(0l, usecs - 750000);
         fade = min(usecs * second_snap, 1.0f);
         break;
     }
 
-    gfx.draw_clock(local_wall_time.tv_sec, clock_color);
-    if(settings.clock_fade_mode == clock_fade_mode_t::off) {
+    gfx.draw_clock(local_time.tv_sec, clock_color);
+    if(settings.clock_fade_mode == clock_fade_mode_t::Off) {
         gfx.display();
     } else {
-        gfx2.draw_clock(local_wall_time.tv_sec + 1, clock_color);
+        gfx2.draw_clock(local_time.tv_sec + 1, clock_color);
         gfx.fade_to(gfx2, fade);
     }
 

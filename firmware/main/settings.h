@@ -41,15 +41,15 @@ template <> inline char const *setting_to_string(timezone_location_t const &a)
 
 #define SETTINGS_FIELDS                                                 \
     X(0, clock_mode, clock_mode_t, clock_mode_t::clock_12_hour)         \
-    X(1, auto_brightness, auto_brightness_t, auto_brightness_t::on)     \
+    X(1, auto_brightness, auto_brightness_t, auto_brightness_t::Auto)   \
     X(2, brightness, uint8_t, 128)                                      \
     X(3, seconds_mode, seconds_mode_t, seconds_mode_t::Long)            \
-    X(4, colon_mode, colon_mode_t, colon_mode_t::on)                    \
-    X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::medium) \
-    X(6, clock_font, clock_font_t, clock_font_t::modern)                \
-    X(7, timezone_mode, timezone_mode_t, timezone_mode_t::automatic)    \
+    X(4, colon_mode, colon_mode_t, colon_mode_t::On)                    \
+    X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::Medium) \
+    X(6, clock_font, clock_font_t, clock_font_t::Square)                \
+    X(7, timezone_mode, timezone_mode_t, timezone_mode_t::Auto)         \
     X(8, location, timezone_location_t, 0)                              \
-    X(9, ticks, tick_mode_t, tick_mode_t::track)
+    X(9, ticks, tick_mode_t, tick_mode_t::Track)
 
 //////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display
@@ -58,7 +58,7 @@ enum class clock_mode_t : uint8_t
 {
     clock_12_hour = 0,
     clock_24_hour = 1,
-    max = 2
+    max = 1
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -66,9 +66,9 @@ enum class clock_mode_t : uint8_t
 
 enum class auto_brightness_t : uint8_t
 {
-    off = 0,
-    on = 1,
-    max = 2
+    Fixed = 0,
+    Auto = 1,
+    max = 1
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -81,7 +81,7 @@ enum class seconds_mode_t : uint8_t
     Short = 2,
     Fixed = 3,
     Single = 4,
-    max = 5
+    max = 4
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -89,11 +89,11 @@ enum class seconds_mode_t : uint8_t
 
 enum class tick_mode_t : uint8_t
 {
-    off = 0,
-    on = 1,
-    dim = 2,
-    track = 3,
-    max = 4
+    Off = 0,
+    On = 1,
+    Dim = 2,
+    Track = 3,
+    max = 3
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -101,11 +101,11 @@ enum class tick_mode_t : uint8_t
 
 enum class colon_mode_t : uint8_t
 {
-    off = 0,
-    on = 1,
-    dim = 2,
-    pulse = 3,
-    max = 4
+    Off = 0,
+    On = 1,
+    Dim = 2,
+    Pulse = 3,
+    max = 3
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -113,29 +113,29 @@ enum class colon_mode_t : uint8_t
 
 enum class clock_fade_mode_t : uint8_t
 {
-    off = 0,
-    low = 1,
-    medium = 2,
-    high = 3,
-    max = 4
+    Off = 0,
+    Low = 1,
+    Medium = 2,
+    High = 3,
+    max = 3
 };
 
 //////////////////////////////////////////////////////////////////////
 
 enum class clock_font_t : uint8_t
 {
-    normal = 0,
-    modern = 1,
-    max = 2
+    Normal = 0,
+    Square = 1,
+    max = 1
 };
 
 //////////////////////////////////////////////////////////////////////
 
 enum class timezone_mode_t : uint8_t
 {
-    automatic = 0,
-    selected = 1,
-    max = 2
+    Auto = 0,
+    Select = 1,
+    max = 1
 };
 
 //////////////////////////////////////////////////////////////////////

@@ -123,10 +123,10 @@ struct : console_command_t<"brightness", "show/set brightness", "auto|fixed 0..2
     void on_command(int argc, char **argv) override
     {
         enum_name<auto_brightness_t> names[] = {
-            "auto", auto_brightness_t::on,     //
-            "fixed", auto_brightness_t::off    //
+            "auto", auto_brightness_t::Auto,     //
+            "fixed", auto_brightness_t::Fixed    //
         };
-        auto_brightness_t auto_brightness = auto_brightness_t::on;
+        auto_brightness_t auto_brightness = auto_brightness_t::Auto;
         int brightness = -1;
         if(argc == 1) {
             printf("%s %d\n", get_enum_name(names, settings.auto_brightness), settings.brightness);
@@ -174,10 +174,10 @@ struct : console_command_t<"colon", "show/set colon display mode", "off|on|dim|p
     void on_command(int argc, char **argv) override
     {
         enum_name<colon_mode_t> names[] = {
-            "off",   colon_mode_t::off,      //
-            "on",    colon_mode_t::on,       //
-            "dim",   colon_mode_t::dim,      //
-            "pulse", colon_mode_t::pulse,    //
+            "off",   colon_mode_t::Off,      //
+            "on",    colon_mode_t::On,       //
+            "dim",   colon_mode_t::Dim,      //
+            "pulse", colon_mode_t::Pulse,    //
         };
         if(argc == 1) {
             printf("%s\n", get_enum_name(names, settings.colon_mode));
@@ -194,10 +194,10 @@ struct : console_command_t<"fade", "show/set fade between seconds", "off|low|med
     void on_command(int argc, char **argv) override
     {
         enum_name<clock_fade_mode_t> names[] = {
-            "off",    clock_fade_mode_t::off,       //
-            "low",    clock_fade_mode_t::low,       //
-            "medium", clock_fade_mode_t::medium,    //
-            "high",   clock_fade_mode_t::high,      //
+            "off",    clock_fade_mode_t::Off,       //
+            "low",    clock_fade_mode_t::Low,       //
+            "medium", clock_fade_mode_t::Medium,    //
+            "high",   clock_fade_mode_t::High,      //
         };
         if(argc == 1) {
             printf("%s\n", get_enum_name(names, settings.clock_fade_mode));
