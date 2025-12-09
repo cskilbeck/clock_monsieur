@@ -65,6 +65,7 @@ void state_handler_t::on_stop()
 void state_init()
 {
     state_queue = xQueueCreate(2, sizeof(void *));
+    state_set(boot_state);
 }
 
 //////////////////////////////////////////////////////////////////////

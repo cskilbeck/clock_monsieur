@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "nvs_handle.hpp"
+#include <nvs_flash.h>
 
 #include "settings.h"
 #include "console.h"
@@ -235,3 +236,16 @@ struct : console_command_t<"save", "save settings", "">
         settings.save();
     }
 } cmd_save;
+
+//////////////////////////////////////////////////////////////////////
+
+void settings_init()
+{
+    esp_err_t ret = nvs_flash_init();
+    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_LOG_ERR(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_LOG_ERR(ret);
+    settings.load();
+}
