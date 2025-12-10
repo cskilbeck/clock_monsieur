@@ -230,4 +230,5 @@ void clock_update()
 {
     gettimeofday(&utc_wall_time, NULL);
     timezone_offset_seconds = timezone_get_offset_seconds(utc_wall_time.tv_sec);
+    timezone_next_offset_seconds = timezone_get_offset_seconds(utc_wall_time.tv_sec + 1);
 }

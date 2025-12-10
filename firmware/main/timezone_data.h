@@ -30,6 +30,6 @@ struct tz_node_t
 };
 
 extern const char TZ_NAME_STRING[3730];
-extern const zone_offset_t ZONE_OFFSETS[13370];
+extern const zone_offset_t ZONE_OFFSETS[13368];
 extern const tz_details_t TZ_DETAILS[418];
 extern const tz_node_t TZ_NODES[433];
