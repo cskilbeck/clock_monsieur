@@ -279,14 +279,14 @@ esp_err_t timezone_set(char const *location)
 
 //////////////////////////////////////////////////////////////////////
 
-int timezone_get_offset_seconds(timeval &current_time)
+int timezone_get_offset_seconds(time_t epoch_seconds)
 {
     if(zone_offset_start == nullptr) {
         return 0;
     }
-    zone_offset const *found = find_timezone(current_time.tv_sec, zone_offset_start, zone_offset_end);
-    if(!found) {
+    zone_offset const *offset = find_timezone(epoch_seconds, zone_offset_start, zone_offset_end);
+    if(offset == nullptr) {
         return 0;
     }
-    return found->offset_seconds();
+    return offset->offset_seconds();
 }

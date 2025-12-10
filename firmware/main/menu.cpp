@@ -211,7 +211,7 @@ namespace
         previous_item = item_t::current_item;
         name_x = 0;
         current_item = where;
-        clock_get_time(nullptr, &last_menu_activity_timestamp);
+        last_menu_activity_timestamp = utc_wall_time;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -499,7 +499,7 @@ void menu_init()
 #if defined(DEBUG)
     // show_menu(&root_menu);
 #endif
-    clock_get_time(nullptr, &last_menu_activity_timestamp);
+    last_menu_activity_timestamp = utc_wall_time;
     item_t::previous_item = nullptr;
     item_t::current_item = &settings_menu;
 }
@@ -509,9 +509,7 @@ void menu_init()
 void menu_update()
 {
     // menu goes away automatically after 10 minutes of inactivity
-    timeval utc;
-    clock_get_time(nullptr, &utc);
-    if((utc.tv_sec - last_menu_activity_timestamp.tv_sec) > 10 * 60) {
+    if((utc_wall_time.tv_sec - last_menu_activity_timestamp.tv_sec) > 10 * 60) {
         menu_exit();
     } else {
         item_t::current_item->on_update();

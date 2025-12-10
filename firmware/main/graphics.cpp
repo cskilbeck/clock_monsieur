@@ -19,7 +19,7 @@ LOG_CONTEXT("graphics");
 
 namespace
 {
-    DRAM_ATTR uint8_t const matrix_lookup[7][26] = {
+    DRAM_ATTR uint8_t const matrix_lookup[screen_height][screen_width] = {
         { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
           0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
 
@@ -87,12 +87,11 @@ namespace
             *scrollbar_pos_out = 0;
             return;
         }
-        float ratio = (float)screen_width / (float)content_width;
-        float scrollbar_width = (float)(screen_width * ratio + 0.9999f);
-        float max_scroll = (float)content_width - (float)screen_width;
-        float current_scroll = (float)-content_pos;
-        float normalized_pos = current_scroll / max_scroll;
-        float scrollbar_track_length = (float)screen_width - scrollbar_width;
+        float ratio = (float)screen_width / content_width;
+        float scrollbar_width = screen_width * ratio + 0.9999f;
+        float max_scroll = (float)content_width - screen_width;
+        float normalized_pos = -content_pos / max_scroll;
+        float scrollbar_track_length = screen_width - scrollbar_width;
         float scrollbar_pos_float = normalized_pos * scrollbar_track_length;
         *scrollbar_width_out = (int)scrollbar_width;
         *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.9999f);
@@ -381,8 +380,7 @@ IRAM_ATTR void graphics_t::draw_seconds(int current_second)
 {
     auto draw_tail = [this, current_second](int TAIL_LENGTH) {
         float delta = 1.0f / TAIL_LENGTH;
-        float intensity = 1.0f;
-        float s = current_second;
+        int s = current_second;
         for(int i = 0; i < TAIL_LENGTH; ++i) {
             set_second(1.0f - i * delta, s);
             s -= 1;

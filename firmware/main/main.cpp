@@ -1,5 +1,4 @@
 #include <freertos/FreeRTOS.h>
-#include <sys/time.h>
 
 #include "main.h"
 #include "util.h"

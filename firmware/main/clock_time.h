@@ -5,4 +5,14 @@
 void clock_init();
 void clock_update();
 
-void clock_get_time(timeval *local_time = nullptr, timeval *utc_time = nullptr);
+//////////////////////////////////////////////////////////////////////
+
+extern timeval utc_wall_time;
+extern int timezone_offset_seconds;
+
+//////////////////////////////////////////////////////////////////////
+
+inline timeval get_local_time()
+{
+    return timeval{ utc_wall_time.tv_sec + timezone_offset_seconds, utc_wall_time.tv_usec };
+}

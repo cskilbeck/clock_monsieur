@@ -260,8 +260,7 @@ void clock_state_t::on_update()
     float constexpr microseconds = 1000000.0f;
     float constexpr one_second = 1.0f;
     float second_snap{ 0.0f };
-    timeval local_time;
-    clock_get_time(&local_time);
+    timeval local_time = get_local_time();
     suseconds_t usecs = local_time.tv_usec;
     float fade = 0.0f;
     switch(settings.clock_fade_mode) {
