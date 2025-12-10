@@ -33,6 +33,7 @@ X bigger less ridiculous buttons
 X put ambient light sensor on the front
 X tweak Ambient light sensor gamma ramp
 X fancy menu scrolling
+X test timezone transition (poke something into the database)
 
 - fancy scrolling in timezone chooser
 - button auto-repeat

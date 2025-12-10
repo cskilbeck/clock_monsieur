@@ -83,8 +83,10 @@ namespace
 
 }    // namespace
 
-int timezone_offset_seconds = 0;
-timeval utc_wall_time;
+int timezone_offset_seconds = 0;     // timezone offset for right now
+int timezone_next_offset_seconds;    // timezone offset for 1 second in the future
+
+timeval utc_wall_time;    // current UTC time
 
 //////////////////////////////////////////////////////////////////////
 // request to ip-api.com to get lat/lon.

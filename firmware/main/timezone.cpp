@@ -73,15 +73,19 @@ namespace
             return end;
         }
         zone_offset const *mid = begin;
+        zone_offset const *result = mid;
         while(begin < end) {
-            mid = begin + ((end - begin) + 1) / 2;
-            if(mid->epoch_start() < now) {
+            mid = begin + (end - begin) / 2;
+            int64_t mid_seconds = mid->epoch_start();
+            bool less = mid->epoch_start() <= now;
+            if(less) {
+                result = mid;
                 begin = mid + 1;
             } else {
-                end = mid - 1;
+                end = mid;
             }
         }
-        return mid;
+        return result;
     }
 
     //////////////////////////////////////////////////////////////////////

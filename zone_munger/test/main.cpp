@@ -14,7 +14,26 @@ std::string format_time(int64_t time)
 #else
     gmtime_r(&t, &x);
 #endif
-    return std::format("{:04d}/{:02d}/{:02d} {:02d}:{:02d}", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min);
+    return std::format("{:04d}/{:02d}/{:02d} {:02d}:{:02d}:{:02d}", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
+}
+
+// e.g 2025, 12, 10, 13, 45, 59
+time_t make_time_t(int year, int month, int day, int hour, int minute, int second)
+{
+    tm t{};
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
+    t.tm_isdst = -1;
+#if defined(_WIN64)
+    time_t e = _mkgmtime(&t);
+#else
+    time_t e = timegm(&t);
+#endif
+    return e;
 }
 
 int get_offset_seconds(zone_offset_t const &zone_offset)
@@ -29,27 +48,17 @@ int64_t get_epoch_seconds(zone_offset_t const &zone_offset)
     return ((int32_t)high << 16 | low) + MIN_EPOCH;
 }
 
-int64_t get_epoch_seconds(zone_offset_t const *zone_offset)
-{
-    return get_epoch_seconds(*zone_offset);
-}
-
 char const *get_node_name(tz_node_t const &node)
 {
     return &TZ_NAME_STRING[node.name_offset];
 }
 
-char const *get_node_name(tz_node_t const *node)
+tz_details_t const *get_node_details(const tz_node_t &node)
 {
-    return get_node_name(*node);
-}
-
-tz_details_t const *get_node_details(const tz_node_t *node)
-{
-    if(node->num_children != 0) {
+    if(node.num_children != 0) {
         return nullptr;
     }
-    return &TZ_DETAILS[node->children_index];
+    return &TZ_DETAILS[node.children_index];
 }
 
 // Find the most recent timezone which started before now (i.e. the current one)
@@ -60,7 +69,7 @@ zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin,
         return end;
     }
     end -= 1;
-    int64_t end_seconds = get_epoch_seconds(end);
+    int64_t end_seconds = get_epoch_seconds(*end);
     if(end_seconds <= now) {
         return end;
     }
@@ -72,15 +81,23 @@ zone_offset_t const *find_timezone(time_t const now, zone_offset_t const *begin,
     zone_offset_t const *high = end;
     zone_offset_t const *result = nullptr;
     while(low < high) {
-        zone_offset_t const *mid = low + ((high - low) + 1) / 2;
-        int64_t mid_seconds = get_epoch_seconds(mid);
-        printf("Low = %d, High = %d, Mid = %d, Is %s < now?\n", id(low), id(high), id(mid), format_time(mid_seconds).c_str());
-        if(mid_seconds < now) {
+        zone_offset_t const *mid = low + (high - low) / 2;
+        int64_t mid_seconds = get_epoch_seconds(*mid);
+        bool less = mid_seconds <= now;
+        printf("Low = %d, High = %d, Mid = %d, Is %s < %s? %s\n",
+               id(low),
+               id(high),
+               id(mid),
+               format_time(mid_seconds).c_str(),
+               format_time(now).c_str(),
+               less ? "YES" : "NO");
+        if(less) {
             result = mid;
             low = mid + 1;
         } else {
             high = mid - 1;
         }
+        printf("LOW = %d(%s), HIGH = (%d)%s, RESULT = (%d)%s\n", id(low), format_time(get_epoch_seconds(*low)).c_str(), id(high), format_time(get_epoch_seconds(*high)).c_str(), id(result), result ? format_time(get_epoch_seconds(*result)).c_str() : "NO RESULT YET");
     }
     return result;
 }
@@ -105,7 +122,7 @@ const tz_node_t *find_location(const char *path)
         uint16_t child_count = current_node->num_children;
         for(uint16_t i = 0; i < child_count; ++i) {
             tz_node_t const *child = &TZ_NODES[child_start_idx + i];
-            char const *child_name = get_node_name(child);
+            char const *child_name = get_node_name(*child);
             if(std::strncmp(segment_start, child_name, segment_len) == 0 && child_name[segment_len] == '\0') {
                 current_node = child;
                 match_found = true;
@@ -132,7 +149,7 @@ void print_node(tz_node_t const *node)
     if(node == nullptr) {
         printf("NULL Node!?\n");
     } else if(node->num_children == 0) {
-        printf("%s:\n", get_node_name(node));
+        printf("%s:\n", get_node_name(*node));
         tz_details_t const &details = TZ_DETAILS[node->children_index];
         for(int i = 0; i < details.offset_count; ++i) {
             int offset = i + details.offset_start_index;
@@ -141,7 +158,7 @@ void print_node(tz_node_t const *node)
             printf("%lld (%s),%d (offset %d)\n", seconds, format_time(seconds).c_str(), get_offset_seconds(zone_offset), offset);
         }
     } else {
-        printf("%s\n", get_node_name(node));
+        printf("%s\n", get_node_name(*node));
     }
 }
 
@@ -173,7 +190,11 @@ int main()
     time_t now;
     time(&now);
 
-    printf("Current UTC time: %s (%lld)\n", format_time(now).c_str(), now);
+    time_t when = make_time_t(2025, 12, 10, 15, 59, 0);
+    //time_t when = make_time_t(2026, 12, 10, 15, 0, 0);
+
+    printf("Curr UTC time: %s (%lld)\n", format_time(now).c_str(), now);
+    printf("When UTC time: %s (%lld)\n", format_time(when).c_str(), when);
 
     char const *locations[] = {
         "Europe/London",
@@ -194,20 +215,20 @@ int main()
             printf("Location %s not found\n", location);
             continue;
         }
-        tz_details_t const *details = get_node_details(node);
+        tz_details_t const *details = get_node_details(*node);
         if(details != nullptr) {
-            for(int i=0; i<details->offset_count; ++i) {
+            for(int i = 0; i < details->offset_count; ++i) {
                 int o = details->offset_start_index + i;
                 zone_offset_t const &zone = ZONE_OFFSETS[o];
                 printf("Zone [%4d]: %s (%d)\n", o, format_time(get_epoch_seconds(zone)).c_str(), get_offset_seconds(zone));
             }
             zone_offset_t const *start = &ZONE_OFFSETS[details->offset_start_index];
             zone_offset_t const *end = &ZONE_OFFSETS[details->offset_start_index + details->offset_count];
-            zone_offset_t const *found = find_timezone(now, start, end);
+            zone_offset_t const *found = find_timezone(when, start, end);
             if(!found) {
                 printf("ERROR: Can't get current time offset for %s\n", location);
             } else {
-                printf("End: %s\n", format_time(get_epoch_seconds(found)).c_str());
+                printf("End: %s\n", format_time(get_epoch_seconds(*found)).c_str());
                 printf("Currently %s GMT offset is %d seconds\n", location, found->offset_seconds_10 * 10);
             }
         }
