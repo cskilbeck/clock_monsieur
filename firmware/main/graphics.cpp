@@ -7,6 +7,7 @@
 
 #include "stdio.h"
 #include "display.h"
+#include "font.h"
 #include "graphics.h"
 #include "settings.h"
 #include "button.h"
@@ -17,30 +18,31 @@ LOG_CONTEXT("graphics");
 
 //////////////////////////////////////////////////////////////////////
 
+DRAM_ATTR uint8_t const graphics_t::matrix_lookup[screen_height][screen_width] = {
+    { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
+      0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
+
+    { 0xD7, 0xD6, 0xD5, 0xD4, 0xD3, 0xD2, 0xD1, 0xD0, 0xDF, 0xDE, 0xDD, 0xDC, 0xDB,
+      0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B },
+
+    { 0xB7, 0xB6, 0xB5, 0xB4, 0xB3, 0xB2, 0xB1, 0xB0, 0xBF, 0xBE, 0xBD, 0xBC, 0xBB,
+      0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x2F, 0x2E, 0x2D, 0x2C, 0x2B },
+
+    { 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1, 0xA0, 0xAF, 0xAE, 0xAD, 0xAC, 0xAB,
+      0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B },
+
+    { 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x8F, 0x8E, 0x8D, 0x8C, 0x8B,
+      0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x30, 0x3F, 0x3E, 0x3D, 0x3C, 0x3B },
+
+    { 0x97, 0x96, 0x95, 0x94, 0x93, 0x92, 0x91, 0x90, 0x9F, 0x9E, 0x9D, 0x9C, 0x9B,
+      0x57, 0x56, 0x55, 0x54, 0x53, 0x52, 0x51, 0x50, 0x5F, 0x5E, 0x5D, 0x5C, 0x5B },
+
+    { 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70, 0x7F, 0x7E, 0x7D, 0x7C, 0x7B,
+      0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
+};
+
 namespace
 {
-    DRAM_ATTR uint8_t const matrix_lookup[screen_height][screen_width] = {
-        { 0xC7, 0xC6, 0xC5, 0xC4, 0xC3, 0xC2, 0xC1, 0xC0, 0xCF, 0xCE, 0xCD, 0xCC, 0xCB,
-          0xF7, 0xF6, 0xF5, 0xF4, 0xF3, 0xF2, 0xF1, 0xF0, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB },
-
-        { 0xD7, 0xD6, 0xD5, 0xD4, 0xD3, 0xD2, 0xD1, 0xD0, 0xDF, 0xDE, 0xDD, 0xDC, 0xDB,
-          0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x1F, 0x1E, 0x1D, 0x1C, 0x1B },
-
-        { 0xB7, 0xB6, 0xB5, 0xB4, 0xB3, 0xB2, 0xB1, 0xB0, 0xBF, 0xBE, 0xBD, 0xBC, 0xBB,
-          0x27, 0x26, 0x25, 0x24, 0x23, 0x22, 0x21, 0x20, 0x2F, 0x2E, 0x2D, 0x2C, 0x2B },
-
-        { 0xA7, 0xA6, 0xA5, 0xA4, 0xA3, 0xA2, 0xA1, 0xA0, 0xAF, 0xAE, 0xAD, 0xAC, 0xAB,
-          0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x00, 0x0F, 0x0E, 0x0D, 0x0C, 0x0B },
-
-        { 0x87, 0x86, 0x85, 0x84, 0x83, 0x82, 0x81, 0x80, 0x8F, 0x8E, 0x8D, 0x8C, 0x8B,
-          0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x30, 0x3F, 0x3E, 0x3D, 0x3C, 0x3B },
-
-        { 0x97, 0x96, 0x95, 0x94, 0x93, 0x92, 0x91, 0x90, 0x9F, 0x9E, 0x9D, 0x9C, 0x9B,
-          0x57, 0x56, 0x55, 0x54, 0x53, 0x52, 0x51, 0x50, 0x5F, 0x5E, 0x5D, 0x5C, 0x5B },
-
-        { 0x77, 0x76, 0x75, 0x74, 0x73, 0x72, 0x71, 0x70, 0x7F, 0x7E, 0x7D, 0x7C, 0x7B,
-          0x47, 0x46, 0x45, 0x44, 0x43, 0x42, 0x41, 0x40, 0x4F, 0x4E, 0x4D, 0x4C, 0x4B },
-    };
 
     DRAM_ATTR uint8_t const hour_lookup[12] = {
         235, 226, 26, 10, 90, 106, 111, 101, 153, 169, 218, 234,
@@ -75,29 +77,6 @@ namespace
 
     DRAM_ATTR uint8_t const *seconds_ticks_maybe_lookup = seconds_hours_lookup;
 
-    //////////////////////////////////////////////////////////////////////
-    // content_width is width of the content to show
-    // screen_width is width of the display screen
-    // content_pos is the origin X pos where the content was drawn (always either negative or 0)
-
-    void calculate_scrollbar(int content_width, int content_pos, int *scrollbar_width_out, int *scrollbar_pos_out)
-    {
-        if(content_width <= screen_width) {
-            *scrollbar_width_out = 0;
-            *scrollbar_pos_out = 0;
-            return;
-        }
-        float ratio = (float)screen_width / content_width;
-        float scrollbar_width = screen_width * ratio + 0.9999f;
-        float max_scroll = (float)content_width - screen_width;
-        float normalized_pos = -content_pos / max_scroll;
-        float scrollbar_track_length = screen_width - scrollbar_width;
-        float scrollbar_pos_float = normalized_pos * scrollbar_track_length;
-        *scrollbar_width_out = (int)scrollbar_width;
-        *scrollbar_pos_out = (int)(scrollbar_pos_float + 0.9999f);
-    }
-
-
 };    // namespace
 
 // gfx is the primary graphics buffer
@@ -131,125 +110,6 @@ IRAM_ATTR uint16_t gamma_get(float x)
 
 //////////////////////////////////////////////////////////////////////
 
-IRAM_ATTR uint8_t font_t::get_width(int c) const
-{
-    return widths[get_c(c)];
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR uint8_t const *font_t::get_bitmap(int c) const
-{
-    return bitmap + get_c(c) * font_height;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR int font_t::measure_string(char const *str) const
-{
-    int width = 0;
-    while(int c = *str++) {
-        int w = get_width(c);
-        width += w == 0 ? (font_width / 2 - 1) : w;
-        width += 1;    // +1 for single pixel gap between chars
-    }
-    return width - 1;    // trim the trailing single pixel gap
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR int font_t::draw_char(graphics_t &gfx, int c, int x, int y, float color) const
-{
-    uint8_t char_width = get_width(c);
-    if(char_width == 0) {
-        return (font_width / 2) - 1;
-    }
-
-    // fully clipped?
-    if(y <= -font_height) {
-        return char_width;
-    }
-
-    int x_end = x + char_width;
-    if(x_end <= 0) {
-        return char_width;
-    }
-
-    uint8_t const *char_data = get_bitmap(c);
-
-    // y clip
-    int y_end = y + font_height;
-    if(y < 0) {
-        int clip = -y;
-        char_data += clip;
-        y_end = font_height - clip;
-        y = 0;
-    }
-    if(y_end > screen_height) {
-        y_end = screen_height;
-    }
-
-    // x clip
-    int shift = 0;
-    if(x < 0) {
-        shift -= x;
-        x = 0;
-    }
-    if(x_end >= screen_width) {
-        x_end = screen_width - 1;
-    }
-
-    // draw it
-    for(; y < y_end; ++y) {
-        uint8_t row = *char_data++;
-        row <<= shift;
-        for(int sx = x; sx <= x_end && row != 0; ++sx) {
-            if((row & 0x80) != 0) {
-                gfx.buffer[matrix_lookup[y][sx]] = color;
-            }
-            row <<= 1;
-        }
-    }
-    return char_width;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR int font_t::draw_char_centered(graphics_t &gfx, int c, int x, int y, float color) const
-{
-    return draw_char(gfx, c, x - get_width(c) / 2, y, color);
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR int font_t::draw_string(graphics_t &gfx, char const *str, int x, int y, float color) const
-{
-    int left = x;
-    while(int c = *str++) {
-        x += draw_char(gfx, c, x, y, color) + 1;
-    }
-    return x - left - 1;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR void font_t::draw_long_string(graphics_t &gfx, char const *text, int x, int y, float color, float scrollbar_color) const
-{
-    int width = draw_string(gfx, text, x, y, color);
-    if(width > screen_width) {
-        int scrollbar_width;
-        int scrollbar_pos;
-        calculate_scrollbar(width, x, &scrollbar_width, &scrollbar_pos);
-        int scrollbar_end = scrollbar_pos + scrollbar_width;
-        for(int sx = scrollbar_pos; sx < scrollbar_end; ++sx) {
-            float p = min(1.0f, gfx.get_pixel(sx, 0) + scrollbar_color);
-            gfx.set_pixel(p, sx, 0);
-        }
-    }
-}
-
-//////////////////////////////////////////////////////////////////////
-
 IRAM_ATTR void graphics_t::clear()
 {
     memset(buffer, 0, sizeof(buffer));
@@ -271,16 +131,6 @@ IRAM_ATTR void graphics_t::clear_matrix()
 IRAM_ATTR void graphics_t::set_led(float color, uint8_t pixel)
 {
     buffer[pixel] = color;
-}
-
-//////////////////////////////////////////////////////////////////////
-
-IRAM_ATTR void graphics_t::set_pixel(float color, int x, int y)
-{
-    if(y < 0 || y >= screen_height || x < 0 || x >= screen_width) {
-        return;
-    }
-    buffer[matrix_lookup[y][x]] = color;
 }
 
 //////////////////////////////////////////////////////////////////////

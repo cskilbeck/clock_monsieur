@@ -2,17 +2,7 @@
 // Generated C++ Source for Bitmap Font: big_caps
 #include "big_caps.h"
 
-// Definition of the struct font_t for local linkage of the data.
-struct font_t {
-    uint8_t width;
-    uint8_t height;
-    const uint8_t *bitmap;
-    const uint8_t *widths;
-};
 
-
-// Array storing all character bitmaps sequentially.
-// Data is **Right-Aligned** (occupies low bits 0 to 6).
 // Total size: 96 chars * 7 rows = 672 bytes.
 // Indexing: (char_code - 32) * 7 + row
 static const uint8_t big_caps_bitmap[672] = {
@@ -219,8 +209,8 @@ static const uint8_t big_caps_widths[96] = {
 
 // The main font structure instance, referencing the static arrays above.
 const struct font_t big_caps_font = {
-    .width = 7,
-    .height = 7,
+    .font_width = 7,
+    .font_height = 7,
     .bitmap = big_caps_bitmap,
     .widths = big_caps_widths
 };

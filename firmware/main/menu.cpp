@@ -23,9 +23,7 @@ LOG_CONTEXT("menu");
 
 namespace
 {
-    struct item_t;
-
-    timeval last_menu_activity_timestamp{ 0 };
+    time_t last_menu_activity_timestamp{ 0 };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -35,8 +33,6 @@ namespace
 
     struct item_t
     {
-        using select_function = std::function<void()>;
-
         // current menu item
         static item_t *current_item;
 
@@ -53,26 +49,14 @@ namespace
         // manual panning x
         static int name_x;
 
-        static void go(item_t *where, int xvel = -2, int yvel = 0);
-
-        char const *name;
         item_t *parent = nullptr;
         item_t *prev = nullptr;
         item_t *next = nullptr;
         item_t *children = nullptr;
-        select_function on_select;
-
-        item_t *old_item = nullptr;
-
-        virtual char const *text() const
-        {
-            return name;
-        }
 
         //////////////////////////////////////////////////////////////////////
 
-        item_t(char const *name, item_t *_parent, select_function const &select_fn = select_function{})
-            : name(name), parent(_parent), prev(nullptr), next(nullptr), children(nullptr), on_select(select_fn)
+        item_t(item_t *_parent) : parent(_parent), prev(nullptr), next(nullptr), children(nullptr)
         {
             if(_parent) {
                 parent = _parent;
@@ -86,6 +70,75 @@ namespace
                     child->next = this;
                     prev = child;
                 }
+            }
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        static void go(item_t *where, int xvel, int yvel)
+        {
+            if(where == item_t::current_item) {
+                return;
+            }
+            LOG_DEBUG("GO to %s", where->text());
+
+            transition_x = item_t::name_x;
+            transition_y = 0;
+            transition_xvel = xvel;
+            transition_yvel = yvel;
+            previous_item = item_t::current_item;
+            name_x = 0;
+            current_item = where;
+            last_menu_activity_timestamp = utc_wall_time.tv_sec;
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        virtual char const *text() const
+        {
+            return "?";
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        virtual void on_select()
+        {
+            if(children != nullptr) {
+                go(children, -2, 0);
+            } else {
+                go(parent, 2, 0);
+            }
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        virtual void on_up()
+        {
+            // UP previous menu item
+            if(prev != nullptr) {
+                go(prev, 0, 1);
+            } else {
+                // or wrap to last sibling
+                item_t *n = next;
+                while(n != nullptr && n->next != nullptr) {
+                    n = n->next;
+                }
+                if(n != nullptr) {
+                    go(n, 0, 1);
+                }
+            }
+        }
+
+        //////////////////////////////////////////////////////////////////////
+
+        virtual void on_down()
+        {
+            // DOWN next menu item
+            if(next != nullptr) {
+                go(next, 0, -1);
+            } else {
+                // or wrap to 1st sibling
+                go(parent->children, 0, -1);
             }
         }
 
@@ -107,6 +160,7 @@ namespace
             int x_gap = 3;
             int y_gap = 1;
 
+            // if scrolling to a new item
             if(previous_item != nullptr) {
                 transition_x += transition_xvel;
                 transition_y += transition_yvel;
@@ -125,31 +179,17 @@ namespace
                 }
             }
 
+            // finished scrolling to new item?
             if(previous_item == nullptr) {
+
                 float scrollbar_color = 0.5f;
                 font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / pan_speed, 0, 1.0f, scrollbar_color);
 
                 if(button_up.pressed) {
-                    if(prev != nullptr) {
-                        // UP previous menu item
-                        go(prev, 0, 1);
-                    } else {
-                        item_t *n = next;
-                        while(n != nullptr && n->next != nullptr) {
-                            n = n->next;
-                        }
-                        if(n != nullptr) {
-                            go(n, 0, 1);
-                        }
-                    }
+                    on_up();
 
                 } else if(button_down.pressed) {
-                    // DOWN next menu item
-                    if(next != nullptr) {
-                        go(next, 0, -1);
-                    } else {
-                        go(parent->children, 0, -1);
-                    }
+                    on_down();
 
                 } else if(button_left.held && name_x < 0) {
                     // LEFT scroll left
@@ -161,34 +201,16 @@ namespace
 
                 } else if(button_left.pressed && name_x == 0) {
                     // LEFT PRESS (if at 0) go up to parent
-                    if(parent != nullptr) {
-                        if(parent->parent != nullptr) {
-                            go(parent, 2, 0);
-                        } else {
-                            // or back to clock if gone back to the root node (which has no name)
-                            menu_exit();
-                        }
+                    if(parent != nullptr && parent->parent != nullptr) {
+                        go(parent, 2, 0);
+                    } else {
+                        // or back to clock if gone back to the root node (which has no parent)
+                        menu_exit();
                     }
 
                 } else if(button_select.pressed) {
                     // SELECT go into child menu or call on_select()
-                    item_t *old_item = current_item;
-                    if(on_select) {
-                        LOG_DEBUG("%s selected", text());
-                        on_select();
-                        if(old_item != current_item) {
-                            LOG_DEBUG("went to %s!", current_item->text());
-                        }
-                        // Only go to parent if this entry is not a single child
-                        if(parent != nullptr && old_item == current_item && next != nullptr && prev != nullptr) {
-                            go(parent, 2, 0);
-                            return;
-                        }
-                    }
-                    // only go into children if on_select didn't call go()
-                    if(children != nullptr && old_item == current_item) {
-                        go(children, -2, 0);
-                    }
+                    on_select();
                 }
             }
             gfx.display();
@@ -197,22 +219,16 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    void item_t::go(item_t *where, int xvel, int yvel)
-    {
-        if(where == item_t::current_item) {
-            return;
-        }
-        LOG_DEBUG("GO to %s", where->name);
+    item_t *item_t::previous_item = nullptr;
+    int item_t::transition_x;
+    int item_t::transition_y;
+    int item_t::transition_xvel;
+    int item_t::transition_yvel;
 
-        transition_x = item_t::name_x;
-        transition_y = 0;
-        transition_xvel = xvel;
-        transition_yvel = yvel;
-        previous_item = item_t::current_item;
-        name_x = 0;
-        current_item = where;
-        last_menu_activity_timestamp = utc_wall_time;
-    }
+    item_t *item_t::current_item{ nullptr };
+    int item_t::name_x{ 0 };
+
+    item_t root_menu{ nullptr };
 
     //////////////////////////////////////////////////////////////////////
 
@@ -234,261 +250,156 @@ namespace
         state_set(clock_state);
     }
 
-
     //////////////////////////////////////////////////////////////////////
 
-    item_t *item_t::previous_item = nullptr;
-    int item_t::transition_x;
-    int item_t::transition_y;
-    int item_t::transition_xvel;
-    int item_t::transition_yvel;
-
-    item_t *item_t::current_item{ nullptr };
-    int item_t::name_x{ 0 };
-
-    item_t root_menu{ "root", nullptr };
-
-    //////////////////////////////////////////////////////////////////////
-
-    template <typename T> void cycle_enum(T &x)
-    {
-        int y = static_cast<int>(x);
-        if(y == static_cast<int>(T::max)) {
-            y = 0;
-        } else {
-            y += 1;
-        }
-        x = static_cast<T>(y);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-#define ENAME(type, value) \
-    case type::value:      \
-        return #value
-
-    ///// Settings
-
-    item_t settings_menu{ "Settings", &root_menu };
-
-    /////     Mode
-
-    item_t mode_menu{ "Mode", &settings_menu };
-
-    struct : item_t
+    template <typename T, T &value> struct enum_item_t : item_t
     {
         using item_t::item_t;
-        char const *text() const override
+
+        void cycle_enum(int direction)
         {
-            switch(settings.clock_mode) {
-            case clock_mode_t::clock_12_hour:
-                return "12 Hour";
-            case clock_mode_t::clock_24_hour:
-                return "24 Hour";
-            }
-            return "?";
+            value = (T)(((int)value + direction) % (int)T::ENUM_MAX);
         }
-    } clock_mode_setting_menu{ "?", &mode_menu, [] { cycle_enum(settings.clock_mode); } };
-
-    /////     Brightness
-
-    item_t brightness_menu{ "Brightness", &settings_menu };
-
-    struct brightness_auto_menu_t : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
+        void on_up() override
         {
-            switch(settings.auto_brightness) {
-                ENAME(auto_brightness_t, Fixed);
-                ENAME(auto_brightness_t, Auto);
-            }
-            return "?";
+            cycle_enum(-1);
         }
-    } brightness_auto_menu{ "?", &brightness_menu, [] { cycle_enum(settings.auto_brightness); } };
-
-    struct : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
+        void on_down() override
         {
-            switch(settings.brightness) {
-            case 32:
-                return "Low";
-            default:
-                return "Medium";
-            case 128:
-                return "High";
-            case 255:
-                return "Max";
-            }
+            cycle_enum(1);
         }
-    } brightness_level_menu{ "?", &brightness_menu, [] {
-                                switch(settings.brightness) {
-                                case 32:
-                                    settings.brightness = 64;
-                                    break;
-                                default:
-                                    settings.brightness = 128;
-                                    break;
-                                case 128:
-                                    settings.brightness = 255;
-                                    break;
-                                case 255:
-                                    settings.brightness = 32;
-                                    break;
-                                }
-                            } };
-
-    /////     Seconds
-
-    item_t seconds_menu{ "Seconds", &settings_menu };
-
-    struct : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
+        void on_select() override
         {
-            switch(settings.seconds_mode) {
-                ENAME(seconds_mode_t, Long);
-                ENAME(seconds_mode_t, Medium);
-                ENAME(seconds_mode_t, Short);
-                ENAME(seconds_mode_t, Fixed);
-                ENAME(seconds_mode_t, Single);
-            }
-            return "?";
+            go(parent, 2, 0);
         }
-    } seconds_type_menu{ "", &seconds_menu, [] { cycle_enum(settings.seconds_mode); } };
-
-    /////     Colon
-
-    item_t colon_menu{ "Colon", &settings_menu };
-
-    struct : item_t
-    {
-        using item_t::item_t;
         char const *text() const override
         {
-            switch(settings.colon_mode) {
-                ENAME(colon_mode_t, Off);
-                ENAME(colon_mode_t, On);
-                ENAME(colon_mode_t, Dim);
-                ENAME(colon_mode_t, Pulse);
-            }
-            return "?";
-        }
-    } colon_setting_menu{ "?", &colon_menu, [] { cycle_enum(settings.colon_mode); } };
-
-    /////     Font
-
-    item_t font_menu{ "Font", &settings_menu };
-
-    struct : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
-        {
-            switch(settings.clock_font) {
-                ENAME(clock_font_t, Normal);
-                ENAME(clock_font_t, Square);
-            }
-            return "?";
-        }
-    } font_setting_menu{ "?", &font_menu, [] { cycle_enum(settings.clock_font); } };
-
-    /////     Fade
-
-    item_t fade_menu{ "Fade", &settings_menu };
-
-    struct : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
-        {
-            switch(settings.clock_fade_mode) {
-                ENAME(clock_fade_mode_t, Off);
-                ENAME(clock_fade_mode_t, Low);
-                ENAME(clock_fade_mode_t, Medium);
-                ENAME(clock_fade_mode_t, High);
-            }
-            return "?";
-        }
-    } fade_setting_menu{ "?", &fade_menu, [] { cycle_enum(settings.clock_fade_mode); } };
-
-    /////     Ticks
-
-    item_t ticks_menu{ "Ticks", &settings_menu };
-
-    struct : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
-        {
-            switch(settings.ticks) {
-                ENAME(tick_mode_t, Off);
-                ENAME(tick_mode_t, On);
-                ENAME(tick_mode_t, Dim);
-                ENAME(tick_mode_t, Track);
-            }
-            return "?";
-        }
-    } ticks_setting_menu{ "?", &ticks_menu, [] { cycle_enum(settings.ticks); } };
-
-    ///// Timezone
-
-    item_t timezone_menu{ "Timezone", &root_menu };
-    item_t timezone_auto_menu{ "Auto", &timezone_menu, [] {
-                                  LOG_INFO("Auto timezone");
-                                  settings.timezone_mode = timezone_mode_t::Auto;
-                                  xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
-                                  menu_exit();
-                              } };
-
-    struct timezone_select_menu_t : item_t
-    {
-        using item_t::item_t;
-        char const *text() const override
-        {
-            if(settings.timezone_mode == timezone_mode_t::Select && settings.location.name[0] != 0) {
-                return settings.location.name;
-            }
-            return "Select";
+            return enum_to_string(value);
         }
     };
 
-    timezone_select_menu_t timezone_select_menu{ "ZONE", &timezone_menu, [] { state_set(timezone_select_state); } };
+#define MENU_OPTION(type, name, parent) \
+    struct : enum_item_t<type, name>    \
+    {                                   \
+        using enum_item_t::enum_item_t; \
+    } type##option(parent)
+
+#define MENU_HEADER(name, txt, parent) \
+    struct : item_t                    \
+    {                                  \
+        using item_t::item_t;          \
+        char const *text() const       \
+        {                              \
+            return txt;                \
+        }                              \
+    } name(parent)
+
+    //////////////////////////////////////////////////////////////////////
+
+    MENU_HEADER(mode_menu, "Mode", &root_menu);
+    MENU_OPTION(clock_mode_t, settings.clock_mode, &mode_menu);
+
+    MENU_HEADER(dimmer_menu, "Dimmer", &root_menu);
+    MENU_OPTION(auto_brightness_t, settings.auto_brightness, &dimmer_menu);
+
+    MENU_HEADER(brightness_menu, "Brightness", &root_menu);
+    MENU_OPTION(brightness_level_t, settings.brightness, &brightness_menu);
+
+    MENU_HEADER(seconds_menu, "Seconds", &root_menu);
+    MENU_OPTION(seconds_mode_t, settings.seconds_mode, &seconds_menu);
+
+    MENU_HEADER(colon_menu, "Colon", &root_menu);
+    MENU_OPTION(colon_mode_t, settings.colon_mode, &colon_menu);
+
+    MENU_HEADER(font_menu, "Font", &root_menu);
+    MENU_OPTION(clock_font_t, settings.clock_font, &font_menu);
+
+    MENU_HEADER(fade_menu, "Fade", &root_menu);
+    MENU_OPTION(clock_fade_mode_t, settings.clock_fade_mode, &fade_menu);
+
+    MENU_HEADER(ticks_menu, "Ticks", &root_menu);
+    MENU_OPTION(tick_mode_t, settings.ticks, &ticks_menu);
+
+    MENU_HEADER(timezone_menu, "Timezone", &root_menu);
+    struct : item_t
+    {
+        using item_t::item_t;
+        void on_select() override
+        {
+            settings.timezone_mode = timezone_mode_t::Auto;
+            xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
+            item_t::on_select();
+        }
+        char const *text() const
+        {
+            return "Auto";
+        }
+    } timezone_auto_menu{ &timezone_menu };
+
+    struct : item_t
+    {
+        using item_t::item_t;
+        void on_select() override
+        {
+            state_set(timezone_select_state);
+        }
+        char const *text() const
+        {
+            return "Select";
+        }
+    } timezone_select_menu{ &timezone_menu };
 
     ///// System
 
-    item_t system_menu{ "System", &root_menu };
-    item_t version_menu{ "Version", &system_menu };
-    item_t show_version_menu{ "V" VERSION_STR, &version_menu };
+    MENU_HEADER(system_menu, "System", &root_menu);
 
-    item_t ip_address_menu{ "IP Address", &system_menu };
-    item_t mac_address_menu{ "MAC Address", &system_menu };
+    MENU_HEADER(version_menu, "Version", &system_menu);
+    MENU_HEADER(ip_address_menu, "IP Address", &system_menu);
+    MENU_HEADER(mac_address_menu, "MAC Address", &system_menu);
 
-    struct ip_addr_item_t : item_t
+    MENU_HEADER(factory_reset_menu, "Factory reset", &system_menu);
+    MENU_HEADER(factory_reset_really_menu, "Really?", &factory_reset_menu);
+    MENU_HEADER(factory_reset_no, "No", &factory_reset_really_menu);
+
+    struct : item_t
+    {
+        using item_t::item_t;
+        char const *text() const
+        {
+            return "V" VERSION_STR;
+        }
+    } show_version_menu{ &version_menu };
+
+    struct : item_t
     {
         using item_t::item_t;
         char const *text() const override
         {
             return wifi_ip_address();
         }
-    } show_ip_menu{ "192.168.0.1", &ip_address_menu };
+    } show_ip_menu{ &ip_address_menu };
 
-    struct mac_addr_item_t : item_t
+    struct : item_t
     {
         using item_t::item_t;
         char const *text() const override
         {
             return wifi_mac_address();
         }
-    } show_mac_address_menu{ "?", &mac_address_menu };
+    } show_mac_address_menu{ &mac_address_menu };
 
-    item_t factory_reset_menu{ "Factory reset", &system_menu };
-    item_t factory_reset_are_you_sure_menu{ "Really?", &factory_reset_menu };
-    item_t factory_reset_no{ "No", &factory_reset_are_you_sure_menu, [] { item_t::go(&settings_menu); } };
-    item_t factory_reset_yes{ "Yes", &factory_reset_are_you_sure_menu, [] { state_set(factory_reset_state); } };
+    struct : item_t
+    {
+        using item_t::item_t;
+        void on_select() override
+        {
+            state_set(factory_reset_state);
+        }
+        char const *text() const
+        {
+            return "Yes";
+        }
+    } factory_reset_yes{ &factory_reset_really_menu };
 
 }    // namespace
 
@@ -499,17 +410,19 @@ void menu_init()
 #if defined(DEBUG)
     // show_menu(&root_menu);
 #endif
-    last_menu_activity_timestamp = utc_wall_time;
+    last_menu_activity_timestamp = utc_wall_time.tv_sec;
     item_t::previous_item = nullptr;
-    item_t::current_item = &settings_menu;
+    if(item_t::current_item == nullptr) {
+        item_t::current_item = &mode_menu;
+    }
 }
 
 //////////////////////////////////////////////////////////////////////
 
 void menu_update()
 {
-    // menu goes away automatically after 10 minutes of inactivity
-    if((utc_wall_time.tv_sec - last_menu_activity_timestamp.tv_sec) > 10 * 60) {
+    // menu goes away automatically after 3 minutes of inactivity
+    if((utc_wall_time.tv_sec - last_menu_activity_timestamp) > 3 * 60) {
         menu_exit();
     } else {
         item_t::current_item->on_update();

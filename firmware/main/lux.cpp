@@ -207,14 +207,14 @@ void lux_update()
     // float t = 1.0f - smoothed_ambient;
     // t = 1.0f - t * t * t;
     float t = smoothed_ambient;
+    int max = settings.get_brightness();
     if(settings.auto_brightness == auto_brightness_t::Auto) {
         // scale lux to two 7 bit numbers
-        int base = (settings.brightness + 1) / 64;
-        int max = settings.brightness;
+        int base = (max + 1) / 64;
         int range = max - base;
         lux = (int)(t * range) + base;
     } else {
-        lux = settings.brightness;
+        lux = max;
     }
     display->set_ambient(lux);
 }

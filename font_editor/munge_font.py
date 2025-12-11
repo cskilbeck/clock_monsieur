@@ -1,5 +1,6 @@
 import json
 import sys
+import argparse
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -56,7 +57,7 @@ def convert_to_uint8_t_rows(pixels: List[int], width: int, height: int, shift : 
 
 # --- C/C++ File Generation ---
 
-def generate_c_files(font_data: Dict, font_name: str):
+def generate_c_files(font_data: Dict, font_name: str, output_path: Path):
     """Generates the .h and .cpp files for a single font."""
 
     metadata = font_data['metadata']
@@ -66,8 +67,8 @@ def generate_c_files(font_data: Dict, font_name: str):
     height = metadata['height']
     total_bitmap_size = NUM_CHARS * height
 
-    header_filename = f"{font_name}.h"
-    source_filename = f"{font_name}.cpp"
+    header_filename = output_path / f"{font_name}.h"
+    source_filename = output_path / f"{font_name}.cpp"
 
     # --- Process Data ---
     all_bitmap_data = []
@@ -91,30 +92,20 @@ def generate_c_files(font_data: Dict, font_name: str):
 
     header_content = f"""
 // Generated C++ Header for Bitmap Font: {font_name}
-// Character Range: ASCII {START_CHAR} to {END_CHAR}
 #include <stdint.h>
 
 #pragma once
 
-// Assumed external structure definition (omitted here for modularity):
-/*
-struct font_t {{
-    uint8_t width;
-    uint8_t height;
-    const uint8_t *bitmap;
-    const uint8_t *widths;
-}};
-*/
+#include "font.h"
 
-// Declaration of the font structure instance defined in {source_filename}
-extern const struct font_t {font_name}_font;
+extern font_t const {font_name}_font;
 """
     try:
         with open(header_filename, 'w') as f:
             f.write(header_content)
     except IOError as e:
-        print(f"❌ Error writing to file {header_filename}: {e}")
-        return
+        print(f"Error writing to file {header_filename}: {e}")
+        return False
 
     # --- Generate .cpp Source File ---
 
@@ -130,8 +121,6 @@ extern const struct font_t {font_name}_font;
         bitmap_lines.append(char_line)
 
     bitmap_array = f"""
-// Array storing all character bitmaps sequentially.
-// Data is **Right-Aligned** (occupies low bits 0 to {width - 1}).
 // Total size: {NUM_CHARS} chars * {height} rows = {total_bitmap_size} bytes.
 // Indexing: (char_code - {START_CHAR}) * {height} + row
 static const uint8_t {font_name}_bitmap[{total_bitmap_size}] = {{
@@ -158,8 +147,8 @@ static const uint8_t {font_name}_widths[{NUM_CHARS}] = {{
     font_struct = f"""
 // The main font structure instance, referencing the static arrays above.
 const struct font_t {font_name}_font = {{
-    .width = {width},
-    .height = {height},
+    .font_width = {width},
+    .font_height = {height},
     .bitmap = {font_name}_bitmap,
     .widths = {font_name}_widths
 }};
@@ -167,15 +156,7 @@ const struct font_t {font_name}_font = {{
 
     source_content = f"""
 // Generated C++ Source for Bitmap Font: {font_name}
-#include "{header_filename}"
-
-// Definition of the struct font_t for local linkage of the data.
-struct font_t {{
-    uint8_t width;
-    uint8_t height;
-    const uint8_t *bitmap;
-    const uint8_t *widths;
-}};
+#include "{header_filename.name}"
 
 {bitmap_array}
 {widths_array}
@@ -185,10 +166,10 @@ struct font_t {{
         with open(source_filename, 'w') as f:
             f.write(source_content)
 
-        print(f"✅ Successfully processed {font_name}. Generated {header_filename} and {source_filename}.")
+        print(f"{font_name}")
         return True
     except IOError as e:
-        print(f"❌ Error writing to file {source_filename}: {e}")
+        print(f"Error writing to file {source_filename}: {e}")
         return False
 
 
@@ -199,40 +180,50 @@ struct font_t {{
 def run_conversion():
     """Handles command-line arguments and processes multiple fonts."""
 
-    if len(sys.argv) < 2:
-        print("Usage: python font_converter.py <font_name_1> [font_name_2] ...")
+    parser = argparse.ArgumentParser(description="Converts JSON font files to C++ header and source files.")
+    parser.add_argument("--source", help="Folder containing the JSON files", type=Path, default='fonts')
+    parser.add_argument("--output", help="Folder for output files", type=Path, default='../firmware/main/fonts')
+    try:
+        args = parser.parse_args()
+    except argparse.ArgumentError as e:
+        print(f"Error: {e}")
         sys.exit(1)
 
-    font_names = sys.argv[1:]
-    success_count = 0
+    source_folder = args.source
+    output_folder = args.output
 
-    print(f"Starting font conversion for {len(font_names)} font(s)...")
+    font_names = source_folder.glob("*.json")
+    total = 0
+    failed = 0
+    succeeded = 0
 
     for font_name in font_names:
+
+        total += 1
 
         json_input_file = Path(font_name)
 
         try:
-            print(f"\n--- Processing: {font_name} ---")
-
             with open(json_input_file, 'r') as f:
                 font_data = json.load(f)
 
             if 'metadata' not in font_data or 'characters' not in font_data:
                 raise ValueError("JSON file must contain 'metadata' and 'characters' keys.")
 
-            if generate_c_files(font_data, Path(font_name).stem):
-                success_count += 1
+            if generate_c_files(font_data, Path(font_name).stem, output_folder):
+                succeeded += 1
 
         except FileNotFoundError:
-            print(f"❌ Error: Input file '{json_input_file}' not found. Skipping.")
+            print(f"Error: Input file '{json_input_file}' not found. Skipping.")
+            failed += 1
         except json.JSONDecodeError:
-            print(f"❌ Error: Failed to decode JSON from '{json_input_file}'. Check file format. Skipping.")
+            print(f"Error: Failed to decode JSON from '{json_input_file}'. Check file format. Skipping.")
+            failed += 1
         except Exception as e:
             print(f"An unexpected error occurred for {font_name}: {e}. Skipping.")
+            failed += 1
 
-    print(f"\n--- Conversion Finished ---")
-    print(f"Total processed: {len(font_names)}. Successfully generated: {success_count}.")
+    print(f"Total processed: {total}, {succeeded} succeeded, {failed} failed.")
 
 
 if __name__ == "__main__":

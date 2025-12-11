@@ -49,6 +49,26 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
+uint8_t settings_t::get_brightness() const
+{
+    switch(brightness) {
+    case brightness_level_t::Min:
+        return 32;
+    case brightness_level_t::Low:
+        return 64;
+    case brightness_level_t::Medium:
+        return 128;
+    case brightness_level_t::High:
+        return 176;
+    case brightness_level_t::Max:
+        return 255;
+    default:
+        return 128;
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
 esp_err_t settings_t::save()
 {
     LOG_INFO("Saving settings");
@@ -127,19 +147,18 @@ struct : console_command_t<"brightness", "show/set brightness", "auto|fixed 0..2
             "auto", auto_brightness_t::Auto,     //
             "fixed", auto_brightness_t::Fixed    //
         };
+        enum_name<brightness_level_t> brightness_names[] = {
+            "low",    brightness_level_t::Low,       //
+            "medium", brightness_level_t::Medium,    //
+            "high",   brightness_level_t::High,      //
+            "max",    brightness_level_t::Max,       //
+        };
         auto_brightness_t auto_brightness = auto_brightness_t::Auto;
-        int brightness = -1;
+        brightness_level_t brightness_level = brightness_level_t::High;
         if(argc == 1) {
-            printf("%s %d\n", get_enum_name(names, settings.auto_brightness), settings.brightness);
-            return;
-        } else if(argc == 3 && find_enum(argv[1], names, auto_brightness)) {
-            brightness = atoi(argv[2]);
-            if(brightness > 255) {
-                brightness = 255;
-            }
-        }
-        if(brightness >= 0) {
-            settings.brightness = (uint8_t)brightness;
+            printf("%s %s\n", get_enum_name(names, settings.auto_brightness), get_enum_name(brightness_names, settings.brightness));
+        } else if(argc == 3 && find_enum(argv[1], names, auto_brightness) && find_enum(argv[2], brightness_names, brightness_level)) {
+            settings.brightness = brightness_level;
             settings.auto_brightness = auto_brightness;
         } else {
             usage();

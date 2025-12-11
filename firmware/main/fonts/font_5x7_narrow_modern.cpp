@@ -2,17 +2,7 @@
 // Generated C++ Source for Bitmap Font: font_5x7_narrow_modern
 #include "font_5x7_narrow_modern.h"
 
-// Definition of the struct font_t for local linkage of the data.
-struct font_t {
-    uint8_t width;
-    uint8_t height;
-    const uint8_t *bitmap;
-    const uint8_t *widths;
-};
 
-
-// Array storing all character bitmaps sequentially.
-// Data is **Right-Aligned** (occupies low bits 0 to 4).
 // Total size: 96 chars * 7 rows = 672 bytes.
 // Indexing: (char_code - 32) * 7 + row
 static const uint8_t font_5x7_narrow_modern_bitmap[672] = {
@@ -219,8 +209,8 @@ static const uint8_t font_5x7_narrow_modern_widths[96] = {
 
 // The main font structure instance, referencing the static arrays above.
 const struct font_t font_5x7_narrow_modern_font = {
-    .width = 5,
-    .height = 7,
+    .font_width = 5,
+    .font_height = 7,
     .bitmap = font_5x7_narrow_modern_bitmap,
     .widths = font_5x7_narrow_modern_widths
 };

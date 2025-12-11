@@ -1,19 +1,9 @@
 
 // Generated C++ Header for Bitmap Font: font_5x7_narrow_modern
-// Character Range: ASCII 32 to 127
 #include <stdint.h>
 
 #pragma once
 
-// Assumed external structure definition (omitted here for modularity):
-/*
-struct font_t {
-    uint8_t width;
-    uint8_t height;
-    const uint8_t *bitmap;
-    const uint8_t *widths;
-};
-*/
+#include "font.h"
 
-// Declaration of the font structure instance defined in font_5x7_narrow_modern.cpp
-extern const struct font_t font_5x7_narrow_modern_font;
+extern font_t const font_5x7_narrow_modern_font;
