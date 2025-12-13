@@ -139,25 +139,15 @@ esp_err_t settings_t::load()
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"brightness", "show/set brightness", "auto|fixed 0..255">
+struct : console_command_t<"brightness", "show/set brightness", enum_names<auto_brightness_t, brightness_level_t>()>
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<auto_brightness_t> names[] = {
-            "auto", auto_brightness_t::Auto,     //
-            "fixed", auto_brightness_t::Fixed    //
-        };
-        enum_name<brightness_level_t> brightness_names[] = {
-            "low",    brightness_level_t::Low,       //
-            "medium", brightness_level_t::Medium,    //
-            "high",   brightness_level_t::High,      //
-            "max",    brightness_level_t::Max,       //
-        };
         auto_brightness_t auto_brightness = auto_brightness_t::Auto;
         brightness_level_t brightness_level = brightness_level_t::High;
         if(argc == 1) {
-            printf("%s %s\n", get_enum_name(names, settings.auto_brightness), get_enum_name(brightness_names, settings.brightness));
-        } else if(argc == 3 && find_enum(argv[1], names, auto_brightness) && find_enum(argv[2], brightness_names, brightness_level)) {
+            printf("%s %s\n", enum_to_string(settings.auto_brightness), enum_to_string(settings.brightness));
+        } else if(argc == 3 && find_enum(argv[1], auto_brightness) && find_enum(argv[2], brightness_level)) {
             settings.brightness = brightness_level;
             settings.auto_brightness = auto_brightness;
         } else {
@@ -168,20 +158,13 @@ struct : console_command_t<"brightness", "show/set brightness", "auto|fixed 0..2
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"seconds", "show/set seconds display mode", "long|medium|short|fixed|single">
+struct : console_command_t<"seconds", "show/set seconds display mode", enum_names<seconds_mode_t>()>
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<seconds_mode_t> names[] = {
-            "long",   seconds_mode_t::Long,      //
-            "medium", seconds_mode_t::Medium,    //
-            "short",  seconds_mode_t::Short,     //
-            "fixed",  seconds_mode_t::Fixed,     //
-            "single", seconds_mode_t::Single,
-        };
         if(argc == 1) {
-            printf("%s\n", get_enum_name(names, settings.seconds_mode));
-        } else if(!(argc == 2 && find_enum(argv[1], names, settings.seconds_mode))) {
+            printf("%s\n", enum_to_string(settings.seconds_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], settings.seconds_mode))) {
             usage();
         }
     }
@@ -189,19 +172,13 @@ struct : console_command_t<"seconds", "show/set seconds display mode", "long|med
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"colon", "show/set colon display mode", "off|on|dim|pulse">
+struct : console_command_t<"colon", "show/set colon display mode", enum_names<colon_mode_t>()>
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<colon_mode_t> names[] = {
-            "off",   colon_mode_t::Off,      //
-            "on",    colon_mode_t::On,       //
-            "dim",   colon_mode_t::Dim,      //
-            "pulse", colon_mode_t::Pulse,    //
-        };
         if(argc == 1) {
-            printf("%s\n", get_enum_name(names, settings.colon_mode));
-        } else if(!(argc == 2 && find_enum(argv[1], names, settings.colon_mode))) {
+            printf("%s\n", enum_to_string(settings.colon_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], settings.colon_mode))) {
             usage();
         }
     }
@@ -209,19 +186,13 @@ struct : console_command_t<"colon", "show/set colon display mode", "off|on|dim|p
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"fade", "show/set fade between seconds", "off|low|medium|high">
+struct : console_command_t<"fade", "show/set fade between seconds", enum_names<clock_fade_mode_t>()>
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<clock_fade_mode_t> names[] = {
-            "off",    clock_fade_mode_t::Off,       //
-            "low",    clock_fade_mode_t::Low,       //
-            "medium", clock_fade_mode_t::Medium,    //
-            "high",   clock_fade_mode_t::High,      //
-        };
         if(argc == 1) {
-            printf("%s\n", get_enum_name(names, settings.clock_fade_mode));
-        } else if(!(argc == 2 && find_enum(argv[1], names, settings.clock_fade_mode))) {
+            printf("%s\n", enum_to_string(settings.clock_fade_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], settings.clock_fade_mode))) {
             usage();
         }
     }
@@ -230,17 +201,13 @@ struct : console_command_t<"fade", "show/set fade between seconds", "off|low|med
 
 //////////////////////////////////////////////////////////////////////
 
-struct : console_command_t<"clock", "show/set 12/24 hour clock mode", "12|24">
+struct : console_command_t<"clock", "show/set 12/24 hour clock mode", enum_names<clock_mode_t>()>
 {
     void on_command(int argc, char **argv) override
     {
-        enum_name<clock_mode_t> names[] = {
-            "12", clock_mode_t::clock_12_hour,    //
-            "24", clock_mode_t::clock_24_hour,    //
-        };
         if(argc == 1) {
-            printf("%s\n", get_enum_name(names, settings.clock_mode));
-        } else if(!(argc == 2 && find_enum(argv[1], names, settings.clock_mode))) {
+            printf("%s\n", enum_to_string(settings.clock_mode));
+        } else if(!(argc == 2 && find_enum(argv[1], settings.clock_mode))) {
             usage();
         }
     }

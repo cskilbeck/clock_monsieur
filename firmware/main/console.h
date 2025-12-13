@@ -3,6 +3,7 @@
 #pragma once
 
 #include <cstring>
+#include "settings.h"
 
 //////////////////////////////////////////////////////////////////////
 
@@ -28,23 +29,6 @@ struct console_command_base_t
     console_command_base_t *next;
 
     static console_command_base_t *command_list;
-};
-
-//////////////////////////////////////////////////////////////////////
-
-template <std::size_t N> struct string_literal
-{
-    char value[N];
-    constexpr string_literal(const char (&str)[N])
-    {
-        for(int i = 0; i < N; ++i) {
-            value[i] = str[i];
-        }
-    }
-    constexpr operator char const *() const
-    {
-        return value;
-    }
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -75,31 +59,11 @@ template <string_literal NAME, string_literal HELP, string_literal ARGS> struct 
 
 //////////////////////////////////////////////////////////////////////
 
-template <typename S> struct enum_name
+template <typename T> bool find_enum(char const *what, T &result)
 {
-    char const *name;
-    S value;
-};
-
-//////////////////////////////////////////////////////////////////////
-
-template <typename T, size_t N> char const *get_enum_name(enum_name<T> const (&values)[N], T needle)
-{
-    for(auto const &f : values) {
-        if(f.value == needle) {
-            return f.name;
-        }
-    }
-    return "?Bad value?";
-}
-
-//////////////////////////////////////////////////////////////////////
-
-template <typename T, size_t N> bool find_enum(char const *what, enum_name<T> const (&values)[N], T &result)
-{
-    for(auto const &f : values) {
-        if(strcmp(f.name, what) == 0) {
-            result = f.value;
+    for(int i = 0; i < count_enum_values<T>(); ++i) {
+        if(strcasecmp(what, enum_to_string((T)i)) == 0) {
+            result = (T)i;
             return true;
         }
     }

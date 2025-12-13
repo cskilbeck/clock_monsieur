@@ -67,7 +67,7 @@ namespace
         return true;
     }
 
-    MAYBE_UNUSED bool json_int64(cJSON const *item, char const *name, int64_t &value)
+    [[maybe_unused]] bool json_int64(cJSON const *item, char const *name, int64_t &value)
     {
         double v;
         if(!json_double(item, name, v)) {

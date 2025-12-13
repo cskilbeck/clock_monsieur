@@ -2,8 +2,7 @@
 
 #pragma once
 
-#include <cstring>
-
+#include "util.h"
 #include "timezone_data.h"
 
 #include "esp_err.h"
@@ -51,187 +50,65 @@ template <> inline char const *setting_to_string(timezone_location_t const &a)
     return a.name;
 }
 
-template <typename T> [[maybe_unused]] static char const *enum_to_string(T value)
-{
-    return "?";
-}
-
-#define ENUM_NAMES(type)                                                \
-    template <> [[maybe_unused]] char const *enum_to_string(type value) \
-    {                                                                   \
-        switch(value) {
-
-#define ENAME(type, value) \
-    case type::value:      \
-        return #value
-
-#define ENAME_TEXT(type, value, text) \
-    case type::value:                 \
-        return text
-
-#define ENUM_NAMES_END \
-    default:           \
-        return "?";    \
-        }              \
-        return "?";    \
-        }
-
 //////////////////////////////////////////////////////////////////////
 // Clock 12/24 hour display
+// Can't use the wacky macros because 12/24 are not valid identifiers
 
 enum class clock_mode_t : uint8_t
 {
     clock_12_hour,
-    clock_24_hour,
-    ENUM_MAX
+    clock_24_hour
 };
 
-ENUM_NAMES(clock_mode_t)
-ENAME_TEXT(clock_mode_t, clock_12_hour, "12 hour");
-ENAME_TEXT(clock_mode_t, clock_24_hour, "24 hour");
-ENUM_NAMES_END
+template <> [[maybe_unused]] constexpr char const *enum_to_string(clock_mode_t value)
+{
+    switch(value) {
+    case clock_mode_t::clock_12_hour:
+        return "12";
+    case clock_mode_t::clock_24_hour:
+        return "24";
+    default:
+        return nullptr;
+    }
+}
 
 //////////////////////////////////////////////////////////////////////
 // Use ambient light sensor to adjust brightness automatically
 
-enum class auto_brightness_t : uint8_t
-{
-    Fixed,
-    Auto,
-    ENUM_MAX
-};
-
-ENUM_NAMES(auto_brightness_t)
-ENAME(auto_brightness_t, Fixed);
-ENAME(auto_brightness_t, Auto);
-ENUM_NAMES_END
+ENUM(auto_brightness_t, uint8_t, Fixed, Auto)
 
 //////////////////////////////////////////////////////////////////////
 // Brightness level
 
-enum class brightness_level_t : uint8_t
-{
-    Min,
-    Low,
-    Medium,
-    High,
-    Max,
-    ENUM_MAX
-};
-
-ENUM_NAMES(brightness_level_t)
-ENAME(brightness_level_t, Min);
-ENAME(brightness_level_t, Low);
-ENAME(brightness_level_t, Medium);
-ENAME(brightness_level_t, High);
-ENAME(brightness_level_t, Max);
-ENUM_NAMES_END
+ENUM(brightness_level_t, uint8_t, Min, Low, Medium, High, Max)
 
 //////////////////////////////////////////////////////////////////////
 // How to display the seconds
 
-enum class seconds_mode_t : uint8_t
-{
-    Long,
-    Medium,
-    Short,
-    Fixed,
-    Single,
-    ENUM_MAX
-};
-
-ENUM_NAMES(seconds_mode_t)
-ENAME(seconds_mode_t, Long);
-ENAME(seconds_mode_t, Medium);
-ENAME(seconds_mode_t, Short);
-ENAME(seconds_mode_t, Fixed);
-ENAME(seconds_mode_t, Single);
-ENUM_NAMES_END
+ENUM(seconds_mode_t, uint8_t, Long, Medium, Short, Fixed, Single)
 
 //////////////////////////////////////////////////////////////////////
 // How to display the hour ticks
 
-enum class tick_mode_t : uint8_t
-{
-    Off,
-    On,
-    Dim,
-    Track,
-    ENUM_MAX
-};
-
-ENUM_NAMES(tick_mode_t)
-ENAME(tick_mode_t, Off);
-ENAME(tick_mode_t, On);
-ENAME(tick_mode_t, Dim);
-ENAME(tick_mode_t, Track);
-ENUM_NAMES_END
+ENUM(tick_mode_t, uint8_t, Off, On, Dim, Track)
 
 //////////////////////////////////////////////////////////////////////
 // How to display the time colon separating hours:minutes
 
-enum class colon_mode_t : uint8_t
-{
-    Off,
-    On,
-    Dim,
-    Pulse,
-    ENUM_MAX
-};
-
-ENUM_NAMES(colon_mode_t)
-ENAME(colon_mode_t, Off);
-ENAME(colon_mode_t, On);
-ENAME(colon_mode_t, Dim);
-ENAME(colon_mode_t, Pulse);
-ENUM_NAMES_END
+ENUM(colon_mode_t, uint8_t, Off, On, Dim, Pulse)
 
 //////////////////////////////////////////////////////////////////////
 // How quickly to transition from one second to the next
 
-enum class clock_fade_mode_t : uint8_t
-{
-    Off,
-    Low,
-    Medium,
-    High,
-    ENUM_MAX
-};
-
-ENUM_NAMES(clock_fade_mode_t)
-ENAME(clock_fade_mode_t, Off);
-ENAME(clock_fade_mode_t, Low);
-ENAME(clock_fade_mode_t, Medium);
-ENAME(clock_fade_mode_t, High);
-ENUM_NAMES_END
+ENUM(clock_fade_mode_t, uint8_t, Off, Low, Medium, High)
 
 //////////////////////////////////////////////////////////////////////
 
-enum class clock_font_t : uint8_t
-{
-    Normal,
-    Square,
-    ENUM_MAX
-};
-
-ENUM_NAMES(clock_font_t)
-ENAME(clock_font_t, Normal);
-ENAME(clock_font_t, Square);
-ENUM_NAMES_END
+ENUM(clock_font_t, uint8_t, Normal, Square)
 
 //////////////////////////////////////////////////////////////////////
 
-enum class timezone_mode_t : uint8_t
-{
-    Auto,
-    Select,
-    ENUM_MAX
-};
-
-ENUM_NAMES(timezone_mode_t)
-ENAME(timezone_mode_t, Auto);
-ENAME(timezone_mode_t, Select);
-ENUM_NAMES_END
+ENUM(timezone_mode_t, uint8_t, Auto, Select)
 
 //////////////////////////////////////////////////////////////////////
 

@@ -258,7 +258,7 @@ namespace
 
         void cycle_enum(int direction)
         {
-            value = (T)(((int)value + direction) % (int)T::ENUM_MAX);
+            value = (T)(((int)value + direction) % count_enum_values<T>());
         }
         void on_up() override
         {
