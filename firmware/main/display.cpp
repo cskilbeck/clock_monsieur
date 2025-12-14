@@ -54,9 +54,9 @@ void display_t::update_ambient()
     if(d > 127) {
         d = 127;
     }
-    fcontrol.global_bc = c;
+    fcontrol.global_bc = d;
     for(int i = 0; i < 16; ++i) {
-        fcontrol.set_dc(i, d);
+        fcontrol.set_dc(i, c);
     }
 }
 
@@ -329,11 +329,8 @@ namespace
 
         LOG_INFO("Entering main loop");
 
-        int prev_column = 0;
         int current_column = 0;
         uint32_t frame = 0;
-
-        float lux = -1.0f;
 
         while(1) {
 
@@ -345,11 +342,10 @@ namespace
             }
 
             // switch off previous column
-            gpio_ll_set_level(&GPIO, high_side_gpios[prev_column], 1);
+            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
 
             // next column
             current_column = (current_column + 1) & 15;
-            prev_column = current_column;
 
             // latch in the grayscale data from previous loop (display of current column starts now)
             toggle_latch();
