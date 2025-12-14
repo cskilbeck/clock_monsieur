@@ -37,7 +37,7 @@ namespace
         static item_t *current_item;
 
         // previous menu item (or null)
-        static item_t *previous_item;
+        static char const *previous_item;
 
         // transition from previous to current item in pixels
         static int transition_x;
@@ -86,7 +86,7 @@ namespace
             transition_y = 0;
             transition_xvel = xvel;
             transition_yvel = yvel;
-            previous_item = item_t::current_item;
+            previous_item = item_t::current_item->text();
             name_x = 0;
             current_item = where;
             last_menu_activity_timestamp = utc_wall_time.tv_sec;
@@ -166,7 +166,7 @@ namespace
                 transition_y += transition_yvel;
                 int x = transition_x / transition_speed;
                 int y = transition_y / transition_speed;
-                int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, previous_item->text(), x, y, 1.0f);
+                int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, previous_item, x, y, 1.0f);
                 offset_x = (transition_xvel == 0) ? 0 : (transition_xvel < 0) ? x + prev_width + x_gap : x - (width + x_gap);
                 offset_y = (transition_yvel == 0) ? 0 : (transition_yvel < 0) ? y + screen_height + y_gap : y - (screen_height + y_gap);
                 if((transition_xvel > 0 && offset_x >= 0) ||    //
@@ -219,7 +219,7 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    item_t *item_t::previous_item = nullptr;
+    char const *item_t::previous_item = nullptr;
     int item_t::transition_x;
     int item_t::transition_y;
     int item_t::transition_xvel;
@@ -258,7 +258,22 @@ namespace
 
         void cycle_enum(int direction)
         {
-            value = (T)(((int)value + direction) % count_enum_values<T>());
+            transition_x = item_t::name_x;
+            transition_y = 0;
+            transition_xvel = 0;
+            transition_yvel = -direction;
+            previous_item = text();
+            name_x = 0;
+            last_menu_activity_timestamp = utc_wall_time.tv_sec;
+            int v = (int)value + direction;
+            size_t num_values = count_enum_values<T>();
+            if(v < 0) {
+                v = num_values - 1;
+            } else if(v >= num_values) {
+                v = 0;
+            }
+            value = (T)v;
+            LOG_INFO("PREV: %s, NOW: %s (%u)", previous_item, text(), (unsigned)value);
         }
         void on_up() override
         {
