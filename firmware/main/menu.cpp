@@ -6,6 +6,7 @@
 #include "freertos/task.h"
 
 #include "util.h"
+#include "linked_list.h"
 #include "main.h"
 #include "clock_time.h"
 #include "graphics.h"
@@ -33,6 +34,8 @@ namespace
 
     struct item_t
     {
+        chs::list_node<item_t> node;
+
         // current menu item
         static item_t *current_item;
 
@@ -50,26 +53,15 @@ namespace
         static int name_x;
 
         item_t *parent = nullptr;
-        item_t *prev = nullptr;
-        item_t *next = nullptr;
-        item_t *children = nullptr;
+        chs::linked_list<item_t, &item_t::node> children;
 
         //////////////////////////////////////////////////////////////////////
 
-        item_t(item_t *_parent) : parent(_parent), prev(nullptr), next(nullptr), children(nullptr)
+        item_t(item_t *_parent) : node(), parent(_parent), children()
         {
+            parent = _parent;
             if(_parent) {
-                parent = _parent;
-                item_t *child = _parent->children;
-                if(child == nullptr) {
-                    _parent->children = this;
-                } else {
-                    while(child->next != nullptr) {
-                        child = child->next;
-                    }
-                    child->next = this;
-                    prev = child;
-                }
+                _parent->children.push_back(this);
             }
         }
 
@@ -96,17 +88,17 @@ namespace
 
         virtual char const *text() const
         {
-            return "?";
+            return "root";
         }
 
         //////////////////////////////////////////////////////////////////////
 
         virtual void on_select()
         {
-            if(children != nullptr) {
-                go(children, -2, 0);
-            } else {
+            if(children.empty()) {
                 go(parent, 2, 0);
+            } else {
+                go(children.head(), -2, 0);
             }
         }
 
@@ -115,17 +107,13 @@ namespace
         virtual void on_up()
         {
             // UP previous menu item
-            if(prev != nullptr) {
+            auto &siblings = parent->children;
+            item_t *prev = siblings.prev(this);
+            if(prev != (item_t *)siblings.end()) {
                 go(prev, 0, 1);
             } else {
                 // or wrap to last sibling
-                item_t *n = next;
-                while(n != nullptr && n->next != nullptr) {
-                    n = n->next;
-                }
-                if(n != nullptr) {
-                    go(n, 0, 1);
-                }
+                go(siblings.tail(), 0, 1);
             }
         }
 
@@ -134,11 +122,13 @@ namespace
         virtual void on_down()
         {
             // DOWN next menu item
-            if(next != nullptr) {
+            auto &siblings = parent->children;
+            item_t *next = siblings.next(this);
+            if(next != (item_t *)siblings.end()) {
                 go(next, 0, -1);
             } else {
                 // or wrap to 1st sibling
-                go(parent->children, 0, -1);
+                go(siblings.head(), 0, -1);
             }
         }
 
@@ -236,8 +226,8 @@ namespace
     void show_menu(item_t const *m, int indent = 0)
     {
         LOG_INFO("%*s%s", indent, "", m->text());
-        for(item_t const *c = m->children; c != nullptr; c = c->next) {
-            show_menu(c, indent + 2);
+        for(item_t const &c : m->children) {
+            show_menu(&c, indent + 2);
         }
     }
 #endif
@@ -273,7 +263,6 @@ namespace
                 v = 0;
             }
             value = (T)v;
-            LOG_INFO("PREV: %s, NOW: %s (%u)", previous_item, text(), (unsigned)value);
         }
         void on_up() override
         {
