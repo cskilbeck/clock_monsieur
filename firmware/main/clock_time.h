@@ -5,6 +5,8 @@
 void clock_init();
 void clock_update();
 
+void clock_draw();
+
 //////////////////////////////////////////////////////////////////////
 
 extern timeval utc_wall_time;               // current wall time UTC

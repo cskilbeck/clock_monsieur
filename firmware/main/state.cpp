@@ -108,7 +108,7 @@ void boot_state_t::on_start()
 void boot_state_t::on_update()
 {
 #if defined(DEBUG)
-    int const slowness = 1;
+    int const slowness = 2;
 #else
     int const slowness = 3;
 #endif
@@ -120,13 +120,17 @@ void boot_state_t::on_update()
     int content_width = font.measure_string(boot_msg);
     int max_x = (content_width - screen_width) * slowness;
     int x = screen_width - 1 - frames / slowness;
-    display->set_ambient(160);
+    display->set_ambient(255);
     gfx.clear();
-    font.draw_string(gfx, boot_msg, x, 0, 0.6);
-    int total = content_width + screen_width;
-    int relative = -(x - screen_width) * 60 / total;
-    for(int i = 0; i < relative; ++i) {
-        gfx.set_second_only(1.0f, i);
+    if(state_elapsed_seconds < 0.5f) {
+        frames = 0;
+    } else {
+        font.draw_string(gfx, boot_msg, x, 0, 1.0f);
+        int total = content_width + screen_width;
+        int relative = -(x - screen_width) * 60 / total;
+        for(int i = 0; i < 60; ++i) {
+            gfx.set_second_only(relative / 60.0f, i);
+        }
     }
     gfx.display();
     if(x < -content_width) {
@@ -164,10 +168,11 @@ void wifi_check_state_t::on_update()
     bool error = (sys_events & SYS_EVENT_PROVISIONING_ERROR) != 0;
     bool done = (sys_events & SYS_EVENT_PROVISIONING_DONE) != 0;
     gfx.clear();
-    int sec = ((frames >> 2) % 12);
+    int sec = (int)(state_elapsed_seconds * 30.0);
     for(int s = 0; s < 60; ++s) {
-        float color = ((s + sec) % 12) < 6 ? 0.0f : 0.95f;
-        gfx.set_second_only(color, 59 - s);
+        float color = s / 60.0f;
+        gfx.set_second_only(color, sec % 60);
+        sec += 1;
     }
     char const *msg = "Network?";
     if(!wifi_up) {
@@ -200,7 +205,7 @@ void wifi_check_state_t::on_update()
 
 //////////////////////////////////////////////////////////////////////
 // Show the message for 10 seconds
-// If they hold UP for 3 or more seconds during that time, factory reset
+// If they hold UP for 5 or more seconds during that time, factory reset
 // Else just go wifi_check_state (i.e. continue boot process)
 
 void factory_reset_state_t::on_start()
@@ -252,44 +257,7 @@ void factory_reset_state_t::on_update()
 
 void clock_state_t::on_update()
 {
-    float clock_color = 1.0f;
-    if((xEventGroupGetBits(system_events) & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {
-        clock_color = fabsf((frames & 127) / 127.0f - 0.5f) + 0.5f;
-    }
-
-    float constexpr microseconds = 1000000.0f;
-    float constexpr one_second = 1.0f;
-    float second_snap{ 0.0f };
-    time_t seconds = utc_wall_time.tv_sec;
-    suseconds_t usecs = utc_wall_time.tv_usec;
-    float fade = 0.0f;
-    switch(settings.clock_fade_mode) {
-    case clock_fade_mode_t::Off:
-        break;
-    case clock_fade_mode_t::High:
-        second_snap = one_second / microseconds;
-        fade = min(usecs * second_snap, 1.0f);
-        break;
-    case clock_fade_mode_t::Medium:
-        second_snap = (one_second / 0.5f) / microseconds;
-        usecs = max(0l, usecs - 500000);
-        fade = min(usecs * second_snap, 1.0f);
-        break;
-    default:
-    case clock_fade_mode_t::Low:
-        second_snap = (one_second / 0.25f) / microseconds;
-        usecs = max(0l, usecs - 750000);
-        fade = min(usecs * second_snap, 1.0f);
-        break;
-    }
-
-    gfx.draw_clock(seconds + timezone_offset_seconds, clock_color);
-    if(settings.clock_fade_mode == clock_fade_mode_t::Off) {
-        gfx.display();
-    } else {
-        gfx2.draw_clock(seconds + 1 + timezone_next_offset_seconds, clock_color);
-        gfx.fade_to(gfx2, fade);
-    }
+    clock_draw();
 
     if(button_select.pressed) {
         state_set(menu_state);

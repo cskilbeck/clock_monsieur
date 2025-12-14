@@ -16,6 +16,7 @@
 #include "ping.h"
 #include "time.h"
 #include "ota.h"
+#include "graphics.h"
 #include "settings.h"
 #include "timezone.h"
 #include "util.h"
@@ -204,6 +205,49 @@ void sntp_task(void *)
         } else {
             vTaskDelete(NULL);
         }
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void clock_draw()
+{
+    float constexpr microseconds = 1000000.0f;
+    float constexpr one_second = 1.0f;
+    float constexpr second_snap_high = one_second / microseconds;
+    float constexpr second_snap_medium = (one_second / 0.5f) / microseconds;
+    float constexpr second_snap_low = (one_second / 0.25f) / microseconds;
+
+    time_t seconds = utc_wall_time.tv_sec;
+    suseconds_t usecs = utc_wall_time.tv_usec;
+
+    float clock_color = 1.0f;
+    if((xEventGroupGetBits(system_events) & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {
+        clock_color = fabsf(usecs / microseconds - 0.5f) + 0.5f;
+    }
+
+    float fade = 0.0f;
+    switch(settings.clock_fade_mode) {
+    case clock_fade_mode_t::Off:
+        break;
+    case clock_fade_mode_t::High:
+        fade = min(usecs * second_snap_high, 1.0f);
+        break;
+    case clock_fade_mode_t::Medium:
+        fade = min(max(0l, usecs - 500000) * second_snap_medium, 1.0f);
+        break;
+    default:
+    case clock_fade_mode_t::Low:
+        fade = min(max(0l, usecs - 750000) * second_snap_low, 1.0f);
+        break;
+    }
+
+    gfx.draw_clock(seconds + timezone_offset_seconds, clock_color);
+    if(settings.clock_fade_mode == clock_fade_mode_t::Off) {
+        gfx.display();
+    } else {
+        gfx2.draw_clock(seconds + 1 + timezone_next_offset_seconds, clock_color);
+        gfx.fade_to(gfx2, fade);
     }
 }
 

@@ -423,7 +423,7 @@ void display_init(void)
         return;
     }
 
-    // core 1, priority 15
+    // core 1, priority 20
     xTaskCreatePinnedToCore(display_task, "display_task", 3584, nullptr, 20, &display_task_handle, 1);
 }
 
