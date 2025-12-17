@@ -161,7 +161,7 @@ namespace chs
             iterator(ptr t) : p(t)
             {
             }
-            iterator(const_ptr *t) : p(t)
+            iterator(const_ptr t) : p(t)
             {
             }
             iterator(iterator const &o) : p(o.p)
@@ -204,6 +204,10 @@ namespace chs
                 return p;
             }
             operator ptr()
+            {
+                return p;
+            }
+            ptr get() const
             {
                 return p;
             }

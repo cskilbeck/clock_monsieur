@@ -34,13 +34,21 @@ namespace
 
     struct item_t
     {
-        chs::list_node<item_t> node;
+        using list_node = chs::list_node<item_t>;
+
+        list_node node;
+
+        using list = chs::linked_list<item_t, &item_t::node>;
+
+        list children;
+
+        item_t *parent = nullptr;
 
         // current menu item
-        static item_t *current_item;
+        static list::iterator current_item;
 
         // previous menu item (or null)
-        static char const *previous_item;
+        static char const *old_text;
 
         // transition from previous to current item in pixels
         static int transition_x;
@@ -52,12 +60,9 @@ namespace
         // manual panning x
         static int name_x;
 
-        item_t *parent = nullptr;
-        chs::linked_list<item_t, &item_t::node> children;
-
         //////////////////////////////////////////////////////////////////////
 
-        item_t(item_t *_parent) : node(), parent(_parent), children()
+        item_t(item_t *_parent) : node(), children(), parent(_parent)
         {
             parent = _parent;
             if(_parent) {
@@ -67,7 +72,7 @@ namespace
 
         //////////////////////////////////////////////////////////////////////
 
-        static void go(item_t *where, int xvel, int yvel)
+        static void go(item_t::list::iterator where, int xvel, int yvel)
         {
             if(where == item_t::current_item) {
                 return;
@@ -78,7 +83,7 @@ namespace
             transition_y = 0;
             transition_xvel = xvel;
             transition_yvel = yvel;
-            previous_item = item_t::current_item->text();
+            old_text = item_t::current_item->text();
             name_x = 0;
             current_item = where;
             last_menu_activity_timestamp = utc_wall_time.tv_sec;
@@ -108,13 +113,11 @@ namespace
         {
             // UP previous menu item
             auto &siblings = parent->children;
-            item_t *prev = siblings.prev(this);
-            if(prev != (item_t *)siblings.end()) {
-                go(prev, 0, 1);
-            } else {
-                // or wrap to last sibling
-                go(siblings.tail(), 0, 1);
+            auto prev = --list::iterator(this);
+            if(prev == siblings.end()) {
+                --prev;
             }
+            go(prev, 0, 1);
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -123,13 +126,11 @@ namespace
         {
             // DOWN next menu item
             auto &siblings = parent->children;
-            item_t *next = siblings.next(this);
-            if(next != (item_t *)siblings.end()) {
-                go(next, 0, -1);
-            } else {
-                // or wrap to 1st sibling
-                go(siblings.head(), 0, -1);
+            auto next = ++list::iterator(this);
+            if(next == siblings.end()) {
+                ++next;
             }
+            go(next, 0, -1);
         }
 
         //////////////////////////////////////////////////////////////////////
@@ -151,26 +152,26 @@ namespace
             int y_gap = 1;
 
             // if scrolling to a new item
-            if(previous_item != nullptr) {
+            if(old_text != nullptr) {
                 transition_x += transition_xvel;
                 transition_y += transition_yvel;
                 int x = transition_x / transition_speed;
                 int y = transition_y / transition_speed;
-                int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, previous_item, x, y, 1.0f);
+                int prev_width = font_5x7_narrow_modern_font.draw_string(gfx, old_text, x, y, 1.0f);
                 offset_x = (transition_xvel == 0) ? 0 : (transition_xvel < 0) ? x + prev_width + x_gap : x - (width + x_gap);
                 offset_y = (transition_yvel == 0) ? 0 : (transition_yvel < 0) ? y + screen_height + y_gap : y - (screen_height + y_gap);
                 if((transition_xvel > 0 && offset_x >= 0) ||    //
                    (transition_xvel < 0 && offset_x <= 0) ||    //
                    (transition_yvel > 0 && offset_y >= 0) ||    //
                    (transition_yvel < 0 && offset_y <= 0)) {
-                    previous_item = nullptr;
+                    old_text = nullptr;
                 } else {
                     font_5x7_narrow_modern_font.draw_string(gfx, text(), offset_x, offset_y, 1.0f);
                 }
             }
 
             // finished scrolling to new item?
-            if(previous_item == nullptr) {
+            if(old_text == nullptr) {
 
                 float scrollbar_color = 0.5f;
                 font_5x7_narrow_modern_font.draw_long_string(gfx, text(), name_x / pan_speed, 0, 1.0f, scrollbar_color);
@@ -209,13 +210,13 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
-    char const *item_t::previous_item = nullptr;
+    char const *item_t::old_text = nullptr;
     int item_t::transition_x;
     int item_t::transition_y;
     int item_t::transition_xvel;
     int item_t::transition_yvel;
 
-    item_t *item_t::current_item{ nullptr };
+    item_t::list::iterator item_t::current_item((item_t *)nullptr);
     int item_t::name_x{ 0 };
 
     item_t root_menu{ nullptr };
@@ -252,7 +253,7 @@ namespace
             transition_y = 0;
             transition_xvel = 0;
             transition_yvel = -direction;
-            previous_item = text();
+            old_text = text();
             name_x = 0;
             last_menu_activity_timestamp = utc_wall_time.tv_sec;
             int v = (int)value + direction;
@@ -328,28 +329,28 @@ namespace
     struct : item_t
     {
         using item_t::item_t;
+        char const *text() const
+        {
+            return "Auto";
+        }
         void on_select() override
         {
             settings.timezone_mode = timezone_mode_t::Auto;
             xEventGroupSetBits(system_events, SYS_EVENT_NEED_LOCATION);
             item_t::on_select();
         }
-        char const *text() const
-        {
-            return "Auto";
-        }
     } timezone_auto_menu{ &timezone_menu };
 
     struct : item_t
     {
         using item_t::item_t;
-        void on_select() override
-        {
-            state_set(timezone_select_state);
-        }
         char const *text() const
         {
             return "Select";
+        }
+        void on_select() override
+        {
+            state_set(timezone_select_state);
         }
     } timezone_select_menu{ &timezone_menu };
 
@@ -358,13 +359,6 @@ namespace
     MENU_HEADER(system_menu, "System", &root_menu);
 
     MENU_HEADER(version_menu, "Version", &system_menu);
-    MENU_HEADER(ip_address_menu, "IP Address", &system_menu);
-    MENU_HEADER(mac_address_menu, "MAC Address", &system_menu);
-
-    MENU_HEADER(factory_reset_menu, "Factory reset", &system_menu);
-    MENU_HEADER(factory_reset_really_menu, "Really?", &factory_reset_menu);
-    MENU_HEADER(factory_reset_no, "No", &factory_reset_really_menu);
-
     struct : item_t
     {
         using item_t::item_t;
@@ -374,6 +368,7 @@ namespace
         }
     } show_version_menu{ &version_menu };
 
+    MENU_HEADER(ip_address_menu, "IP Address", &system_menu);
     struct : item_t
     {
         using item_t::item_t;
@@ -383,6 +378,7 @@ namespace
         }
     } show_ip_menu{ &ip_address_menu };
 
+    MENU_HEADER(mac_address_menu, "MAC Address", &system_menu);
     struct : item_t
     {
         using item_t::item_t;
@@ -391,6 +387,10 @@ namespace
             return wifi_mac_address();
         }
     } show_mac_address_menu{ &mac_address_menu };
+
+    MENU_HEADER(factory_reset_menu, "Factory reset", &system_menu);
+    MENU_HEADER(factory_reset_really_menu, "Really?", &factory_reset_menu);
+    MENU_HEADER(factory_reset_no, "No", &factory_reset_really_menu);
 
     struct : item_t
     {
@@ -415,9 +415,9 @@ void menu_init()
     // show_menu(&root_menu);
 #endif
     last_menu_activity_timestamp = utc_wall_time.tv_sec;
-    item_t::previous_item = nullptr;
-    if(item_t::current_item == nullptr) {
-        item_t::current_item = &mode_menu;
+    item_t::old_text = nullptr;
+    if(item_t::current_item.get() == nullptr) {
+        item_t::current_item = item_t::list::iterator(&mode_menu);
     }
 }
 
