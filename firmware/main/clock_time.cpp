@@ -195,7 +195,7 @@ void sntp_task(void *)
 
         LOG_INFO("Wait for SNTP...");
 
-        // wait for SNTP to get up or someone to ask for timezone auto
+        // wait for SNTP to get up
         EventBits_t sntp_up = xEventGroupWaitBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED, false, false, SNTP_WAIT_TICKS);
 
         if((sntp_up & SYS_EVENT_SNTP_SYNCHRONIZED) == 0) {

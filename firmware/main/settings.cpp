@@ -215,6 +215,20 @@ struct : console_command_t<"clock", "show/set 12/24 hour clock mode", enum_names
 
 //////////////////////////////////////////////////////////////////////
 
+struct : console_command_t<"font", "show/set clock font", enum_names<clock_font_t>()>
+{
+    void on_command(int argc, char **argv) override
+    {
+        if(argc == 1) {
+            printf("%s\n", enum_to_string(settings.clock_font));
+        } else if(!(argc == 2 && find_enum(argv[1], settings.clock_font))) {
+            usage();
+        }
+    }
+} cmd_font;
+
+//////////////////////////////////////////////////////////////////////
+
 struct : console_command_t<"save", "save settings", "">
 {
     void on_command(int argc, char **argv) override

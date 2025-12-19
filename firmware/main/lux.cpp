@@ -203,18 +203,17 @@ void lux_update()
 
     smoothed_ambient = smooth_factor * ambient + (1.0f - smooth_factor) * smoothed_ambient;
 
-    // ghetto inverse gamma ramp
-    // float t = 1.0f - smoothed_ambient;
-    // t = 1.0f - t * t * t;
     float t = smoothed_ambient;
     int max = settings.get_brightness();
     if(settings.auto_brightness == auto_brightness_t::Auto) {
-        // scale lux to two 7 bit numbers
         int base = (max + 1) / 64;
         int range = max - base;
         lux = (int)(t * range) + base;
     } else {
-        lux = max;
+        max += 1;
+        max *= max;
+        max >>= 8;
+        lux = max - 1;
     }
     display->set_ambient(lux);
 }
