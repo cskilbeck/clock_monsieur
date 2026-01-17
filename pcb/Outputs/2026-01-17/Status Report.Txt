@@ -1,0 +1,10 @@
+Output: Bill of Materials
+Type  : BOM
+From  : Variant [[No Variations]] of Project [clock_led.PrjPcb]
+   Generated File[Bill of Materials-clock_led.xlsx]
+
+
+Files Generated   : 1
+Documents Printed : 0
+
+Finished Output Generation At 11:38:44 On 17 Jan 2026
