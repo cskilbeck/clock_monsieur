@@ -122,6 +122,14 @@ enum class settings_field_id_t : uint8_t
 
 //////////////////////////////////////////////////////////////////////
 
+struct brightness_range_t
+{
+    uint8_t min_brightness;
+    uint8_t max_brightness;
+};
+
+//////////////////////////////////////////////////////////////////////
+
 struct settings_t
 {
 #undef X
@@ -129,7 +137,7 @@ struct settings_t
 
     SETTINGS_FIELDS
 
-    uint8_t get_brightness() const;
+    brightness_range_t get_brightness_range() const;
 
     esp_err_t load();
     esp_err_t save();

@@ -49,21 +49,21 @@ namespace
 
 //////////////////////////////////////////////////////////////////////
 
-uint8_t settings_t::get_brightness() const
+brightness_range_t settings_t::get_brightness_range() const
 {
     switch(brightness) {
     case brightness_level_t::Min:
-        return 32;
+        return { 3, 32 };
     case brightness_level_t::Low:
-        return 64;
+        return { 4, 64 };
     case brightness_level_t::Medium:
-        return 128;
+        return { 5, 128 };
     case brightness_level_t::High:
-        return 176;
+        return { 7, 176 };
     case brightness_level_t::Max:
-        return 255;
+        return { 9, 255 };
     default:
-        return 128;
+        return { 5, 128 };
     }
 }
 

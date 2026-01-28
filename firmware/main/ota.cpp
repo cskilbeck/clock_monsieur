@@ -23,7 +23,7 @@ LOG_CONTEXT("ota");
 
 #define OTA_RECV_BUF_SIZE 1024
 
-#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW_STR "/latest.txt";
+#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW_STR "/latest.txt"
 #define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW_STR "/%s.bin"
 
 //////////////////////////////////////////////////////////////////////
@@ -61,6 +61,8 @@ esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.timeout_ms = 10000;
     config.max_authorization_retries = 10;
+
+    LOG_INFO("Checking %s", LATEST_URL);
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if(client == NULL) {

@@ -44,6 +44,11 @@ struct display_t
         ambient = b;
     }
 
+    uint8_t get_ambient()
+    {
+        return ambient;
+    }
+
     void update_ambient();
 };
 

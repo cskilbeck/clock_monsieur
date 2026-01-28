@@ -129,7 +129,7 @@ namespace
 
         for(size_t i = 0; i < 16; ++i) {
             mask |= 1ULL << (int)high_side_gpios[i];
-            gpio_set_level(high_side_gpios[i], 0);
+            gpio_set_level(high_side_gpios[i], 1);
         }
         mask |= 1ULL << LATCH_PIN;
         gpio_set_level(LATCH_PIN, 0);
@@ -143,7 +143,7 @@ namespace
         }
         for(size_t i = 0; i < 16; ++i) {
             mask |= 1ULL << (int)high_side_gpios[i];
-            gpio_set_level(high_side_gpios[i], 0);
+            gpio_set_level(high_side_gpios[i], 1);
         }
         return ESP_OK;
     }

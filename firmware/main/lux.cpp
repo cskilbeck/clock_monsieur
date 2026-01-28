@@ -1,6 +1,7 @@
 //////////////////////////////////////////////////////////////////////
 
-#include "driver/i2c_master.h"
+#include <algorithm>
+
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -16,168 +17,16 @@
 #include "lux.h"
 #include "settings.h"
 #include "util.h"
-#include <algorithm>
 
 //////////////////////////////////////////////////////////////////////
-// I2C Port and GPIO pins
-
-#define I2C_TIMEOUT_MS 100
-
-#define VEML3235_DEVICE 0
-#define LTR303_DEVICE 1
-#define ALS_PT243_DEVICE 2
-
-#define USE_DEVICE ALS_PT243_DEVICE
-
-#define I2C_MASTER_PORT I2C_NUM_0
-#define I2C_MASTER_FREQ_HZ 100000    // 100 kHz
-
-#define VEML3235_I2C_ADDR 0x10
-#define VEML3235_ALS_CONF 0x00
-#define VEML3235_W_DATA 0x04
-#define VEML3235_ALS_DATA 0x05
-
-#define LTR303_I2C_ADDR 0x29
-#define LTR303_CONF_ADDR 0x80
-#define LTR303_RATE_ADDR 0x85
-#define LTR303_DATA_CH1 0x88
-#define LTR303_DATA_CH0 0x8A
-
-#define LTR303_SETUP_CONF 0b00011101
-#define LTR303_SETUP_RATE 0b00011011
-
-#if USE_DEVICE == VEML3235_DEVICE
-#define INIT_DEVICE veml3235_init
-#define READ_LUX veml3235_read_lux
-#elif USE_DEVICE == LTR303_DEVICE
-#define INIT_DEVICE ltr303_init
-#define READ_LUX ltr303_read_lux
-#elif USE_DEVICE == ALS_PT243_DEVICE
-#define INIT_DEVICE als_pt243_init
-#define READ_LUX als_pt243_read_lux
-#else
-#error "What ambient sensor device to use?"
-#endif
 
 LOG_CONTEXT("lux");
 
 namespace
 {
-    const char *TAG = "I2C_DRIVER";
+    const char *TAG = "LUX_DRIVER";
 
     uint16_t brightness;
-
-    i2c_master_bus_handle_t i2c_bus_handle = NULL;
-    i2c_master_dev_handle_t i2c_device_handle;
-
-    //////////////////////////////////////////////////////////////////////
-
-    [[maybe_unused]] esp_err_t read_register(uint8_t reg_addr, uint16_t &value)
-    {
-        uint8_t reg[1] = { reg_addr };
-        uint8_t data[2];
-
-        ESP_CHECK(i2c_master_transmit_receive(i2c_device_handle, reg, sizeof(reg), data, sizeof(data), I2C_TIMEOUT_MS));
-
-        value = (data[1] << 8) | data[0];
-        return ESP_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    [[maybe_unused]] esp_err_t write_register(uint8_t reg_addr, uint8_t value)
-    {
-        uint8_t reg[2] = { reg_addr, value };
-        return i2c_master_transmit(i2c_device_handle, reg, sizeof(reg), I2C_TIMEOUT_MS);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // Initialize the VEML3235 - write 2 config bytes to register 0x00
-
-#if USE_DEVICE == VEML3235_DEVICE
-    esp_err_t veml3235_init()
-    {
-        i2c_master_bus_config_t conf{};
-        conf.sda_io_num = I2C_MASTER_SDA_GPIO;
-        conf.scl_io_num = I2C_MASTER_SCL_GPIO;
-        conf.clk_source = I2C_CLK_SRC_DEFAULT;
-        conf.glitch_ignore_cnt = 7;
-        conf.flags = { .enable_internal_pullup = true };
-        ESP_LOG_ERR(i2c_new_master_bus(&conf, &i2c_bus_handle));
-
-        i2c_master_dev_handle_t handle;
-        i2c_device_config_t dev_cfg = {
-            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-            .device_address = VEML3235_I2C_ADDR,
-            .scl_speed_hz = 100000,
-        };
-        ESP_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &handle));
-
-        // Register address + 2 data bytes
-        uint8_t write_data[3] = { VEML3235_ALS_CONF, 0b0100000, 0b00000001 };
-
-        ESP_CHECK(i2c_master_transmit(handle, write_data, sizeof(write_data), I2C_TIMEOUT_MS));
-        i2c_device_handle = handle;
-        return ESP_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    esp_err_t veml3235_read_lux(uint16_t lux_value[2])
-    {
-        if(i2c_device_handle == nullptr) {
-            lux_value[0] = 64;
-            lux_value[1] = 64;
-            return ESP_OK;
-        }
-        ESP_CHECK(read_register(VEML3235_W_DATA, lux_value[0]));
-        ESP_CHECK(read_register(VEML3235_ALS_DATA, lux_value[1]));
-        return ESP_OK;
-    }
-#elif USE_DEVICE == LTR303_DEVICE
-    //////////////////////////////////////////////////////////////////////
-    // Initialize the LTR303
-
-    esp_err_t ltr303_init()
-    {
-        i2c_master_bus_config_t conf{};
-        conf.sda_io_num = I2C_MASTER_SDA_GPIO;
-        conf.scl_io_num = I2C_MASTER_SCL_GPIO;
-        conf.clk_source = I2C_CLK_SRC_DEFAULT;
-        conf.glitch_ignore_cnt = 7;
-        conf.flags = { .enable_internal_pullup = true };
-        ESP_LOG_ERR(i2c_new_master_bus(&conf, &i2c_bus_handle));
-
-        i2c_master_dev_handle_t handle;
-        i2c_device_config_t dev_cfg = {
-            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-            .device_address = LTR303_I2C_ADDR,
-            .scl_speed_hz = 100000,
-        };
-        ESP_CHECK(i2c_master_bus_add_device(bus, &dev_cfg, &handle));
-
-        i2c_device_handle = handle;
-
-        ESP_CHECK(write_register(LTR303_CONF_ADDR, LTR303_SETUP_CONF));
-        ESP_CHECK(write_register(LTR303_RATE_ADDR, LTR303_SETUP_RATE));
-
-        return ESP_OK;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-
-    esp_err_t ltr303_read_lux(uint16_t lux_value[2])
-    {
-        if(i2c_device_handle == nullptr) {
-            lux_value[0] = 64;
-            lux_value[1] = 64;
-            return ESP_OK;
-        }
-        ESP_CHECK(read_register(LTR303_DATA_CH1, lux_value[0]));
-        ESP_CHECK(read_register(LTR303_DATA_CH0, lux_value[1]));
-        return ESP_OK;
-    }
-#elif USE_DEVICE == ALS_PT243_DEVICE
 
     esp_err_t adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle)
     {
@@ -323,19 +172,19 @@ namespace
         lux_value[1] = lux_value[0];
         return ESP_OK;
     }
-#endif
+
     //////////////////////////////////////////////////////////////////////
 
     void ambient_sensor_task(void *pvParameters)
     {
         LOG_INFO("ambient_sensor_task begins");
 
-        ESP_LOG_ERR(INIT_DEVICE());
+        ESP_LOG_ERR(als_pt243_init());
 
         while(true) {
 
             uint16_t lux_value[2];
-            if(READ_LUX(lux_value) == ESP_OK) {
+            if(als_pt243_read_lux(lux_value) == ESP_OK) {
                 brightness = max(lux_value[0], lux_value[1]);
             }
             delay_ms(200);
@@ -358,24 +207,14 @@ void lux_init()
 
 void lux_update()
 {
-    int lux = 128;
-
     // ambient light response
     float ambient = (float)brightness * (1.0f / 65535);
-
     smoothed_ambient = smooth_factor * ambient + (1.0f - smooth_factor) * smoothed_ambient;
-
-    float t = smoothed_ambient;
-    int max = settings.get_brightness();
+    brightness_range_t brightness_range = settings.get_brightness_range();
+    int lux = brightness_range.max_brightness;
     if(settings.auto_brightness == auto_brightness_t::Auto) {
-        int base = (max + 1) / 64;
-        int range = max - base;
-        lux = (int)(t * range) + base;
-    } else {
-        max += 1;
-        max *= max;
-        max >>= 8;
-        lux = max - 1;
+        int range = brightness_range.max_brightness - brightness_range.min_brightness;
+        lux = (int)(smoothed_ambient * range) + brightness_range.min_brightness;
     }
     display->set_ambient(lux);
 }
@@ -398,7 +237,7 @@ void lux_state_t::on_update()
         state_set(clock_state);
     }
     char hex[5];
-    sprintf(hex, "%04X", brightness);
+    sprintf(hex, "%02X", display->get_ambient());
     gfx.clear();
     font_5x7_font.draw_string(gfx, hex, 0, 0, 1.0f);
     int b = brightness * 60 >> 16;
@@ -406,5 +245,4 @@ void lux_state_t::on_update()
         gfx.set_second_only(1.0f, i);
     }
     gfx.display();
-    display->set_ambient(255);
 }
