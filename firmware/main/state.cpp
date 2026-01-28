@@ -31,6 +31,7 @@ menu_state_t menu_state;
 timezone_select_state_t timezone_select_state;
 ota_state_t ota_state;
 lux_state_t lux_state;
+led_edit_state_t led_edit_state;
 
 //////////////////////////////////////////////////////////////////////
 
@@ -66,6 +67,7 @@ void state_init()
 {
     state_queue = xQueueCreate(2, sizeof(void *));
     state_set(boot_state);
+    // state_set(led_edit_state);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -302,5 +304,36 @@ IRAM_ATTR void ota_state_t::on_update()
     int width = font_5x7_font.measure_string(msg);
     int x = screen_width - ((frames >> 1) % (width + screen_width));
     font_5x7_font.draw_string(gfx, msg, x, 0, 1);
+    gfx.display();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void led_edit_state_t::on_start()
+{
+    led_number = 0;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void led_edit_state_t::on_update()
+{
+    display->set_ambient(255);
+    gfx.clear();
+    if(button_left.pressed) {
+        led_number += 1;
+        LOG_INFO("%d", led_number);
+    }
+    if(button_right.pressed) {
+        led_number -= 1;
+        LOG_INFO("%d", led_number);
+    }
+    if(button_up.held) {
+        for(int i = 0; i < 256; ++i) {
+            gfx.set_led(1.0f, i);
+        }
+    } else {
+        gfx.set_led(1.0f, led_number);
+    }
     gfx.display();
 }

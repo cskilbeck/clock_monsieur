@@ -51,5 +51,6 @@ struct display_t
 
 void display_init();
 void display_update();
+int display_send_frame(int column);
 
 extern display_t *display;

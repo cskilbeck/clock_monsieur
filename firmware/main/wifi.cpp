@@ -181,7 +181,7 @@ esp_err_t read_security_info()
         ESP_LOGE(TAG, "Failed to read data from partition (0x%x)!", err);
     }
 #if defined(DEBUG)
-    ESP_LOGI(TAG, "---> POP! %s (%d)", sec_info.password, sec_info.password_len);
+    ESP_LOGI(TAG, "---> POP! %.15s (%d)", sec_info.password, sec_info.password_len);
     ESP_LOGI(TAG, "SALT:");
     dump_hex(sec_info.salt, sizeof(sec_info.salt));
     ESP_LOGI(TAG, "VERIFIER:");

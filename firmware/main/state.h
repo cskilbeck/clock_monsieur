@@ -86,7 +86,18 @@ struct lux_state_t : state_handler_t
 
 //////////////////////////////////////////////////////////////////////
 
+struct led_edit_state_t : state_handler_t
+{
+    void on_start() override;
+    void on_update() override;
+
+    uint8_t led_number = 0;
+};
+
+//////////////////////////////////////////////////////////////////////
+
 extern boot_state_t boot_state;
+extern led_edit_state_t led_edit_state;
 extern wifi_check_state_t wifi_check_state;
 extern clock_state_t clock_state;
 extern menu_state_t menu_state;

@@ -32,6 +32,7 @@ idf_component_register(
         json
         app_update
         esp_http_client
+        esp_adc
     INCLUDE_DIRS
         . fonts/
 )

@@ -27,6 +27,7 @@
 
 #include "display.h"
 #include "gpio_defs.h"
+#include "console.h"
 #include "util.h"
 
 //////////////////////////////////////////////////////////////////////
@@ -80,27 +81,43 @@ namespace
     display_t *back_buffer = display_data + 0;
     display_t *front_buffer = display_data + 1;
 
+#define SW_00 GPIO_NUM_13
+#define SW_01 GPIO_NUM_9
+#define SW_02 GPIO_NUM_10
+#define SW_03 GPIO_NUM_11
+#define SW_04 GPIO_NUM_12
+#define SW_05 GPIO_NUM_3
+#define SW_06 GPIO_NUM_14
+#define SW_07 GPIO_NUM_21
+#define SW_08 GPIO_NUM_4
+#define SW_09 GPIO_NUM_5
+#define SW_10 GPIO_NUM_6
+#define SW_11 GPIO_NUM_7
+#define SW_12 GPIO_NUM_15
+#define SW_13 GPIO_NUM_16
+#define SW_14 GPIO_NUM_17
+#define SW_15 GPIO_NUM_18
+
     // The order here is important. No two lines from the same half bridge
     // may be adjacent (the half bridge can't switch A on and B off instantly)
 
     DRAM_ATTR gpio_num_t const high_side_gpios[16] = {
-        // clang-format off
-        HIGH_SIDE_GPIO_06,
-        HIGH_SIDE_GPIO_05,
-        HIGH_SIDE_GPIO_07,
-        HIGH_SIDE_GPIO_04,
-        HIGH_SIDE_GPIO_02,
-        HIGH_SIDE_GPIO_00,
-        HIGH_SIDE_GPIO_03,
-        HIGH_SIDE_GPIO_01,
-        HIGH_SIDE_GPIO_14,
-        HIGH_SIDE_GPIO_12,
-        HIGH_SIDE_GPIO_15,
-        HIGH_SIDE_GPIO_13,
-        HIGH_SIDE_GPIO_10,
-        HIGH_SIDE_GPIO_08,
-        HIGH_SIDE_GPIO_11,
-        HIGH_SIDE_GPIO_09,
+        SW_06,    // 7
+        SW_00,    // 8
+        SW_07,    // 6
+        SW_05,    // 9
+        SW_02,    // 5
+        SW_04,    // 10
+        SW_01,    // 0
+        SW_03,    // 11
+        SW_14,    // 1
+        SW_12,    // 12
+        SW_15,    // 2
+        SW_13,    // 13
+        SW_10,    // 3
+        SW_08,    // 14
+        SW_11,    // 4
+        SW_09,    // 15
     };
 
     //////////////////////////////////////////////////////////////////////
@@ -120,7 +137,15 @@ namespace
         gpio_config_t io_conf{};
         io_conf.mode = GPIO_MODE_OUTPUT;
         io_conf.pin_bit_mask = mask;
-        return gpio_config(&io_conf);
+        esp_err_t err = gpio_config(&io_conf);
+        if(err != ESP_OK) {
+            return err;
+        }
+        for(size_t i = 0; i < 16; ++i) {
+            mask |= 1ULL << (int)high_side_gpios[i];
+            gpio_set_level(high_side_gpios[i], 0);
+        }
+        return ESP_OK;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -232,7 +257,7 @@ namespace
         // Giving a max PWM counter of ??
 
         gptimer_alarm_config_t alarm_config{};
-        alarm_config.alarm_count = 2738;    // 
+        alarm_config.alarm_count = 2738;    //
         // alarm_config.alarm_count = 2600;
         alarm_config.reload_count = 0;
         alarm_config.flags.auto_reload_on_alarm = true;
@@ -318,6 +343,11 @@ namespace
     //////////////////////////////////////////////////////////////////////
     // Main display task
 
+    int refresh = 0;
+    int current_column = 0;
+    int prev_column = 0;
+    uint32_t frame = 0;
+
     IRAM_ATTR void display_task(void *)
     {
         LOG_INFO("DISPLAY TASK BEGINS");
@@ -329,56 +359,69 @@ namespace
 
         LOG_INFO("Entering main loop");
 
-        int current_column = 0;
-        uint32_t frame = 0;
-
         while(1) {
 
             // wait for timer to fire
             ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-            // BLOCKING wait for grayscale SPI complete (which it should have anyway)
-            while(GPSPI2.cmd.usr) {
-            }
-
-            // switch off previous column
-            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 1);
-
-            // next column
-            current_column = (current_column + 1) & 15;
-
-            // latch in the grayscale data from previous loop (display of current column starts now)
-            toggle_latch();
-
-            // switch on current column so it actually lights up
-            gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 0);
-
-            // start sending fcntl data
-            spi_kick((uint32_t const *)&front_buffer->fcontrol, 0xffff);
-
-            // if done all columns 8 times, swap front,back buffer
-            if(current_column == 0) {
-                frame += 1;
-                if((frame & 7) == 0) {
-                    buffer_index = 1 - buffer_index;
-                    back_buffer = display_data + buffer_index;
-                    front_buffer = display_data + (1 - buffer_index);
-                    xEventGroupSetBits(event_group_handle, VBLANK_BIT);
-                }
-            }
-
-            // BLOCKING wait for fcntl SPI complete
-            while(GPSPI2.cmd.usr) {
-            }
-
-            // latch in the fcntl data
-            toggle_latch();
-
-            // start sending grayscale data
-            spi_kick((uint32_t const *)(front_buffer->led + current_column * 16), 0);
+            current_column = display_send_frame(current_column + 1);
         }
     }
 }    // namespace
+
+//////////////////////////////////////////////////////////////////////
+
+int display_send_frame(int column)
+{
+    // BLOCKING wait for grayscale SPI complete (which it should have anyway)
+    while(GPSPI2.cmd.usr) {
+    }
+
+    // switch off all columns
+    for(auto &x : high_side_gpios) {
+        gpio_ll_set_level(&GPIO, x, 1);
+    }
+
+    // next column
+    prev_column = current_column;
+    current_column = column & 15;
+
+    // latch in the grayscale data from previous loop (display of current column starts now)
+    toggle_latch();
+
+    // Hmm, seems to switch one on we set the OTHER one to 0
+
+    // switch on current column so it actually lights up (although this actually switches on the other one...)
+    gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 0);
+
+    // start sending fcntl data
+    // spi_kick((uint32_t const *)(front_buffer->led + current_column * 16), 0);
+    spi_kick((uint32_t const *)&front_buffer->fcontrol, 0xffff);
+
+    // if done all columns 8 times, swap front,back buffer
+    refresh = (refresh + 1) & 15;
+    if(refresh == 0) {
+        frame += 1;
+        if((frame & 7) == 0) {
+            buffer_index = 1 - buffer_index;
+            back_buffer = display_data + buffer_index;
+            front_buffer = display_data + (1 - buffer_index);
+            xEventGroupSetBits(event_group_handle, VBLANK_BIT);
+        }
+    }
+
+    // BLOCKING wait for fcntl SPI complete
+    while(GPSPI2.cmd.usr) {
+    }
+
+    // latch in the fcntl data
+    toggle_latch();
+
+    // start sending grayscale data
+    spi_kick((uint32_t const *)(front_buffer->led + current_column * 16), 0);
+
+    return column;
+}
 
 //////////////////////////////////////////////////////////////////////
 // Set the dot correction (i.e. brightness) for a channel
