@@ -79,7 +79,7 @@ esp_err_t do_ping_check()
 
     ESP_CHECK(esp_ping_start(ping_handle));
 
-    while(true) {
+    while(fails < 10) {
         LOG_INFO("Waiting for pings");
         EventBits_t b = xEventGroupWaitBits(system_events, SYS_EVENT_NETWORK_CONNECTED, false, true, pdMS_TO_TICKS(5000));
         if((b & SYS_EVENT_NETWORK_CONNECTED) != 0) {
@@ -87,6 +87,7 @@ esp_err_t do_ping_check()
             LOG_INFO("Network is up");
             return ESP_OK;
         }
+        fails += 1;
     }
     return ESP_ERR_TIMEOUT;
 }

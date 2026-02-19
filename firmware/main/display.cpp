@@ -257,8 +257,7 @@ namespace
         // Giving a max PWM counter of ??
 
         gptimer_alarm_config_t alarm_config{};
-        alarm_config.alarm_count = 2738;    //
-        // alarm_config.alarm_count = 2600;
+        alarm_config.alarm_count = 2738;
         alarm_config.reload_count = 0;
         alarm_config.flags.auto_reload_on_alarm = true;
 
@@ -395,7 +394,6 @@ int display_send_frame(int column)
     gpio_ll_set_level(&GPIO, high_side_gpios[current_column], 0);
 
     // start sending fcntl data
-    // spi_kick((uint32_t const *)(front_buffer->led + current_column * 16), 0);
     spi_kick((uint32_t const *)&front_buffer->fcontrol, 0xffff);
 
     // if done all columns 8 times, swap front,back buffer

@@ -24,8 +24,6 @@ LOG_CONTEXT("lux");
 
 namespace
 {
-    const char *TAG = "LUX_DRIVER";
-
     uint16_t brightness;
 
     esp_err_t adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle)
@@ -36,7 +34,7 @@ namespace
 
 #if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
         if(!calibrated) {
-            ESP_LOGI(TAG, "calibration scheme version is %s", "Curve Fitting");
+            LOG_INFO("calibration scheme version is Curve Fitting");
             adc_cali_curve_fitting_config_t cali_config = {
                 .unit_id = unit,
                 .chan = channel,
@@ -52,7 +50,7 @@ namespace
 
 #if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
         if(!calibrated) {
-            ESP_LOGI(TAG, "calibration scheme version is %s", "Line Fitting");
+            LOG_INFO("calibration scheme version is Line Fitting");
             adc_cali_line_fitting_config_t cali_config = {
                 .unit_id = unit,
                 .atten = atten,
@@ -67,11 +65,11 @@ namespace
 
         *out_handle = handle;
         if(ret == ESP_OK) {
-            ESP_LOGI(TAG, "Calibration Success");
+            LOG_INFO("Calibration Success");
         } else if(ret == ESP_ERR_NOT_SUPPORTED || !calibrated) {
-            ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
+            LOG_WARN("eFuse not burnt, skip software calibration");
         } else {
-            ESP_LOGE(TAG, "Invalid arg or no memory");
+            LOG_ERROR("Invalid arg or no memory");
         }
         return ESP_OK;
     }
@@ -80,6 +78,9 @@ namespace
 
     template <size_t WINDOW_SIZE> struct max_deque_t
     {
+        // Ensure WINDOW size is a power of 2
+        static_assert((WINDOW_SIZE & (WINDOW_SIZE - 1)) == 0);
+
         //////////////////////////////////////////////////////////////////////
 
         max_deque_t()
@@ -158,10 +159,10 @@ namespace
     esp_err_t als_pt243_read_lux(uint16_t lux_value[2])
     {
         int adc_raw;
-        ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
+        ESP_CHECK(adc_oneshot_read(adc1_handle, ADC_CHANNEL_0, &adc_raw));
 
         int voltage;
-        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &voltage));
+        ESP_CHECK(adc_cali_raw_to_voltage(adc1_cali_chan0_handle, adc_raw, &voltage));
 
         max_deque.add_reading(voltage);
         int cur_max = max_deque.get_max();

@@ -1,5 +1,7 @@
 //////////////////////////////////////////////////////////////////////
 
+#include <algorithm>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -34,11 +36,9 @@ namespace
             }
             break;
         case HTTP_EVENT_ON_FINISH:
-            if(ctx->len < sizeof(ctx->buffer) - 1) {
-                ctx->buffer[ctx->len] = '\0';
-                LOG_DEBUG("Response Size: %d", ctx->len);
-                LOG_DEBUG("Response: %s", ctx->buffer);
-            }
+            ctx->buffer[std::min(ctx->buffer_size - 1, ctx->len)] = '\0';
+            LOG_DEBUG("Response Size: %d", ctx->len);
+            LOG_DEBUG("Response: %s", ctx->buffer);
             break;
         case HTTP_EVENT_ERROR:
             LOG_WARN("HTTP Event Error: %d", evt->event_id);

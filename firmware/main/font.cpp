@@ -5,7 +5,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include "stdio.h"
 #include "display.h"
 #include "font.h"
 #include "graphics.h"

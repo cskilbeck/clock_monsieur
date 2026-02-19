@@ -10,7 +10,6 @@
 #include "main.h"
 #include "clock_time.h"
 #include "graphics.h"
-#include "graphics.h"
 #include "button.h"
 #include "menu.h"
 #include "wifi.h"

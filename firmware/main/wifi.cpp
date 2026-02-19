@@ -18,8 +18,9 @@
 
 #include "wifi.h"
 #include "main.h"
+#include "util.h"
 
-static char const *TAG = "wifi";
+LOG_CONTEXT("wifi");
 
 //////////////////////////////////////////////////////////////////////
 
@@ -100,7 +101,7 @@ static const char sec2_verifier[] = {
 
 static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
 {
-    ESP_LOGI(TAG, "Development mode: using hard coded salt");
+    LOG_INFO("Development mode: using hard coded salt");
     *salt = sec2_salt;
     *salt_len = sizeof(sec2_salt);
     return ESP_OK;
@@ -108,7 +109,7 @@ static esp_err_t example_get_sec2_salt(const char **salt, uint16_t *salt_len)
 
 static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *verifier_len)
 {
-    ESP_LOGI(TAG, "Development mode: using hard coded verifier");
+    LOG_INFO("Development mode: using hard coded verifier");
     *verifier = sec2_verifier;
     *verifier_len = sizeof(sec2_verifier);
     return ESP_OK;
@@ -167,24 +168,24 @@ esp_err_t read_security_info()
     const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, SEC_PARTITION_SUBTYPE, SEC_PARTITION_LABEL);
 
     if(!partition) {
-        ESP_LOGE(TAG, "Partition '%s' not found!", SEC_PARTITION_LABEL);
+        LOG_ERROR("Partition '%s' not found!", SEC_PARTITION_LABEL);
         return ESP_ERR_NOT_FOUND;
     }
 
     if(sizeof(struct sec_info_t) > partition->size) {
-        ESP_LOGE(TAG, "Struct size (%zu) exceeds partition size (%zu)!", sizeof(struct sec_info_t), partition->size);
+        LOG_ERROR("Struct size (%zu) exceeds partition size (%zu)!", sizeof(struct sec_info_t), partition->size);
         return ESP_ERR_INVALID_SIZE;
     }
     esp_err_t err = esp_partition_read(partition, 0, &sec_info, sizeof(struct sec_info_t));
 
     if(err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to read data from partition (0x%x)!", err);
+        LOG_ERROR("Failed to read data from partition (0x%x)!", err);
     }
 #if defined(DEBUG)
-    ESP_LOGI(TAG, "---> POP! %.15s (%d)", sec_info.password, sec_info.password_len);
-    ESP_LOGI(TAG, "SALT:");
+    LOG_INFO("---> POP! %.15s (%d)", sec_info.password, sec_info.password_len);
+    LOG_INFO("SALT:");
     dump_hex(sec_info.salt, sizeof(sec_info.salt));
-    ESP_LOGI(TAG, "VERIFIER:");
+    LOG_INFO("VERIFIER:");
     dump_hex(sec_info.verifier, sizeof(sec_info.verifier));
 #endif
     return err;
@@ -222,30 +223,30 @@ static esp_err_t example_get_sec2_verifier(const char **verifier, uint16_t *veri
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    ESP_LOGI(TAG, "EVENT: %s, ID = %d", event_base, event_id);
+    LOG_INFO("EVENT: %s, ID = %d", event_base, event_id);
 
     if(event_base == WIFI_PROV_EVENT) {
 
         switch(event_id) {
 
         case WIFI_PROV_START:
-            ESP_LOGI(TAG, "Provisioning started");
+            LOG_INFO("Provisioning started");
             break;
 
         case WIFI_PROV_CRED_RECV: {
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_GOT_SSID);
             wifi_sta_config_t *wifi_sta_cfg = (wifi_sta_config_t *)event_data;
-            ESP_LOGI(TAG, "Received Wi-Fi credentials:");
-            ESP_LOGI(TAG, "    SSID     : %s", (const char *)wifi_sta_cfg->ssid);
-            ESP_LOGI(TAG, "    Password : %s", (const char *)wifi_sta_cfg->password);
+            LOG_INFO("Received Wi-Fi credentials:");
+            LOG_INFO("    SSID     : %s", (const char *)wifi_sta_cfg->ssid);
+            LOG_INFO("    Password : %s", (const char *)wifi_sta_cfg->password);
             break;
         }
 
         case WIFI_PROV_CRED_FAIL: {
             wifi_prov_sta_fail_reason_t *reason = (wifi_prov_sta_fail_reason_t *)event_data;
-            ESP_LOGE(TAG, "Provisioning failed!");
-            ESP_LOGE(TAG, "Reason : %s", (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi auth failed" : "Wi-Fi access-point not found");
-            ESP_LOGE(TAG, "Please reset to factory and retry provisioning");
+            LOG_ERROR("Provisioning failed!");
+            LOG_ERROR("Reason : %s", (*reason == WIFI_PROV_STA_AUTH_ERROR) ? "Wi-Fi auth failed" : "Wi-Fi access-point not found");
+            LOG_ERROR("Please reset to factory and retry provisioning");
 
             /* Reset the state machine on provisioning failure.
              * It allows the provisioning manager to retry the provisioning process
@@ -258,7 +259,7 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
         }
 
         case WIFI_PROV_CRED_SUCCESS:
-            ESP_LOGI(TAG, "Provisioning successful");
+            LOG_INFO("Provisioning successful");
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_DONE);
             break;
 
@@ -278,13 +279,13 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             wifi_retries += 1;
-            ESP_LOGI(TAG, "Disconnected");
+            LOG_INFO("Disconnected");
             xEventGroupClearBits(system_events, SYS_EVENT_SNTP_SYNCHRONIZED | SYS_EVENT_NETWORK_CONNECTED | SYS_EVENT_WIFI_CONNECTED);
             if(wifi_retries < 10) {
-                ESP_LOGI(TAG, "Connecting to the AP again for %d time", wifi_retries);
+                LOG_INFO("Connecting to the AP again for %d time", wifi_retries);
                 esp_wifi_connect();
             } else {
-                ESP_LOGI(TAG, "Wifi ain't happening - let's try provisioning");
+                LOG_INFO("Wifi ain't happening - let's try provisioning");
                 wifi_prov_mgr_reset_sm_state_for_reprovision();
             }
             break;
@@ -294,19 +295,20 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     } else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
+        LOG_INFO("======================= Connected with IP Address:" IPSTR " =======================", IP2STR(&event->ip_info.ip));
         sprintf(ip_addr, IPSTR, IP2STR(&event->ip_info.ip));
         /* Signal main application to continue execution */
         xEventGroupSetBits(system_events, SYS_EVENT_WIFI_CONNECTED);
+        wifi_retries = 0;
     } else if(event_base == PROTOCOMM_TRANSPORT_BLE_EVENT) {
         switch(event_id) {
         case PROTOCOMM_TRANSPORT_BLE_CONNECTED:
             xEventGroupSetBits(system_events, SYS_EVENT_BLE_CONNECTED);
-            ESP_LOGI(TAG, "BLE transport: Connected!");
+            LOG_INFO("BLE transport: Connected!");
             break;
         case PROTOCOMM_TRANSPORT_BLE_DISCONNECTED:
             xEventGroupClearBits(system_events, SYS_EVENT_PROVISIONING_BITS);
-            ESP_LOGI(TAG, "BLE transport: Disconnected!");
+            LOG_INFO("BLE transport: Disconnected!");
             break;
         default:
             break;
@@ -314,15 +316,15 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     } else if(event_base == PROTOCOMM_SECURITY_SESSION_EVENT) {
         switch(event_id) {
         case PROTOCOMM_SECURITY_SESSION_SETUP_OK:
-            ESP_LOGI(TAG, "Secured session established!");
+            LOG_INFO("Secured session established!");
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_IN_PROGRESS);
             break;
         case PROTOCOMM_SECURITY_SESSION_INVALID_SECURITY_PARAMS:
-            ESP_LOGE(TAG, "Received invalid security parameters for establishing secure session!");
+            LOG_ERROR("Received invalid security parameters for establishing secure session!");
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_ERROR);
             break;
         case PROTOCOMM_SECURITY_SESSION_CREDENTIALS_MISMATCH:
-            ESP_LOGE(TAG, "Received incorrect username and/or PoP for establishing secure session!");
+            LOG_ERROR("Received incorrect username and/or PoP for establishing secure session!");
             xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING_ERROR);
             break;
         default:
@@ -358,7 +360,7 @@ void wifi_prov_app_callback(void *user_data, wifi_prov_cb_event_t event, void *e
 
 esp_err_t start_provisioning()
 {
-    ESP_LOGI(TAG, "Starting provisioning");
+    LOG_INFO("Starting provisioning");
     xEventGroupSetBits(system_events, SYS_EVENT_PROVISIONING);
 
     wifi_prov_security_t security = WIFI_PROV_SECURITY_2;
@@ -452,7 +454,7 @@ esp_err_t wifi_init()
     /* Get Wi-Fi Station configuration */
     wifi_config_t wifi_cfg;
     if(esp_wifi_get_config(WIFI_IF_STA, &wifi_cfg) == ESP_OK && strlen((const char *)wifi_cfg.sta.ssid) != 0) {
-        ESP_LOGI(TAG, "Already provisioned, starting Wi-Fi STA");
+        LOG_INFO("Already provisioned, starting Wi-Fi STA");
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
         /* Start Wi-Fi station */

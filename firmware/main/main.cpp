@@ -26,14 +26,14 @@ extern "C" void app_main()
     system_events = xEventGroupCreate();
 
     settings_init();
-    lux_init();
     display_init();
+    lux_init();
     button_init();
     wifi_init();
     ota_init();
-    console_init();
     clock_init();
     state_init();
+    console_init();
 
     while(true) {
         display_update();

@@ -76,7 +76,6 @@ namespace
         zone_offset const *result = mid;
         while(begin < end) {
             mid = begin + (end - begin) / 2;
-            int64_t mid_seconds = mid->epoch_start();
             bool less = mid->epoch_start() <= now;
             if(less) {
                 result = mid;
