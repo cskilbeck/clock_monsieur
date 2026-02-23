@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cstddef>
+#include <unistd.h>  // fsync, fileno
 
 #include "esp_log.h"
 #include "esp_err.h"

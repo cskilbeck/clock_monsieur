@@ -5,14 +5,12 @@
 #include <cstdio>
 #include <cstring>
 
-#include "stdio.h"
 #include "display.h"
 #include "font.h"
 #include "graphics.h"
 #include "settings.h"
 #include "button.h"
 #include "util.h"
-#include "settings.h"
 
 LOG_CONTEXT("graphics");
 

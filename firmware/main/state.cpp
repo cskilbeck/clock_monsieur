@@ -22,29 +22,27 @@ LOG_CONTEXT("state");
 
 //////////////////////////////////////////////////////////////////////
 
-state_handler_t null_state;
-boot_state_t boot_state;
-wifi_check_state_t wifi_check_state;
-factory_reset_state_t factory_reset_state;
-clock_state_t clock_state;
-menu_state_t menu_state;
-timezone_select_state_t timezone_select_state;
-ota_state_t ota_state;
-lux_state_t lux_state;
-led_edit_state_t led_edit_state;
-
-//////////////////////////////////////////////////////////////////////
-
 namespace
 {
-    state_handler_t *current_state = &null_state;
+    alignas(std::max_align_t) static uint8_t state_buf[max_sizeof_v<state_handler_t,            //
+                                                                    boot_state_t,               //
+                                                                    wifi_check_state_t,         //
+                                                                    factory_reset_state_t,      //
+                                                                    clock_state_t,              //
+                                                                    ota_state_t,                //
+                                                                    menu_state_t,               //
+                                                                    timezone_select_state_t,    //
+                                                                    lux_state_t,                //
+                                                                    led_edit_state_t>           //
+    ];
+    state_handler_t *current_state = nullptr;
     QueueHandle_t state_queue;
     int frames;
 
     uint64_t state_start_timestamp;
     double state_elapsed_seconds;
 
-};    // namespace
+}    // namespace
 
 //////////////////////////////////////////////////////////////////////
 
@@ -65,20 +63,22 @@ void state_handler_t::on_stop()
 
 void state_init()
 {
-    state_queue = xQueueCreate(2, sizeof(void *));
-    state_set(boot_state);
-    // state_set(led_edit_state);
+    current_state = new(state_buf) state_handler_t{};
+    state_queue = xQueueCreate(2, sizeof(void (*)(void *)));
+    state_set<boot_state_t>();
+    // state_set<led_edit_state_t>();
 }
 
 //////////////////////////////////////////////////////////////////////
 
 void state_update()
 {
-    state_handler_t *new_state;
-    BaseType_t got = xQueueReceive(state_queue, (void *)&new_state, (TickType_t)0);
-    if(got == pdPASS) {
+    void (*ctor)(void *);
+    if(xQueueReceive(state_queue, &ctor, 0) == pdPASS) {
         current_state->on_stop();
-        current_state = new_state;
+        current_state->~state_handler_t();
+        ctor(state_buf);
+        current_state = reinterpret_cast<state_handler_t *>(state_buf);
         frames = 0;
         state_start_timestamp = esp_rtc_get_time_us();
         current_state->on_start();
@@ -90,10 +90,9 @@ void state_update()
 
 //////////////////////////////////////////////////////////////////////
 
-void state_set(state_handler_t &new_state)
+void state_enqueue(void (*ctor)(void *))
 {
-    void *ptr_to_new_state = (void *)&new_state;
-    xQueueSendToBack(state_queue, &ptr_to_new_state, (TickType_t)0);
+    xQueueSendToBack(state_queue, &ctor, 0);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -137,9 +136,9 @@ void boot_state_t::on_update()
     gfx.display();
     if(x < -content_width) {
         if(factory_reset) {
-            state_set(factory_reset_state);
+            state_set<factory_reset_state_t>();
         } else {
-            state_set(wifi_check_state);
+            state_set<wifi_check_state_t>();
         }
     }
 }
@@ -159,7 +158,7 @@ void wifi_check_state_t::on_update()
     EventBits_t sys_events = xEventGroupGetBits(system_events);
     bool network_up = (sys_events & SYS_EVENT_NETWORK_CONNECTED) == SYS_EVENT_NETWORK_CONNECTED;
     if(network_up) {
-        state_set(clock_state);
+        state_set<clock_state_t>();
         return;
     }
     bool wifi_up = (sys_events & SYS_EVENT_WIFI_CONNECTED) == SYS_EVENT_WIFI_CONNECTED;
@@ -249,7 +248,7 @@ void factory_reset_state_t::on_update()
         int x = ((int)(t * 2 * screen_width)) % max_width;
         font_5x7_font.draw_string(gfx, msg, screen_width - x, 0, 1);
         if(t > 10) {
-            state_set(wifi_check_state);
+            state_set<wifi_check_state_t>();
         }
     }
     gfx.display();
@@ -262,7 +261,7 @@ void clock_state_t::on_update()
     clock_draw();
 
     if(button_select.pressed) {
-        state_set(menu_state);
+        state_set<menu_state_t>();
     }
 }
 

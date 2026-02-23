@@ -19,12 +19,14 @@ idf_component_register(
         timezone_data.cpp
         menu.cpp
         timezone_data.cpp
+        buzzer.cpp
         fonts/font_5x7.cpp
         fonts/font_5x7_narrow_modern.cpp
         fonts/big_caps.cpp
         fonts/square_font.cpp
     PRIV_REQUIRES
         driver
+        esp_driver_rmt
         bt
         nvs_flash
         mbedtls

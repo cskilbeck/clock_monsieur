@@ -173,12 +173,14 @@ esp_err_t do_ota_firmware_update(const char *latest)
         int data_read = esp_http_client_read(client, upgrade_data_buf, OTA_RECV_BUF_SIZE);
         if(data_read < 0) {
             LOG_ERROR("Error: SSL data read error");
+            esp_ota_abort(update_handle);
             return ESP_FAIL;
         } else if(data_read > 0) {
             // Write Chunk to Flash
             err = esp_ota_write(update_handle, upgrade_data_buf, data_read);
             if(err != ESP_OK) {
                 LOG_ERROR("esp_ota_write failed (%s)", esp_err_to_name(err));
+                esp_ota_abort(update_handle);
                 return err;
             }
             binary_file_len += data_read;
@@ -190,6 +192,7 @@ esp_err_t do_ota_firmware_update(const char *latest)
                 break;
             }
             LOG_ERROR("Connection closed before all data received? GOT %d bytes", binary_file_len);
+            esp_ota_abort(update_handle);
             return ESP_FAIL;
         }
     }
@@ -198,6 +201,7 @@ esp_err_t do_ota_firmware_update(const char *latest)
     err = esp_ota_end(update_handle);
     if(err != ESP_OK) {
         LOG_ERROR("esp_ota_end failed (%s)!", esp_err_to_name(err));
+        esp_ota_abort(update_handle);
         return err;
     }
 
@@ -240,7 +244,7 @@ void ota_task(void *)
         } else {
             LOG_INFO("FIRMWARE available: %s (currently %s)", latest, VERSION_STR);
             if(strcmp(latest, VERSION_STR) != 0) {
-                state_set(ota_state);
+                state_set<ota_state_t>();
                 err = do_ota_firmware_update(latest);
                 if(err != ESP_OK) {
                     // OTA update failed, wait 30 seconds and try again?

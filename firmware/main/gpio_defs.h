@@ -52,3 +52,7 @@
 #define BUTTON_2_GPIO GPIO_NUM_48
 #define BUTTON_3_GPIO GPIO_NUM_47
 #define BUTTON_4_GPIO GPIO_NUM_45
+
+//////////////////////////////////////////////////////////////////////
+// Buzzer (BSS138 gate via 1k5 series resistor R4)
+#define BUZZER_GPIO GPIO_NUM_2

@@ -194,7 +194,7 @@ struct : console_command_t<"factory", "erase NVS partition", "">
 {
     void on_command(int argc, char **argv) override
     {
-        state_set(factory_reset_state);
+        state_set<factory_reset_state_t>();
     }
 } cmd_factory;
 

@@ -226,7 +226,7 @@ struct : console_command_t<"lux", "show lux", "">
 {
     void on_command(int argc, char **argv) override
     {
-        state_set(lux_state);
+        state_set<lux_state_t>();
     }
 } lux_command;
 
@@ -235,7 +235,7 @@ struct : console_command_t<"lux", "show lux", "">
 void lux_state_t::on_update()
 {
     if(button_select.pressed) {
-        state_set(clock_state);
+        state_set<clock_state_t>();
     }
     char hex[5];
     sprintf(hex, "%02X", display->get_ambient());

@@ -12,6 +12,7 @@
 #include "ota.h"
 #include "state.h"
 #include "console.h"
+#include "buzzer.h"
 
 LOG_CONTEXT("main");
 
@@ -29,6 +30,7 @@ extern "C" void app_main()
     display_init();
     lux_init();
     button_init();
+    buzzer_init();
     wifi_init();
     ota_init();
     clock_init();

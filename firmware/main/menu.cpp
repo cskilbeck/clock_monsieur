@@ -237,7 +237,7 @@ namespace
     void menu_exit()
     {
         settings.save();
-        state_set(clock_state);
+        state_set<clock_state_t>();
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -349,7 +349,7 @@ namespace
         }
         void on_select() override
         {
-            state_set(timezone_select_state);
+            state_set<timezone_select_state_t>();
         }
     } timezone_select_menu{ &timezone_menu };
 
@@ -396,7 +396,7 @@ namespace
         using item_t::item_t;
         void on_select() override
         {
-            state_set(factory_reset_state);
+            state_set<factory_reset_state_t>();
         }
         char const *text() const
         {

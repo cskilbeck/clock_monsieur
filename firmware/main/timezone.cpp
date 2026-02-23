@@ -235,7 +235,7 @@ void timezone_select_update()
 
             set_timezone(current);
             settings.save();
-            state_set(clock_state);
+            state_set<clock_state_t>();
         }
     }
     if(button_up.pressed && node_index != 0) {
@@ -253,7 +253,7 @@ void timezone_select_update()
         name_x += 1;
     } else if(button_left.pressed && name_x == 0) {
         if(parent_index.empty()) {
-            state_set(clock_state);
+            state_set<clock_state_t>();
         } else {
             location_t parent = parent_index.pop();
             current_index = parent.index;

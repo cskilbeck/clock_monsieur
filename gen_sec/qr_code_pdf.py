@@ -6,9 +6,9 @@ from reportlab.lib.colors import black
 
 
 def create_qr_pdf(qr_code_path, output_filename, title, subtitle, footer):
-    PAGE_WIDTH = 4 * inch
-    PAGE_HEIGHT = 6 * inch
-    QR_SIZE = 25 * mm
+    page_width = 4 * inch
+    page_height = 6 * inch
+    qr_size = 25 * mm
 
     styles = getSampleStyleSheet()
 
@@ -33,13 +33,13 @@ def create_qr_pdf(qr_code_path, output_filename, title, subtitle, footer):
     pdf = [
         Paragraph(title, title_style),
         Paragraph(subtitle, subtitle_style),
-        Image(str(qr_code_path), width=QR_SIZE, height=QR_SIZE, kind='proportional'),
+        Image(str(qr_code_path), width=qr_size, height=qr_size, kind='proportional'),
         Paragraph(footer, subtitle_style),
     ]
 
     doc = SimpleDocTemplate(
         str(output_filename),
-        pagesize=(PAGE_WIDTH, PAGE_HEIGHT),
+        pagesize=(page_width, page_height),
         leftMargin=0.25 * inch,
         rightMargin=0.25 * inch,
         topMargin=1 * mm,
