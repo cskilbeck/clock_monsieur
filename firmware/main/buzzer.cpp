@@ -1,33 +1,32 @@
 //////////////////////////////////////////////////////////////////////
 //
-// Buzzer driver — LEDC square-wave drive
-//                 with melody sequencer and volume envelope
+// Buzzer driver — RMT+DMA square-wave drive
+//                 with per-cycle ADSR envelope and melody sequencer
 //
 // Signal path
 // ───────────
-//  ESP32-S3 GPIO (LEDC) ──► R4 (1k5) ──► BSS138 gate ──► BSS138 drain ──► buzzer ──► +5V
+//  ESP32-S3 GPIO (RMT) ──► R4 (1k5) ──► BSS138 gate ──► BSS138 drain ──► buzzer ──► +5V
 //
-//  The LEDC peripheral generates a square wave at the desired tone
-//  frequency.  The MOSFET switches the buzzer coil on/off at that
-//  rate; the coil's inductance and the diaphragm's mechanical
-//  response naturally smooth the harmonics.
+//  The RMT peripheral generates a square wave via DMA.  Each RMT symbol
+//  encodes one complete tone cycle: duration0 = high (duty), duration1 = low.
+//  A custom encoder modulates the duty ratio per-cycle to produce a smooth
+//  raised-cosine ADSR envelope (~2700 updates/sec at resonance).
 //
 //  MLT-7525 buzzer: rated 3.6 V (range 2.5–4.5 V), 95 mA, 2.7 kHz.
 //  50% duty square wave at 5 V supply ≈ 93 mA RMS — within rating.
 //
-// Volume envelope
-// ───────────────
-//  Each note carries attack_ms and release_ms durations.  The
-//  LEDC duty cycle is modulated every ~5 ms following a
-//  raised-cosine curve (zero derivative at both endpoints).
+// Why per-cycle RMT beats LEDC tick-based modulation
+// ──────────────────────────────────────────────────
+//  LEDC: envelope updates once per FreeRTOS tick (~10 ms at 100 Hz),
+//  giving coarse 2-step attacks and incomplete releases.
 //
-// Melody sequencer
-// ────────────────
-//  A FreeRTOS queue carries CMD_TONE / CMD_MELODY / CMD_STOP.
-//  Any queued command preempts the current playback (detected via
-//  check_stop() at each envelope-update cycle).  The silence()
-//  helper doubles as a gap timer that also responds to incoming
-//  commands.
+//  RMT+DMA: each DMA symbol = one tone cycle, so envelope resolution
+//  equals the tone frequency (~2700 updates/sec).  DMA runs autonomously;
+//  the ISR fires only when a ping-pong buffer node is consumed (~5×/sec),
+//  making CPU usage near-zero.
+//
+//  Each symbol is self-contained (one full cycle), so buffer-boundary
+//  phase continuity is trivial — no 50 Hz DMA-glitch artifacts.
 //
 //////////////////////////////////////////////////////////////////////
 
@@ -39,7 +38,10 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-#include "driver/ledc.h"
+#include "driver/rmt_tx.h"
+#include "driver/rmt_encoder.h"
+#include "driver/gpio.h"
+#include "esp_heap_caps.h"
 
 #include "buzzer.h"
 #include "melodies.h"
@@ -56,18 +58,175 @@ LOG_CONTEXT("buzzer");
 namespace
 {
     //////////////////////////////////////////////////////////////////////
-    // LEDC configuration
+    // RMT configuration
 
-    static constexpr ledc_mode_t LEDC_MODE = LEDC_LOW_SPEED_MODE;
-    static constexpr ledc_timer_t LEDC_TMR = LEDC_TIMER_0;
-    static constexpr ledc_channel_t LEDC_CHAN = LEDC_CHANNEL_0;
-    static constexpr ledc_timer_bit_t DUTY_RES = LEDC_TIMER_10_BIT;
-    static constexpr uint32_t DUTY_HALF = (1u << 10) / 2;    // 512 = 50% duty
+    static constexpr uint32_t RMT_RESOLUTION_HZ = 5000000;    // 5 MHz (200 ns ticks)
+    static constexpr size_t RMT_MEM_SYMBOLS = 512;            // DMA buffer: 256 per ping-pong node
 
     //////////////////////////////////////////////////////////////////////
-    // Envelope update interval
+    // Cosine ramp LUT — 256 entries, values 0..1000 (permil).
+    //
+    // cosine_ramp[i] = (1 − cos(π·i/255)) × 500
+    //   i=0  → 0    (ramp start)
+    //   i=255→ 1000  (ramp end)
+    //
+    // Computed once at init; stored in DRAM for safe ISR access.
 
-    static constexpr TickType_t ENVELOPE_TICKS = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
+    static uint16_t cosine_ramp[256];
+
+    static void init_cosine_ramp()
+    {
+        for(int i = 0; i < 256; ++i) {
+            double a = M_PI * i / 255.0;
+            cosine_ramp[i] = (uint16_t)((1.0 - cos(a)) * 500.0 + 0.5);
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Custom RMT encoder — produces one RMT symbol per tone cycle,
+    // modulating duty (amplitude) according to the ADSR envelope.
+
+    struct buzzer_encoder_t
+    {
+        rmt_encoder_t base;             // must be first member
+        rmt_encoder_t *copy_encoder;    // ESP-IDF built-in copy helper
+
+        // Note parameters (set by task before rmt_transmit)
+        uint32_t cycle_ticks;     // RMT_RESOLUTION_HZ / freq_hz
+        uint32_t total_cycles;    // 0 = indefinite
+        uint32_t attack_cycles;
+        uint32_t decay_cycles;
+        uint32_t release_cycles;
+        uint16_t sustain_permil;    // sustain_level × 1000
+        uint16_t volume_permil;     // amplitude × 1000
+
+        // Runtime state (ISR context)
+        uint32_t cycle_index;
+    };
+
+    //////////////////////////////////////////////////////////////////////
+    // encode() — IRAM_ATTR, runs in ISR context.
+    //
+    // Fills the DMA buffer with RMT symbols, one per tone cycle.
+    // Each symbol: duration0 = high phase (duty), duration1 = low phase.
+    // The duty ratio encodes the ADSR envelope amplitude.
+
+    static size_t IRAM_ATTR buzzer_encode(rmt_encoder_t *encoder, rmt_channel_handle_t channel, const void *primary_data, size_t data_size,
+                                          rmt_encode_state_t *ret_state)
+    {
+        buzzer_encoder_t *enc = __containerof(encoder, buzzer_encoder_t, base);
+        size_t encoded_symbols = 0;
+        rmt_encode_state_t session_state = RMT_ENCODING_RESET;
+
+        uint32_t half = enc->cycle_ticks / 2;
+
+        while(true) {
+
+            // Finite note complete?
+            if(enc->total_cycles > 0 && enc->cycle_index >= enc->total_cycles) {
+                *ret_state = RMT_ENCODING_COMPLETE;
+                return encoded_symbols;
+            }
+
+            // ── ADSR amplitude (0..1000) ────────────────────────
+
+            uint32_t idx = enc->cycle_index;
+            uint32_t amplitude;
+
+            uint32_t atk_end = enc->attack_cycles;
+            uint32_t decay_end = atk_end + enc->decay_cycles;
+            // Sustain ends where release begins (only for finite notes)
+            uint32_t sus_end = (enc->total_cycles > 0) ? enc->total_cycles - enc->release_cycles : 0xFFFFFFFF;
+
+            if(idx < atk_end && atk_end > 0) {
+                // Attack: ramp 0 → 1000
+                uint32_t lut_idx = idx * 255 / atk_end;
+                amplitude = cosine_ramp[lut_idx];
+
+            } else if(idx < decay_end && enc->decay_cycles > 0) {
+                // Decay: ramp 1000 → sustain
+                uint32_t phase = idx - atk_end;
+                uint32_t lut_idx = phase * 255 / enc->decay_cycles;
+                amplitude = 1000 - (uint32_t)(1000 - enc->sustain_permil) * cosine_ramp[lut_idx] / 1000;
+
+            } else if(idx < sus_end) {
+                // Sustain: constant level
+                amplitude = enc->sustain_permil;
+
+            } else if(enc->total_cycles > 0) {
+                // Release: ramp sustain → 0
+                uint32_t phase = idx - sus_end;
+                uint32_t rel_len = enc->release_cycles;
+                if(rel_len > 0) {
+                    uint32_t lut_idx = phase * 255 / rel_len;
+                    if(lut_idx > 255)
+                        lut_idx = 255;
+                    amplitude = (uint32_t)enc->sustain_permil * (1000 - cosine_ramp[lut_idx]) / 1000;
+                } else {
+                    amplitude = 0;
+                }
+
+            } else {
+                amplitude = enc->sustain_permil;
+            }
+
+            // ── Scale by volume ─────────────────────────────────
+
+            uint32_t amp = amplitude * enc->volume_permil / 1000;
+
+            // ── Compute symbol durations ────────────────────────
+
+            uint32_t high_ticks = amp * half / 1000;
+
+            // Minimum 1 tick high to avoid degenerate RMT symbols
+            if(high_ticks < 1)
+                high_ticks = 1;
+
+            uint32_t low_ticks = enc->cycle_ticks - high_ticks;
+            // Clamp to 15-bit max (only matters for very low freq + low duty)
+            if(low_ticks > 32767)
+                low_ticks = 32767;
+
+            rmt_symbol_word_t symbol = {};
+            symbol.duration0 = high_ticks;
+            symbol.level0 = 1;
+            symbol.duration1 = low_ticks;
+            symbol.level1 = 0;
+
+            // ── Write symbol via copy encoder ───────────────────
+
+            size_t ret = enc->copy_encoder->encode(enc->copy_encoder, channel, &symbol, sizeof(symbol), &session_state);
+            encoded_symbols += ret;
+
+            if(session_state & RMT_ENCODING_MEM_FULL) {
+                *ret_state = RMT_ENCODING_MEM_FULL;
+                return encoded_symbols;
+            }
+
+            enc->cycle_index++;
+        }
+    }
+
+    static esp_err_t buzzer_encoder_reset(rmt_encoder_t *encoder)
+    {
+        buzzer_encoder_t *enc = __containerof(encoder, buzzer_encoder_t, base);
+        enc->cycle_index = 0;
+        return enc->copy_encoder->reset(enc->copy_encoder);
+    }
+
+    static esp_err_t buzzer_encoder_del(rmt_encoder_t *encoder)
+    {
+        buzzer_encoder_t *enc = __containerof(encoder, buzzer_encoder_t, base);
+        enc->copy_encoder->del(enc->copy_encoder);
+        free(enc);
+        return ESP_OK;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // RMT handles and task state
+
+    static rmt_channel_handle_t rmt_channel = nullptr;
+    static buzzer_encoder_t *buzzer_enc = nullptr;
 
     //////////////////////////////////////////////////////////////////////
     // Command queue
@@ -85,6 +244,10 @@ namespace
         float freq_hz;           // CMD_TONE
         float amplitude;         // CMD_TONE  (0.0–1.0)
         uint16_t duration_ms;    // CMD_TONE  (0 = indefinite)
+        uint16_t attack_ms;      // CMD_TONE
+        uint16_t decay_ms;       // CMD_TONE
+        float sustain_level;     // CMD_TONE  (0.0–1.0)
+        uint16_t release_ms;     // CMD_TONE
         note_t const *notes;     // CMD_MELODY
         int count;               // CMD_MELODY
         bool loop;               // CMD_MELODY
@@ -94,92 +257,59 @@ namespace
     static TaskHandle_t task_handle = nullptr;
 
     //////////////////////////////////////////////////////////////////////
-    // LEDC helpers
+    // configure_encoder — task context, called before rmt_transmit.
+    // No race: DMA hasn't started yet when this runs.
 
-    static void set_freq(float freq_hz)
+    static void configure_encoder(float freq_hz, uint16_t on_ms, uint16_t attack_ms, uint16_t decay_ms, float sustain_level,
+                                  uint16_t release_ms, float volume)
     {
-        ledc_timer_pause(LEDC_MODE, LEDC_TMR);
-        ledc_set_freq(LEDC_MODE, LEDC_TMR, (uint32_t)(freq_hz + 0.5f));
-        ledc_timer_rst(LEDC_MODE, LEDC_TMR);
-        ledc_timer_resume(LEDC_MODE, LEDC_TMR);
-    }
+        uint32_t freq = (uint32_t)(freq_hz + 0.5f);
 
-    static void set_amplitude(float amplitude)
-    {
-        if(amplitude < 0.002f) {
-            // Disconnect output to avoid duty=0 / hpoint=0 glitch pulses
-            ledc_stop(LEDC_MODE, LEDC_CHAN, 0);
-            return;
-        }
-        uint32_t duty = (uint32_t)(amplitude * DUTY_HALF + 0.5f);
-        if(duty == 0) duty = 1;
-        ledc_set_duty(LEDC_MODE, LEDC_CHAN, duty);
-        ledc_update_duty(LEDC_MODE, LEDC_CHAN);
-    }
+        buzzer_enc->cycle_ticks = RMT_RESOLUTION_HZ / freq;
+        buzzer_enc->total_cycles = on_ms > 0 ? freq * on_ms / 1000 : 0;
+        buzzer_enc->attack_cycles = freq * attack_ms / 1000;
+        buzzer_enc->decay_cycles = freq * decay_ms / 1000;
+        buzzer_enc->release_cycles = on_ms > 0 ? freq * release_ms / 1000 : 0;
+        buzzer_enc->sustain_permil = (uint16_t)(sustain_level * 1000.0f + 0.5f);
+        buzzer_enc->volume_permil = (uint16_t)(volume * 1000.0f + 0.5f);
+        buzzer_enc->cycle_index = 0;
 
-    static void stop_output()
-    {
-        ledc_stop(LEDC_MODE, LEDC_CHAN, 0);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // envelope — raised-cosine amplitude [0.0, 1.0] for elapsed_ms into note.
-    //
-    // Timeline:
-    //   [0 .. attack_ms)                → ramp up   (1 - cos(πt/T)) / 2
-    //   [attack_ms .. on_ms-release_ms) → sustain  1.0
-    //   [on_ms-release_ms .. on_ms)     → ramp down (1 + cos(πt/T)) / 2
-    //
-    // If attack+release > on_ms they are clamped to on_ms/2 each.
-
-    static float envelope(uint32_t elapsed_ms, note_t const &n)
-    {
-        uint32_t atk = n.attack_ms;
-        uint32_t rel = n.release_ms;
-        uint32_t on = n.on_ms;
-
-        if(atk + rel > on) {
-            atk = on / 2;
-            rel = on - atk;
-        }
-
-        if(atk > 0 && elapsed_ms < atk) {
-            float t = (float)elapsed_ms / (float)atk;
-            return (1.0f - cosf((float)M_PI * t)) * 0.5f;
-        }
-
-        uint32_t rel_start = on - rel;
-        if(rel > 0 && elapsed_ms >= rel_start) {
-            if(elapsed_ms >= on) {
-                return 0.0f;
+        // Ensure attack + decay + release ≤ total_cycles
+        if(buzzer_enc->total_cycles > 0) {
+            uint32_t adsr = buzzer_enc->attack_cycles + buzzer_enc->decay_cycles + buzzer_enc->release_cycles;
+            if(adsr > buzzer_enc->total_cycles) {
+                buzzer_enc->attack_cycles = buzzer_enc->attack_cycles * buzzer_enc->total_cycles / adsr;
+                buzzer_enc->decay_cycles = buzzer_enc->decay_cycles * buzzer_enc->total_cycles / adsr;
+                buzzer_enc->release_cycles = buzzer_enc->total_cycles - buzzer_enc->attack_cycles - buzzer_enc->decay_cycles;
             }
-            float t = (float)(elapsed_ms - rel_start) / (float)rel;
-            return (1.0f + cosf((float)M_PI * t)) * 0.5f;
         }
 
-        return 1.0f;    // sustain
+        buzzer_enc->copy_encoder->reset(buzzer_enc->copy_encoder);
     }
 
     //////////////////////////////////////////////////////////////////////
-    // check_stop — non-blocking peek at the command queue.
-    // If any command is pending, puts it back at the front and returns true.
-    // Any pending command (CMD_STOP, CMD_MELODY, CMD_TONE) interrupts
-    // current playback so the outer loop can process it.
+    // on_trans_done — ISR callback, notifies task when DMA finishes.
 
-    static bool check_stop()
+    static bool IRAM_ATTR on_trans_done(rmt_channel_handle_t channel, const rmt_tx_done_event_data_t *edata, void *user_ctx)
     {
-        cmd_t cmd;
-        if(xQueueReceive(cmd_queue, &cmd, 0) == pdPASS) {
-            xQueueSendToFront(cmd_queue, &cmd, 0);
-            return true;
-        }
-        return false;
+        BaseType_t higher_prio_woken = pdFALSE;
+        vTaskNotifyGiveFromISR((TaskHandle_t)user_ctx, &higher_prio_woken);
+        return higher_prio_woken == pdTRUE;
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // abort_transmission — stop active RMT output immediately.
+
+    static void abort_transmission()
+    {
+        rmt_disable(rmt_channel);
+        rmt_enable(rmt_channel);
+        gpio_set_level(BUZZER_GPIO, 0);    // safety: ensure MOSFET off
     }
 
     //////////////////////////////////////////////////////////////////////
     // silence — wait up to gap_ms doing nothing (output off).
     // Returns true and re-queues the command if one arrives early.
-    // Used both for inter-note gaps and for rest notes.
 
     static bool silence(uint16_t gap_ms)
     {
@@ -194,38 +324,42 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // play_note — modulate LEDC duty for one note (or indefinitely).
-    //
-    // note == nullptr  → full amplitude, effectively no time limit
-    //                    (caller uses a synthetically large on_ms)
-    // note != nullptr  → raised-cosine envelope, exits at note->on_ms
+    // play_rmt_note — start DMA playback and poll for completion
+    //                 or preemption.
     //
     // Returns true  if a command arrived (playback interrupted).
-    // Returns false if the note completed its full on_ms normally.
+    // Returns false if the note completed normally.
 
-    static bool play_note(note_t const *note, float volume = 1.0f)
+    static bool play_rmt_note(float freq_hz, uint16_t on_ms, uint16_t attack_ms, uint16_t decay_ms, float sustain_level,
+                              uint16_t release_ms, float volume)
     {
-        TickType_t const note_start = xTaskGetTickCount();
+        configure_encoder(freq_hz, on_ms, attack_ms, decay_ms, sustain_level, release_ms, volume);
 
+        // Clear any pending notification from a previous transmission
+        ulTaskNotifyTake(pdTRUE, 0);
+
+        uint8_t dummy = 0;
+        rmt_transmit_config_t tx_config = {};
+        tx_config.loop_count = 0;         // single pass; encoder controls length
+        tx_config.flags.eot_level = 0;    // GPIO low when transmission ends
+
+        ESP_LOG_ERR(rmt_transmit(rmt_channel, &buzzer_enc->base, &dummy, sizeof(dummy), &tx_config));
+
+        // Poll loop: 10 ms resolution for preemption
         while(true) {
-
-            if(check_stop()) {
+            cmd_t cmd;
+            if(xQueueReceive(cmd_queue, &cmd, pdMS_TO_TICKS(10)) == pdPASS) {
+                // Preempted by new command — abort and re-queue
+                abort_transmission();
+                xQueueSendToFront(cmd_queue, &cmd, 0);
                 return true;
             }
 
-            uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - note_start) * portTICK_PERIOD_MS);
-
-            if(note && elapsed_ms >= note->on_ms) {
-                break;
+            // Check if transmission completed (ISR notification)
+            if(ulTaskNotifyTake(pdTRUE, 0) > 0) {
+                return false;    // note completed normally
             }
-
-            float amp = note ? envelope(elapsed_ms, *note) : 1.0f;
-            set_amplitude(amp * volume);
-
-            vTaskDelay(ENVELOPE_TICKS);
         }
-
-        return false;    // note completed normally
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -240,21 +374,16 @@ namespace
             xQueueReceive(cmd_queue, &cmd, portMAX_DELAY);
 
             if(cmd.type == CMD_STOP) {
-                continue;    // nothing is playing, nothing to do
+                abort_transmission();
+                continue;
             }
 
             if(cmd.type == CMD_TONE) {
-                uint16_t dur = cmd.duration_ms > 0 ? cmd.duration_ms : 65535;
-                LOG_INFO("tone %.1f Hz  amp %.0f%%  dur %u ms", (double)cmd.freq_hz, (double)(cmd.amplitude * 100.0f), (unsigned)dur);
+                LOG_INFO("tone %.1f Hz  amp %.0f%%  dur %u ms", (double)cmd.freq_hz, (double)(cmd.amplitude * 100.0f),
+                         (unsigned)cmd.duration_ms);
 
-                set_freq(cmd.freq_hz);
-
-                // 15 ms attack prevents click at tone start.
-                // 30 ms release softens tone end (needs ≥3 tick periods
-                // at configTICK_RATE_HZ=100 to ramp down meaningfully).
-                uint16_t rel = cmd.duration_ms > 0 ? 30 : 0;
-                note_t const tn = { cmd.freq_hz, dur, 15, rel, 0 };
-                play_note(&tn, cmd.amplitude);
+                uint16_t rel = cmd.duration_ms > 0 ? cmd.release_ms : 0;
+                play_rmt_note(cmd.freq_hz, cmd.duration_ms, cmd.attack_ms, cmd.decay_ms, cmd.sustain_level, rel, cmd.amplitude);
 
             } else {    // CMD_MELODY
 
@@ -270,12 +399,9 @@ namespace
                             // Rest: combined on_ms + gap_ms of silence.
                             interrupted = silence((uint16_t)(n.on_ms + n.gap_ms));
                         } else {
-                            set_freq(n.freq_hz);
-
-                            interrupted = play_note(&n);
+                            interrupted = play_rmt_note(n.freq_hz, n.on_ms, n.attack_ms, n.decay_ms, n.sustain_level, n.release_ms, 1.0f);
 
                             if(!interrupted) {
-                                stop_output();
                                 interrupted = silence(n.gap_ms);
                             }
                         }
@@ -283,7 +409,8 @@ namespace
                 } while(cmd.loop && !interrupted);
             }
 
-            stop_output();
+            // Ensure GPIO is low after any playback
+            gpio_set_level(BUZZER_GPIO, 0);
         }
     }
 
@@ -293,40 +420,59 @@ namespace
 
 void buzzer_init()
 {
-    ledc_timer_config_t timer_cfg{};
-    timer_cfg.speed_mode = LEDC_MODE;
-    timer_cfg.duty_resolution = DUTY_RES;
-    timer_cfg.timer_num = LEDC_TMR;
-    timer_cfg.freq_hz = 2700;    // default; changed per-note
-    timer_cfg.clk_cfg = LEDC_AUTO_CLK;
-    ESP_LOG_ERR(ledc_timer_config(&timer_cfg));
+    init_cosine_ramp();
 
-    ledc_channel_config_t chan_cfg{};
-    chan_cfg.gpio_num = BUZZER_GPIO;
-    chan_cfg.speed_mode = LEDC_MODE;
-    chan_cfg.channel = LEDC_CHAN;
-    chan_cfg.timer_sel = LEDC_TMR;
-    chan_cfg.duty = 0;
-    chan_cfg.hpoint = 0;
-    ESP_LOG_ERR(ledc_channel_config(&chan_cfg));
+    // Configure RMT TX channel with DMA
+    rmt_tx_channel_config_t tx_chan_config = {};
+    tx_chan_config.gpio_num = BUZZER_GPIO;
+    tx_chan_config.clk_src = RMT_CLK_SRC_DEFAULT;
+    tx_chan_config.resolution_hz = RMT_RESOLUTION_HZ;
+    tx_chan_config.mem_block_symbols = RMT_MEM_SYMBOLS;
+    tx_chan_config.trans_queue_depth = 4;
+    tx_chan_config.flags.with_dma = true;
+    ESP_LOG_ERR(rmt_new_tx_channel(&tx_chan_config, &rmt_channel));
 
+    // Create custom encoder
+    buzzer_enc = (buzzer_encoder_t *)heap_caps_calloc(1, sizeof(buzzer_encoder_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    ASSERT(buzzer_enc != nullptr);
+
+    buzzer_enc->base.encode = buzzer_encode;
+    buzzer_enc->base.reset = buzzer_encoder_reset;
+    buzzer_enc->base.del = buzzer_encoder_del;
+
+    rmt_copy_encoder_config_t copy_config = {};
+    ESP_LOG_ERR(rmt_new_copy_encoder(&copy_config, &buzzer_enc->copy_encoder));
+
+    // Create command queue + task (task blocks on queue, safe to create before rmt_enable)
     cmd_queue = xQueueCreate(4, sizeof(cmd_t));
     ASSERT(cmd_queue != nullptr);
 
     xTaskCreatePinnedToCore(buzzer_task, "buzzer_task", 3072, nullptr, 5, &task_handle, 0);
 
-    LOG_INFO("init: LEDC square wave, %d-bit duty", (int)DUTY_RES);
+    // Register done callback (must happen before rmt_enable)
+    rmt_tx_event_callbacks_t callbacks = {};
+    callbacks.on_trans_done = on_trans_done;
+    ESP_LOG_ERR(rmt_tx_register_event_callbacks(rmt_channel, &callbacks, (void *)task_handle));
+
+    ESP_LOG_ERR(rmt_enable(rmt_channel));
+
+    LOG_INFO("init: RMT+DMA, %lu Hz resolution, %u symbol buffer", (unsigned long)RMT_RESOLUTION_HZ, (unsigned)RMT_MEM_SYMBOLS);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void buzzer_play_tone(float freq_hz, float amplitude, uint16_t duration_ms)
+void buzzer_play_tone(float freq_hz, float amplitude, uint16_t duration_ms, uint16_t attack_ms, uint16_t decay_ms, float sustain_level,
+                      uint16_t release_ms)
 {
     cmd_t cmd{};
     cmd.type = CMD_TONE;
     cmd.freq_hz = freq_hz;
     cmd.amplitude = amplitude;
     cmd.duration_ms = duration_ms;
+    cmd.attack_ms = attack_ms;
+    cmd.decay_ms = decay_ms;
+    cmd.sustain_level = sustain_level;
+    cmd.release_ms = release_ms;
     xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
 }
 
@@ -351,7 +497,7 @@ void buzzer_stop()
 
 namespace
 {
-    struct : console_command_t<"tone", "test buzzer", "<freq> [amp dur_ms] | melody <n> | stop">
+    struct : console_command_t<"tone", "test buzzer", "<freq> [amp% [dur [atk dec sus% rel]]] | melody <n> | stop">
     {
         void on_command(int argc, char **argv) override
         {
@@ -366,7 +512,7 @@ namespace
                     return;
                 }
                 auto const &m = melodies::table[idx];
-                buzzer_play_melody(m.notes, m.count, true);
+                buzzer_play_melody(m.notes, m.count, false);
                 return;
             }
             float freq = (float)atof(argv[1]);
@@ -377,7 +523,11 @@ namespace
             float amp = (argc >= 3) ? (float)atof(argv[2]) : 100.0f;
             amp = std::clamp(amp, 1.0f, 100.0f) * 0.01f;
             uint16_t dur = (argc >= 4) ? (uint16_t)atoi(argv[3]) : 0;
-            buzzer_play_tone(freq, amp, dur);
+            uint16_t atk = (argc >= 5) ? (uint16_t)atoi(argv[4]) : 15;
+            uint16_t dec = (argc >= 6) ? (uint16_t)atoi(argv[5]) : 0;
+            float sus = (argc >= 7) ? std::clamp((float)atof(argv[6]), 0.0f, 100.0f) * 0.01f : 1.0f;
+            uint16_t rel = (argc >= 8) ? (uint16_t)atoi(argv[7]) : 30;
+            buzzer_play_tone(freq, amp, dur, atk, dec, sus, rel);
         }
     } tone_cmd;
 }    // namespace
