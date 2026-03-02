@@ -1,63 +1,45 @@
 //////////////////////////////////////////////////////////////////////
 //
-// Buzzer driver — RMT DMA double-buffered sine synthesis
+// Buzzer driver — LEDC square-wave drive
 //                 with melody sequencer and volume envelope
 //
 // Signal path
 // ───────────
-//  ESP32-S3 GPIO ──► R4 (1k5) ──► BSS138 gate ──► BSS138 drain ──► buzzer ──► +5V
+//  ESP32-S3 GPIO (LEDC) ──► R4 (1k5) ──► BSS138 gate ──► BSS138 drain ──► buzzer ──► +5V
 //
-//  The MOSFET is switched at ~300 kHz (RMT carrier).  Each carrier
-//  cycle's duty cycle is modulated to trace a sine wave at the desired
-//  tone frequency.  The buzzer coil low-pass filters the 300 kHz
-//  switching, recovering the audio-frequency sine envelope.
+//  The LEDC peripheral generates a square wave at the desired tone
+//  frequency.  The MOSFET switches the buzzer coil on/off at that
+//  rate; the coil's inductance and the diaphragm's mechanical
+//  response naturally smooth the harmonics.
 //
-// Double-buffer / DMA
-// ───────────────────
-//  Two DMA-capable buffers (each ≈ 5 ms of carrier cycles) are
-//  alternated.  One is streamed to the GPIO by RMT/DMA without CPU
-//  involvement; the other is being refilled by buzzer_task.
-//  on_trans_done (ISR) increments a counting FreeRTOS notification;
-//  the task decrements it one-for-one (pdFALSE mode) so that two
-//  rapid completions after a WiFi preemption are each serviced
-//  individually and no refill is missed.
-//
-// WiFi resilience (Core 0)
-// ────────────────────────
-//  DMA runs independently of the CPU.  The 5 ms buffer window and
-//  a pre-queued second buffer (trans_queue_depth=2) give 10 ms of
-//  headroom — larger than any typical WiFi CPU burst (~1–3 ms).
-//  The task runs at priority 5; resilience comes from buffer depth,
-//  not task priority.
+//  MLT-7525 buzzer: rated 3.6 V (range 2.5–4.5 V), 95 mA, 2.7 kHz.
+//  50% duty square wave at 5 V supply ≈ 93 mA RMS — within rating.
 //
 // Volume envelope
 // ───────────────
 //  Each note carries attack_ms and release_ms durations.  The
-//  amplitude applied to fill_buffer follows a raised-cosine curve
-//  (zero derivative at both endpoints), computed from elapsed time
-//  at each buffer-fill step (~5 ms granularity — imperceptible for
-//  envelopes of 20 ms or more).
+//  LEDC duty cycle is modulated every ~5 ms following a
+//  raised-cosine curve (zero derivative at both endpoints).
 //
 // Melody sequencer
 // ────────────────
 //  A FreeRTOS queue carries CMD_TONE / CMD_MELODY / CMD_STOP.
 //  Any queued command preempts the current playback (detected via
-//  check_stop() at each buffer-fill cycle).  The silence() helper
-//  doubles as a gap timer that also responds to incoming commands.
+//  check_stop() at each envelope-update cycle).  The silence()
+//  helper doubles as a gap timer that also responds to incoming
+//  commands.
 //
 //////////////////////////////////////////////////////////////////////
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <algorithm>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-#include "driver/gpio.h"
-#include "driver/rmt_tx.h"
-#include "esp_heap_caps.h"
+#include "driver/ledc.h"
 
 #include "buzzer.h"
 #include "melodies.h"
@@ -74,51 +56,18 @@ LOG_CONTEXT("buzzer");
 namespace
 {
     //////////////////////////////////////////////////////////////////////
-    // RMT / carrier
+    // LEDC configuration
 
-    static constexpr uint32_t RMT_RESOLUTION_HZ = 80'000'000;    // APB clock
-    static constexpr uint16_t CARRIER_PERIOD_TICKS = 267;        // 80e6/267 ≈ 299,625 Hz
-    static constexpr float CARRIER_FREQ_HZ = (float)RMT_RESOLUTION_HZ / CARRIER_PERIOD_TICKS;
-
-    // Keep duration0 and duration1 both ≥ 1; 0 is the RMT end-of-sequence marker.
-    static constexpr int DUTY_MIN = 1;
-    static constexpr int DUTY_MAX = CARRIER_PERIOD_TICKS - 1;    // 266
-    static constexpr float DUTY_CENTRE = CARRIER_PERIOD_TICKS * 0.5f;
-    static constexpr float DUTY_AMPLITUDE = DUTY_CENTRE - DUTY_MIN - 0.5f;    // 132.0
+    static constexpr ledc_mode_t LEDC_MODE = LEDC_LOW_SPEED_MODE;
+    static constexpr ledc_timer_t LEDC_TMR = LEDC_TIMER_0;
+    static constexpr ledc_channel_t LEDC_CHAN = LEDC_CHANNEL_0;
+    static constexpr ledc_timer_bit_t DUTY_RES = LEDC_TIMER_10_BIT;
+    static constexpr uint32_t DUTY_HALF = (1u << 10) / 2;    // 512 = 50% duty
 
     //////////////////////////////////////////////////////////////////////
-    // Sine LUT — unit values in [-1.0, 1.0]; amplitude is applied at fill time
-    // so a single table serves all volume levels without regeneration.
+    // Envelope update interval
 
-    static constexpr int SINE_LUT_SIZE = 256;
-    static float sine_lut[SINE_LUT_SIZE];
-
-    //////////////////////////////////////////////////////////////////////
-    // Double buffers
-    //
-    // 1500 items × (1 / 299,625 Hz) ≈ 5.0 ms per buffer.
-    // At 2 kHz that is 10 full sine cycles — comfortably more than any
-    // WiFi-induced CPU gap on Core 0.
-
-    static constexpr size_t ITEMS_PER_BUFFER = 1500;
-    static rmt_symbol_word_t *buffers[2];    // allocated from internal DMA DRAM
-    static int fill_idx;                     // which buffer to refill next
-
-    //////////////////////////////////////////////////////////////////////
-    // Phase accumulator: Q16.16 fixed-point
-    //   upper 8 bits  → sine_lut index [0, 255]
-    //   lower 16 bits → sub-sample fraction
-
-    static constexpr uint32_t PHASE_SCALE = (uint32_t)SINE_LUT_SIZE << 16;    // 0x01000000
-    static uint32_t phase_acc;
-    static uint32_t phase_step;
-
-    //////////////////////////////////////////////////////////////////////
-    // RMT handles
-
-    static rmt_channel_handle_t tx_chan = nullptr;
-    static rmt_encoder_handle_t encoder = nullptr;
-    static rmt_transmit_config_t tx_config{};
+    static constexpr TickType_t ENVELOPE_TICKS = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
 
     //////////////////////////////////////////////////////////////////////
     // Command queue
@@ -133,45 +82,53 @@ namespace
     struct cmd_t
     {
         cmd_type_t type;
-        float freq_hz;          // CMD_TONE
-        note_t const *notes;    // CMD_MELODY
-        int count;              // CMD_MELODY
-        bool loop;              // CMD_MELODY
+        float freq_hz;           // CMD_TONE
+        float amplitude;         // CMD_TONE  (0.0–1.0)
+        uint16_t duration_ms;    // CMD_TONE  (0 = indefinite)
+        note_t const *notes;     // CMD_MELODY
+        int count;               // CMD_MELODY
+        bool loop;               // CMD_MELODY
     };
 
     static QueueHandle_t cmd_queue = nullptr;
     static TaskHandle_t task_handle = nullptr;
 
     //////////////////////////////////////////////////////////////////////
-    // fill_buffer — write ITEMS_PER_BUFFER carrier cycles with
-    // amplitude-scaled sine.  Phase accumulator advances and wraps
-    // so tone is phase-continuous across buffer boundaries.
+    // LEDC helpers
 
-    static void fill_buffer(rmt_symbol_word_t *buf, float amplitude)
+    static void set_freq(float freq_hz)
     {
-        float const scale = amplitude * DUTY_AMPLITUDE;
-        for(size_t i = 0; i < ITEMS_PER_BUFFER; ++i) {
-            uint8_t idx = (uint8_t)(phase_acc >> 16);
-            int duty = (int)(DUTY_CENTRE + scale * sine_lut[idx] + 0.5f);
-            duty = std::clamp(duty, DUTY_MIN, DUTY_MAX);
-            buf[i].duration0 = (uint16_t)duty;
-            buf[i].level0 = 1;
-            buf[i].duration1 = CARRIER_PERIOD_TICKS - (uint16_t)duty;
-            buf[i].level1 = 0;
-            phase_acc += phase_step;
-            if(phase_acc >= PHASE_SCALE) {
-                phase_acc -= PHASE_SCALE;
-            }
+        ledc_timer_pause(LEDC_MODE, LEDC_TMR);
+        ledc_set_freq(LEDC_MODE, LEDC_TMR, (uint32_t)(freq_hz + 0.5f));
+        ledc_timer_rst(LEDC_MODE, LEDC_TMR);
+        ledc_timer_resume(LEDC_MODE, LEDC_TMR);
+    }
+
+    static void set_amplitude(float amplitude)
+    {
+        if(amplitude < 0.002f) {
+            // Disconnect output to avoid duty=0 / hpoint=0 glitch pulses
+            ledc_stop(LEDC_MODE, LEDC_CHAN, 0);
+            return;
         }
+        uint32_t duty = (uint32_t)(amplitude * DUTY_HALF + 0.5f);
+        if(duty == 0) duty = 1;
+        ledc_set_duty(LEDC_MODE, LEDC_CHAN, duty);
+        ledc_update_duty(LEDC_MODE, LEDC_CHAN);
+    }
+
+    static void stop_output()
+    {
+        ledc_stop(LEDC_MODE, LEDC_CHAN, 0);
     }
 
     //////////////////////////////////////////////////////////////////////
     // envelope — raised-cosine amplitude [0.0, 1.0] for elapsed_ms into note.
     //
     // Timeline:
-    //   [0 .. attack_ms)              → ramp up   (1 - cos(πt/T)) / 2
+    //   [0 .. attack_ms)                → ramp up   (1 - cos(πt/T)) / 2
     //   [attack_ms .. on_ms-release_ms) → sustain  1.0
-    //   [on_ms-release_ms .. on_ms)   → ramp down (1 + cos(πt/T)) / 2
+    //   [on_ms-release_ms .. on_ms)     → ramp down (1 + cos(πt/T)) / 2
     //
     // If attack+release > on_ms they are clamped to on_ms/2 each.
 
@@ -204,48 +161,6 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // transmit — concise wrapper used throughout
-
-    static inline void transmit(rmt_symbol_word_t *buf)
-    {
-        ESP_LOG_ERR(rmt_transmit(tx_chan, encoder, buf, ITEMS_PER_BUFFER * sizeof(rmt_symbol_word_t), &tx_config));
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // on_trans_done ISR — counting-mode notify.
-    // Each completion increments the counter by 1; ulTaskNotifyTake with
-    // pdFALSE decrements by 1, so two rapid completions after a WiFi burst
-    // result in two separate wake-ups and two buffer refills.
-
-    IRAM_ATTR static bool on_trans_done(rmt_channel_handle_t, const rmt_tx_done_event_data_t *, void *)
-    {
-        BaseType_t hp = pdFALSE;
-        vTaskNotifyGiveFromISR(task_handle, &hp);
-        return hp == pdTRUE;
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // drain_tail — wait for all queued buffers to finish between melody
-    // notes.  RMT stays enabled; eot_level=0 pulls GPIO low automatically.
-
-    static void drain_tail()
-    {
-        rmt_tx_wait_all_done(tx_chan, pdMS_TO_TICKS(50));
-        xTaskNotifyStateClear(nullptr);
-    }
-
-    //////////////////////////////////////////////////////////////////////
-    // stop_rmt — drain, disable, force GPIO low, clear stale notifications.
-    // Must be called once after every rmt_enable().
-
-    static void stop_rmt()
-    {
-        drain_tail();
-        rmt_disable(tx_chan);
-        gpio_set_level(BUZZER_GPIO, 0);
-    }
-
-    //////////////////////////////////////////////////////////////////////
     // check_stop — non-blocking peek at the command queue.
     // If any command is pending, puts it back at the front and returns true.
     // Any pending command (CMD_STOP, CMD_MELODY, CMD_TONE) interrupts
@@ -262,7 +177,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // silence — wait up to gap_ms doing nothing (RMT idle, GPIO low).
+    // silence — wait up to gap_ms doing nothing (output off).
     // Returns true and re-queues the command if one arrives early.
     // Used both for inter-note gaps and for rest notes.
 
@@ -279,7 +194,7 @@ namespace
     }
 
     //////////////////////////////////////////////////////////////////////
-    // play_note — stream sine buffers for one note (or indefinitely).
+    // play_note — modulate LEDC duty for one note (or indefinitely).
     //
     // note == nullptr  → full amplitude, effectively no time limit
     //                    (caller uses a synthetically large on_ms)
@@ -287,46 +202,15 @@ namespace
     //
     // Returns true  if a command arrived (playback interrupted).
     // Returns false if the note completed its full on_ms normally.
-    //
-    // Phase accumulator and phase_step must be set by the caller before
-    // calling play_note.
 
-    static bool play_note(note_t const *note)
+    static bool play_note(note_t const *note, float volume = 1.0f)
     {
         TickType_t const note_start = xTaskGetTickCount();
-
-        // Prime both buffers before entering the steady-state loop so
-        // RMT always has something queued (no gap at note start).
-        static constexpr uint32_t BUF1_MS = (uint32_t)(1000.0f * ITEMS_PER_BUFFER / CARRIER_FREQ_HZ + 0.5f);    // ≈ 5
-
-        float amp0 = note ? envelope(0, *note) : 1.0f;
-        float amp1 = note ? envelope(BUF1_MS, *note) : 1.0f;
-
-        fill_buffer(buffers[0], amp0);
-        transmit(buffers[0]);
-        fill_buffer(buffers[1], amp1);
-        transmit(buffers[1]);
-        fill_idx = 0;
 
         while(true) {
 
             if(check_stop()) {
                 return true;
-            }
-
-            // Wait for a buffer to be consumed.  10 ms timeout is a safety
-            // net against an RMT stall; in normal operation trans_done fires
-            // every ~5 ms.
-            uint32_t got = ulTaskNotifyTake(pdFALSE, pdMS_TO_TICKS(10));
-
-            if(check_stop()) {
-                return true;
-            }
-
-            // Genuine timeout (got == 0): no buffer was consumed, so do not
-            // queue a new one — just retry the wait.
-            if(got == 0) {
-                continue;
             }
 
             uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - note_start) * portTICK_PERIOD_MS);
@@ -336,9 +220,9 @@ namespace
             }
 
             float amp = note ? envelope(elapsed_ms, *note) : 1.0f;
-            fill_buffer(buffers[fill_idx], amp);
-            transmit(buffers[fill_idx]);
-            fill_idx ^= 1;
+            set_amplitude(amp * volume);
+
+            vTaskDelay(ENVELOPE_TICKS);
         }
 
         return false;    // note completed normally
@@ -359,18 +243,18 @@ namespace
                 continue;    // nothing is playing, nothing to do
             }
 
-            ESP_LOG_ERR(rmt_enable(tx_chan));
-
             if(cmd.type == CMD_TONE) {
-                LOG_INFO("tone %.1f Hz", (double)cmd.freq_hz);
+                uint16_t dur = cmd.duration_ms > 0 ? cmd.duration_ms : 65535;
+                LOG_INFO("tone %.1f Hz  amp %.0f%%  dur %u ms", (double)cmd.freq_hz, (double)(cmd.amplitude * 100.0f), (unsigned)dur);
 
-                phase_acc = 0;
-                phase_step = (uint32_t)(cmd.freq_hz / CARRIER_FREQ_HZ * PHASE_SCALE + 0.5f);
+                set_freq(cmd.freq_hz);
 
-                // Synthetic note: 15 ms attack prevents click at tone start;
-                // on_ms = 65535 is effectively infinite for an alarm clock.
-                note_t const tn = { cmd.freq_hz, 65535, 15, 0, 0 };
-                play_note(&tn);
+                // 15 ms attack prevents click at tone start.
+                // 30 ms release softens tone end (needs ≥3 tick periods
+                // at configTICK_RATE_HZ=100 to ramp down meaningfully).
+                uint16_t rel = cmd.duration_ms > 0 ? 30 : 0;
+                note_t const tn = { cmd.freq_hz, dur, 15, rel, 0 };
+                play_note(&tn, cmd.amplitude);
 
             } else {    // CMD_MELODY
 
@@ -386,14 +270,12 @@ namespace
                             // Rest: combined on_ms + gap_ms of silence.
                             interrupted = silence((uint16_t)(n.on_ms + n.gap_ms));
                         } else {
-                            phase_acc = 0;
-                            phase_step = (uint32_t)(n.freq_hz / CARRIER_FREQ_HZ * PHASE_SCALE + 0.5f);
+                            set_freq(n.freq_hz);
 
                             interrupted = play_note(&n);
 
                             if(!interrupted) {
-                                // Note completed: drain tail, then inter-note gap.
-                                drain_tail();
+                                stop_output();
                                 interrupted = silence(n.gap_ms);
                             }
                         }
@@ -401,7 +283,7 @@ namespace
                 } while(cmd.loop && !interrupted);
             }
 
-            stop_rmt();
+            stop_output();
         }
     }
 
@@ -411,58 +293,40 @@ namespace
 
 void buzzer_init()
 {
-    // Unit sine LUT in [-1.0, 1.0]; amplitude applied per-buffer in fill_buffer.
-    for(int i = 0; i < SINE_LUT_SIZE; ++i) {
-        sine_lut[i] = sinf(2.0f * (float)M_PI * i / SINE_LUT_SIZE);
-    }
+    ledc_timer_config_t timer_cfg{};
+    timer_cfg.speed_mode = LEDC_MODE;
+    timer_cfg.duty_resolution = DUTY_RES;
+    timer_cfg.timer_num = LEDC_TMR;
+    timer_cfg.freq_hz = 2700;    // default; changed per-note
+    timer_cfg.clk_cfg = LEDC_AUTO_CLK;
+    ESP_LOG_ERR(ledc_timer_config(&timer_cfg));
 
-    // DMA-capable buffers must live in internal SRAM (GDMA cannot reach PSRAM).
-    for(int i = 0; i < 2; ++i) {
-        buffers[i] =
-            (rmt_symbol_word_t *)heap_caps_malloc(ITEMS_PER_BUFFER * sizeof(rmt_symbol_word_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-        ASSERT(buffers[i] != nullptr);
-    }
-
-
-    tx_config.loop_count = 0;
-    tx_config.flags.eot_level = 0;    // GPIO low when idle → MOSFET off
-
-    rmt_tx_channel_config_t chan_cfg{};
-    chan_cfg.clk_src = RMT_CLK_SRC_APB;    // 80 MHz
+    ledc_channel_config_t chan_cfg{};
     chan_cfg.gpio_num = BUZZER_GPIO;
-    chan_cfg.mem_block_symbols = 64;    // internal FIFO depth (min 48 for DMA)
-    chan_cfg.resolution_hz = RMT_RESOLUTION_HZ;
-    chan_cfg.trans_queue_depth = 2;    // one in-flight + one pre-queued
-    chan_cfg.flags.with_dma = 1;
-    ESP_LOG_ERR(rmt_new_tx_channel(&chan_cfg, &tx_chan));
-
-    rmt_copy_encoder_config_t enc_cfg{};
-    ESP_LOG_ERR(rmt_new_copy_encoder(&enc_cfg, &encoder));
-
-    rmt_tx_event_callbacks_t cbs{};
-    cbs.on_trans_done = on_trans_done;
-    ESP_LOG_ERR(rmt_tx_register_event_callbacks(tx_chan, &cbs, nullptr));
-
-    gpio_set_level(BUZZER_GPIO, 0);    // MOSFET off while RMT disabled
+    chan_cfg.speed_mode = LEDC_MODE;
+    chan_cfg.channel = LEDC_CHAN;
+    chan_cfg.timer_sel = LEDC_TMR;
+    chan_cfg.duty = 0;
+    chan_cfg.hpoint = 0;
+    ESP_LOG_ERR(ledc_channel_config(&chan_cfg));
 
     cmd_queue = xQueueCreate(4, sizeof(cmd_t));
     ASSERT(cmd_queue != nullptr);
 
-    // Core 0, priority 5: above idle/lux, below WiFi (23) and display (20).
-    // Resilience against WiFi preemption comes from buffer depth, not priority.
     xTaskCreatePinnedToCore(buzzer_task, "buzzer_task", 3072, nullptr, 5, &task_handle, 0);
 
-    LOG_INFO("init: carrier=%.0f Hz, buf=%zu items (%.1f ms), 2×%zu B DRAM", (double)CARRIER_FREQ_HZ, ITEMS_PER_BUFFER,
-             1000.0 * ITEMS_PER_BUFFER / CARRIER_FREQ_HZ, ITEMS_PER_BUFFER * sizeof(rmt_symbol_word_t));
+    LOG_INFO("init: LEDC square wave, %d-bit duty", (int)DUTY_RES);
 }
 
 //////////////////////////////////////////////////////////////////////
 
-void buzzer_play_tone(float freq_hz)
+void buzzer_play_tone(float freq_hz, float amplitude, uint16_t duration_ms)
 {
     cmd_t cmd{};
     cmd.type = CMD_TONE;
     cmd.freq_hz = freq_hz;
+    cmd.amplitude = amplitude;
+    cmd.duration_ms = duration_ms;
     xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
 }
 
@@ -487,7 +351,7 @@ void buzzer_stop()
 
 namespace
 {
-    struct : console_command_t<"buzzer", "test buzzer", "[freq_hz | melody <n> | stop]">
+    struct : console_command_t<"tone", "test buzzer", "<freq> [amp dur_ms] | melody <n> | stop">
     {
         void on_command(int argc, char **argv) override
         {
@@ -510,7 +374,10 @@ namespace
                 printf("freq must be 100–10000 Hz\n");
                 return;
             }
-            buzzer_play_tone(freq);
+            float amp = (argc >= 3) ? (float)atof(argv[2]) : 100.0f;
+            amp = std::clamp(amp, 1.0f, 100.0f) * 0.01f;
+            uint16_t dur = (argc >= 4) ? (uint16_t)atoi(argv[3]) : 0;
+            buzzer_play_tone(freq, amp, dur);
         }
-    } buzzer_cmd;
+    } tone_cmd;
 }    // namespace

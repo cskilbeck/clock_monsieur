@@ -16,6 +16,6 @@ struct note_t
 //////////////////////////////////////////////////////////////////////
 
 void buzzer_init();
-void buzzer_play_tone(float freq_hz);
+void buzzer_play_tone(float freq_hz, float amplitude = 1.0f, uint16_t duration_ms = 0);
 void buzzer_play_melody(note_t const *notes, int count, bool loop);
 void buzzer_stop();
