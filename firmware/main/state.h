@@ -82,6 +82,17 @@ struct menu_state_t : state_handler_t
 
 //////////////////////////////////////////////////////////////////////
 
+struct timer_state_t : state_handler_t
+{
+    void on_start() override;
+    void on_update() override;
+
+    double end_time;
+    bool done;
+};
+
+//////////////////////////////////////////////////////////////////////
+
 struct timezone_select_state_t : state_handler_t
 {
     void on_start() override;

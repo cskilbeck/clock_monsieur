@@ -22,7 +22,8 @@
     X(7, timezone_mode, timezone_mode_t, timezone_mode_t::Auto)         \
     X(8, location, timezone_location_t, 0)                              \
     X(9, ticks, tick_mode_t, tick_mode_t::Track)                        \
-    X(10, brightness, brightness_level_t, brightness_level_t::Max)
+    X(10, brightness, brightness_level_t, brightness_level_t::Max)      \
+    X(11, timer_seconds, uint16_t, 60)
 
 //////////////////////////////////////////////////////////////////////
 // Thus far, settings are all either uint8_t (possibly via an enum class) or a timezone_location_t
@@ -42,6 +43,13 @@ template <typename T> inline char const *setting_to_string(T const &a)
 {
     static char buffer[8];
     sprintf(buffer, "%u", (uint8_t)a);
+    return buffer;
+}
+
+template <> inline char const *setting_to_string(uint16_t const &a)
+{
+    static char buffer[8];
+    sprintf(buffer, "%u", a);
     return buffer;
 }
 

@@ -102,6 +102,28 @@ namespace melodies
     static constexpr int CHARGE_COUNT = sizeof(CHARGE) / sizeof(CHARGE[0]);
 
     //////////////////////////////////////////////////////////////////////
+    // CHARGE_X3 — Charge played 3 times with 1-second gaps.
+
+    // clang-format off
+    #define CHARGE_NOTES                                 \
+        N(523.25f, 120, 5, 10, 5),                      \
+        N(659.25f, 120, 5, 10, 5),                      \
+        N(783.99f, 120, 5, 10, 5),                      \
+        NA(1046.50f, 200, 5, 15, 5, 40, 0.85f),         \
+        N(783.99f, 90, 5, 10, 5),                       \
+        NA(1046.50f, 600, 5, 80, 0, 120, 0.50f)
+
+    static constexpr note_t CHARGE_X3[] = {
+        CHARGE_NOTES, REST(1000),
+        CHARGE_NOTES, REST(1000),
+        CHARGE_NOTES, REST(500),
+    };
+    #undef CHARGE_NOTES
+    // clang-format on
+
+    static constexpr int CHARGE_X3_COUNT = sizeof(CHARGE_X3) / sizeof(CHARGE_X3[0]);
+
+    //////////////////////////////////////////////////////////////////////
     // HAPPY_BIRTHDAY — the classic song, key of C.
     //   Four phrases with held endings that decay naturally.
 

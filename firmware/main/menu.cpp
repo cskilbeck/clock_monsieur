@@ -300,6 +300,85 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    MENU_HEADER(timer_menu, "Timer", &root_menu);
+
+    struct : item_t
+    {
+        using item_t::item_t;
+
+        int hold_frames = 0;
+
+        char const *text() const override
+        {
+            return "Set";
+        }
+
+        void on_update() override
+        {
+            uint16_t &secs = settings.timer_seconds;
+
+            // up/down: adjust duration
+            if(button_up.pressed) {
+                if(secs < 3599) secs++;
+                hold_frames = 0;
+            } else if(button_down.pressed) {
+                if(secs > 1) secs--;
+                hold_frames = 0;
+            } else if(button_up.held) {
+                hold_frames++;
+                if(hold_frames > 50) {
+                    int rate = 15 - (hold_frames - 50) / 20;
+                    if(rate < 1) rate = 1;
+                    if(hold_frames % rate == 0 && secs < 3599) secs++;
+                }
+            } else if(button_down.held) {
+                hold_frames++;
+                if(hold_frames > 50) {
+                    int rate = 15 - (hold_frames - 50) / 20;
+                    if(rate < 1) rate = 1;
+                    if(hold_frames % rate == 0 && secs > 1) secs--;
+                }
+            } else {
+                hold_frames = 0;
+            }
+
+            // select: start countdown
+            if(button_select.pressed) {
+                current_item = list::iterator((item_t *)nullptr);
+                settings.save();
+                state_set<timer_state_t>();
+                return;
+            }
+
+            // left: back to Timer header
+            if(button_left.pressed) {
+                go(parent, 2, 0);
+                return;
+            }
+
+            // draw M:SS
+            int mins = secs / 60;
+            int s = secs % 60;
+            char buf[8];
+            sprintf(buf, "%2d%02d", mins, s);
+
+            gfx.clear();
+            font_t const &font = settings.clock_font == clock_font_t::Square ? square_font_font : font_5x7_font;
+            font.draw_char_centered(gfx, buf[0], 2, 0, 1.0f);
+            font.draw_char_centered(gfx, buf[1], 8, 0, 1.0f);
+            font.draw_char_centered(gfx, buf[2], 16, 0, 1.0f);
+            font.draw_char_centered(gfx, buf[3], 22, 0, 1.0f);
+
+            // steady colon
+            gfx.buffer[graphics_t::matrix_lookup[2][12]] = 1.0f;
+            gfx.buffer[graphics_t::matrix_lookup[4][12]] = 1.0f;
+
+            gfx.display();
+        }
+    } timer_setup_menu{ &timer_menu };
+
+    //////////////////////////////////////////////////////////////////////
+
     MENU_HEADER(mode_menu, "Mode", &root_menu);
     MENU_OPTION(clock_mode_t, settings.clock_mode, &mode_menu);
 
@@ -416,7 +495,7 @@ void menu_init()
     last_menu_activity_timestamp = utc_wall_time.tv_sec;
     item_t::old_text = nullptr;
     if(item_t::current_item.get() == nullptr) {
-        item_t::current_item = item_t::list::iterator(&mode_menu);
+        item_t::current_item = item_t::list::iterator(&timer_menu);
     }
 }
 

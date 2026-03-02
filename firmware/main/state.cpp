@@ -17,6 +17,8 @@
 #include "util.h"
 #include "clock_time.h"
 #include "timezone.h"
+#include "buzzer.h"
+#include "melodies.h"
 
 LOG_CONTEXT("state");
 
@@ -33,7 +35,8 @@ namespace
                                                                     menu_state_t,               //
                                                                     timezone_select_state_t,    //
                                                                     lux_state_t,                //
-                                                                    led_edit_state_t>           //
+                                                                    led_edit_state_t,           //
+                                                                    timer_state_t>              //
     ];
     state_handler_t *current_state = nullptr;
     QueueHandle_t state_queue;
@@ -334,5 +337,69 @@ void led_edit_state_t::on_update()
     } else {
         gfx.set_led(1.0f, led_number);
     }
+    gfx.display();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void timer_state_t::on_start()
+{
+    end_time = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0 + settings.timer_seconds;
+    done = false;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void timer_state_t::on_update()
+{
+    double now = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0;
+    double remaining_f = end_time - now;
+    int remaining = (remaining_f <= 0.0) ? 0 : (int)ceil(remaining_f);
+
+    if(remaining <= 0) {
+        if(!done) {
+            buzzer_play_melody(melodies::CHARGE_X3, melodies::CHARGE_X3_COUNT, false);
+            done = true;
+        }
+
+        // any button dismisses
+        if(button_select.pressed || button_left.pressed || button_right.pressed || button_up.pressed || button_down.pressed) {
+            buzzer_stop();
+            state_set<clock_state_t>();
+            return;
+        }
+
+        remaining = 0;
+    } else {
+        // cancel on select or left during countdown
+        if(button_select.pressed || button_left.pressed) {
+            state_set<clock_state_t>();
+            return;
+        }
+    }
+
+    int mins = remaining / 60;
+    int secs = remaining % 60;
+
+    gfx.clear();
+
+    // seconds ring: bright for 0..secs-1, dim for secs..59
+    for(int i = 0; i < 60; ++i) {
+        gfx.set_second(i < secs ? 1.0f : 0.15f, i);
+    }
+
+    // M:SS display using clock font at same digit positions as draw_time
+    char buf[16];
+    sprintf(buf, "%2d%02d", mins, secs);
+    font_t const &font = settings.clock_font == clock_font_t::Square ? square_font_font : font_5x7_font;
+    font.draw_char_centered(gfx, buf[0], 2, 0, 1.0f);
+    font.draw_char_centered(gfx, buf[1], 8, 0, 1.0f);
+    font.draw_char_centered(gfx, buf[2], 16, 0, 1.0f);
+    font.draw_char_centered(gfx, buf[3], 22, 0, 1.0f);
+
+    // steady colon
+    gfx.buffer[graphics_t::matrix_lookup[2][12]] = 1.0f;
+    gfx.buffer[graphics_t::matrix_lookup[4][12]] = 1.0f;
+
     gfx.display();
 }
