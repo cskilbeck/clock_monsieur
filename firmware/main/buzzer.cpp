@@ -255,6 +255,7 @@ namespace
 
     static QueueHandle_t cmd_queue = nullptr;
     static TaskHandle_t task_handle = nullptr;
+    static volatile bool buzzer_playing = false;
 
     //////////////////////////////////////////////////////////////////////
     // configure_encoder — task context, called before rmt_transmit.
@@ -378,6 +379,8 @@ namespace
                 continue;
             }
 
+            buzzer_playing = true;
+
             if(cmd.type == CMD_TONE) {
                 LOG_INFO("tone %.1f Hz  amp %.0f%%  dur %u ms", (double)cmd.freq_hz, (double)(cmd.amplitude * 100.0f),
                          (unsigned)cmd.duration_ms);
@@ -411,6 +414,7 @@ namespace
 
             // Ensure GPIO is low after any playback
             gpio_set_level(BUZZER_GPIO, 0);
+            buzzer_playing = false;
         }
     }
 
@@ -491,6 +495,11 @@ void buzzer_stop()
     cmd_t cmd{};
     cmd.type = CMD_STOP;
     xQueueSend(cmd_queue, &cmd, portMAX_DELAY);
+}
+
+bool buzzer_is_playing()
+{
+    return buzzer_playing;
 }
 
 //////////////////////////////////////////////////////////////////////

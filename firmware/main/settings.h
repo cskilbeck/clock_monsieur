@@ -8,6 +8,18 @@
 #include "esp_err.h"
 
 //////////////////////////////////////////////////////////////////////
+
+ENUM(alarm_enabled_t, uint8_t, Off, On)
+
+//////////////////////////////////////////////////////////////////////
+
+ENUM(alarm_mode_t, uint8_t, EveryDay, Weekdays, Once)
+
+//////////////////////////////////////////////////////////////////////
+
+ENUM(alarm_melody_t, uint8_t, Gentle, Standard, Urgent, Cuckoo, Charge, Birthday)
+
+//////////////////////////////////////////////////////////////////////
 // ONLY ADD to this list, NEVER REMOVE anything
 
 // #define X(ID, NAME, TYPE, DEFAULT_VALUE)
@@ -23,7 +35,13 @@
     X(8, location, timezone_location_t, 0)                              \
     X(9, ticks, tick_mode_t, tick_mode_t::Track)                        \
     X(10, brightness, brightness_level_t, brightness_level_t::Max)      \
-    X(11, timer_seconds, uint16_t, 60)
+    X(11, timer_seconds, uint16_t, 60)                                   \
+    X(12, alarm_hour, uint8_t, 7)                                          \
+    X(13, alarm_minute, uint8_t, 0)                                        \
+    X(14, alarm_mode, alarm_mode_t, alarm_mode_t::EveryDay)                  \
+    X(15, alarm_melody, alarm_melody_t, alarm_melody_t::Charge)         \
+    X(16, alarm_snooze, uint8_t, 5)                                     \
+    X(17, alarm_enabled, alarm_enabled_t, alarm_enabled_t::Off)
 
 //////////////////////////////////////////////////////////////////////
 // Thus far, settings are all either uint8_t (possibly via an enum class) or a timezone_location_t

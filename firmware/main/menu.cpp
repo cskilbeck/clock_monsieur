@@ -16,6 +16,8 @@
 #include "state.h"
 #include "settings.h"
 #include "version.h"
+#include "buzzer.h"
+#include "melodies.h"
 
 LOG_CONTEXT("menu");
 
@@ -237,7 +239,32 @@ namespace
     void menu_exit()
     {
         settings.save();
+        item_t::current_item = item_t::list::iterator((item_t *)nullptr);
         state_set<clock_state_t>();
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // Accelerating hold-repeat: call each frame with held state of up/down.
+    // Returns true when the action should fire.
+
+    bool hold_repeat(button_t const &btn, int &hold_frames)
+    {
+        if(btn.pressed) {
+            hold_frames = 0;
+            return true;
+        }
+        if(!btn.held) {
+            return false;
+        }
+        hold_frames++;
+        if(hold_frames <= 50) {
+            return false;
+        }
+        int rate = 15 - (hold_frames - 50) / 20;
+        if(rate < 1) {
+            rate = 1;
+        }
+        return (hold_frames % rate) == 0;
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -274,7 +301,7 @@ namespace
         }
         void on_select() override
         {
-            go(parent, 2, 0);
+            cycle_enum(1);
         }
         char const *text() const override
         {
@@ -300,6 +327,194 @@ namespace
 
     //////////////////////////////////////////////////////////////////////
 
+    MENU_HEADER(alarm_menu, "Alarm", &root_menu);
+
+    struct : enum_item_t<alarm_enabled_t, settings.alarm_enabled>
+    {
+        using enum_item_t::enum_item_t;
+        void on_up() override { item_t::on_up(); }
+        void on_down() override { item_t::on_down(); }
+    } alarm_enabled_toption(&alarm_menu);
+
+    MENU_HEADER(alarm_set_menu, "Set", &alarm_menu);
+
+    struct : item_t
+    {
+        using item_t::item_t;
+
+        int field = 0;    // 0=hour, 1=minute
+        int hold_frames = 0;
+
+        char const *text() const override
+        {
+            return "Time";
+        }
+
+        void on_update() override
+        {
+            uint8_t &hour = settings.alarm_hour;
+            uint8_t &minute = settings.alarm_minute;
+
+            // left/right: switch field or go back
+            if(button_left.pressed) {
+                if(field == 1) {
+                    field = 0;
+                } else {
+                    go(parent, 2, 0);
+                    return;
+                }
+            } else if(button_right.pressed) {
+                if(field == 0) {
+                    field = 1;
+                }
+            }
+
+            // select: back to alarm header
+            if(button_select.pressed) {
+                go(parent, 2, 0);
+                return;
+            }
+
+            // up/down: adjust selected field
+            if(hold_repeat(button_up, hold_frames)) {
+                if(field == 0) {
+                    hour = (hour + 1) % 24;
+                } else {
+                    minute = (minute + 1) % 60;
+                }
+            } else if(hold_repeat(button_down, hold_frames)) {
+                if(field == 0) {
+                    hour = (hour + 23) % 24;
+                } else {
+                    minute = (minute + 59) % 60;
+                }
+            }
+
+            // draw HH:MM with narrow font (fits A/P suffix in 12h mode)
+            int display_hour = hour;
+            bool is_pm = false;
+            bool is_24h = settings.clock_mode == clock_mode_t::clock_24_hour;
+            char const *fmt;
+            if(is_24h) {
+                display_hour %= 24;
+                fmt = "%02d%02d";
+            } else {
+                is_pm = (hour % 24) >= 12;
+                display_hour = hour % 12;
+                if(display_hour == 0) {
+                    display_hour = 12;
+                }
+                fmt = "%2d%02d";
+            }
+            char buf[8];
+            sprintf(buf, fmt, display_hour, (int)minute);
+
+            gfx.clear();
+            font_t const &font = font_5x7_narrow_modern_font;
+
+            // blink selected field (use frame counter)
+            static int blink_frame = 0;
+            blink_frame++;
+            bool visible = (blink_frame % 40) < 28;
+
+            float hour_alpha = (field == 0 && !visible) ? 0.0f : 1.0f;
+            float minute_alpha = (field == 1 && !visible) ? 0.0f : 1.0f;
+
+            // narrow font: digits centered at 2, 6, colon at 9, digits at 13, 17, A/P at 20
+            font.draw_char_centered(gfx, buf[0], 2, 0, hour_alpha);
+            font.draw_char_centered(gfx, buf[1], 6, 0, hour_alpha);
+            font.draw_char_centered(gfx, buf[2], 13, 0, minute_alpha);
+            font.draw_char_centered(gfx, buf[3], 17, 0, minute_alpha);
+
+            // steady colon at column 9
+            gfx.buffer[graphics_t::matrix_lookup[2][9]] = 1.0f;
+            gfx.buffer[graphics_t::matrix_lookup[4][9]] = 1.0f;
+
+            // AM/PM indicator in 12h mode
+            if(!is_24h) {
+                font.draw_char(gfx, is_pm ? 'P' : 'A', 20, 0, 1.0f);
+            }
+
+            gfx.display();
+        }
+    } alarm_time_menu{ &alarm_set_menu };
+
+    MENU_HEADER(alarm_mode_menu, "Repeat", &alarm_menu);
+    MENU_OPTION(alarm_mode_t, settings.alarm_mode, &alarm_mode_menu);
+
+    MENU_HEADER(alarm_melody_menu, "Melody", &alarm_menu);
+
+    struct : enum_item_t<alarm_melody_t, settings.alarm_melody>
+    {
+        using enum_item_t::enum_item_t;
+
+        void cycle_enum_with_preview(int direction)
+        {
+            cycle_enum(direction);
+            int idx = (int)settings.alarm_melody;
+            if(idx >= 0 && idx < melodies::count) {
+                auto const &m = melodies::table[idx];
+                buzzer_play_melody(m.notes, m.count, false);
+            }
+        }
+
+        void on_up() override
+        {
+            cycle_enum_with_preview(-1);
+        }
+
+        void on_down() override
+        {
+            cycle_enum_with_preview(1);
+        }
+
+        void on_select() override
+        {
+            cycle_enum_with_preview(1);
+        }
+
+        void on_update() override
+        {
+            if(old_text == nullptr && button_left.pressed && name_x == 0) {
+                buzzer_stop();
+            }
+            item_t::on_update();
+        }
+    } alarm_melody_option{ &alarm_melody_menu };
+
+    MENU_HEADER(alarm_snooze_menu, "Snooze", &alarm_menu);
+
+    struct : item_t
+    {
+        using item_t::item_t;
+
+        int hold_frames = 0;
+
+        char const *text() const override
+        {
+            static char buf[8];
+            sprintf(buf, "%d min", settings.alarm_snooze);
+            return buf;
+        }
+
+        void on_select() override
+        {
+            go(parent, 2, 0);
+        }
+
+        void on_update() override
+        {
+            if(hold_repeat(button_up, hold_frames) && settings.alarm_snooze < 30) {
+                settings.alarm_snooze++;
+            } else if(hold_repeat(button_down, hold_frames) && settings.alarm_snooze > 1) {
+                settings.alarm_snooze--;
+            }
+            item_t::on_update();
+        }
+    } alarm_snooze_option{ &alarm_snooze_menu };
+
+    //////////////////////////////////////////////////////////////////////
+
     MENU_HEADER(timer_menu, "Timer", &root_menu);
 
     struct : item_t
@@ -318,34 +533,20 @@ namespace
             uint16_t &secs = settings.timer_seconds;
 
             // up/down: adjust duration
-            if(button_up.pressed) {
-                if(secs < 3599) secs++;
-                hold_frames = 0;
-            } else if(button_down.pressed) {
-                if(secs > 1) secs--;
-                hold_frames = 0;
-            } else if(button_up.held) {
-                hold_frames++;
-                if(hold_frames > 50) {
-                    int rate = 15 - (hold_frames - 50) / 20;
-                    if(rate < 1) rate = 1;
-                    if(hold_frames % rate == 0 && secs < 3599) secs++;
+            if(hold_repeat(button_up, hold_frames)) {
+                if(secs < 3599) {
+                    secs++;
                 }
-            } else if(button_down.held) {
-                hold_frames++;
-                if(hold_frames > 50) {
-                    int rate = 15 - (hold_frames - 50) / 20;
-                    if(rate < 1) rate = 1;
-                    if(hold_frames % rate == 0 && secs > 1) secs--;
+            } else if(hold_repeat(button_down, hold_frames)) {
+                if(secs > 1) {
+                    secs--;
                 }
-            } else {
-                hold_frames = 0;
             }
 
             // select: start countdown
             if(button_select.pressed) {
-                current_item = list::iterator((item_t *)nullptr);
                 settings.save();
+                current_item = list::iterator((item_t *)nullptr);
                 state_set<timer_state_t>();
                 return;
             }
@@ -428,6 +629,7 @@ namespace
         }
         void on_select() override
         {
+            current_item = list::iterator((item_t *)nullptr);
             state_set<timezone_select_state_t>();
         }
     } timezone_select_menu{ &timezone_menu };
@@ -475,6 +677,7 @@ namespace
         using item_t::item_t;
         void on_select() override
         {
+            current_item = list::iterator((item_t *)nullptr);
             state_set<factory_reset_state_t>();
         }
         char const *text() const
@@ -495,7 +698,7 @@ void menu_init()
     last_menu_activity_timestamp = utc_wall_time.tv_sec;
     item_t::old_text = nullptr;
     if(item_t::current_item.get() == nullptr) {
-        item_t::current_item = item_t::list::iterator(&timer_menu);
+        item_t::current_item = item_t::list::iterator(&alarm_menu);
     }
 }
 
@@ -503,8 +706,8 @@ void menu_init()
 
 void menu_update()
 {
-    // menu goes away automatically after 3 minutes of inactivity
-    if((utc_wall_time.tv_sec - last_menu_activity_timestamp) > 3 * 60) {
+    // menu goes away automatically after 30 seconds of inactivity
+    if((utc_wall_time.tv_sec - last_menu_activity_timestamp) > 30) {
         menu_exit();
     } else {
         item_t::current_item->on_update();

@@ -36,7 +36,8 @@ namespace
                                                                     timezone_select_state_t,    //
                                                                     lux_state_t,                //
                                                                     led_edit_state_t,           //
-                                                                    timer_state_t>              //
+                                                                    timer_state_t,              //
+                                                                    alarm_state_t>              //
     ];
     state_handler_t *current_state = nullptr;
     QueueHandle_t state_queue;
@@ -44,6 +45,8 @@ namespace
 
     uint64_t state_start_timestamp;
     double state_elapsed_seconds;
+
+    double snooze_end_time = 0;
 
 }    // namespace
 
@@ -263,6 +266,39 @@ void clock_state_t::on_update()
 {
     clock_draw();
 
+    // snooze check
+    if(snooze_end_time > 0) {
+        double now = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0;
+        if(now >= snooze_end_time) {
+            snooze_end_time = 0;
+            state_set<alarm_state_t>();
+            return;
+        }
+    }
+
+    // alarm check
+    static time_t last_alarm_minute = -1;
+
+    if(settings.alarm_enabled == alarm_enabled_t::On) {
+        long local_seconds = utc_wall_time.tv_sec + timezone_offset_seconds;
+        int local_hour = (int)((local_seconds / 3600) % 24);
+        int local_minute = (int)((local_seconds % 3600) / 60);
+        time_t current_epoch_minute = utc_wall_time.tv_sec / 60;
+
+        if(local_hour == settings.alarm_hour && local_minute == settings.alarm_minute && current_epoch_minute != last_alarm_minute) {
+            int local_dow = (int)(((local_seconds / 86400) + 4) % 7);    // 0=Sun .. 6=Sat
+            bool should_fire = true;
+            if(settings.alarm_mode == alarm_mode_t::Weekdays) {
+                should_fire = (local_dow >= 1 && local_dow <= 5);
+            }
+            if(should_fire) {
+                last_alarm_minute = current_epoch_minute;
+                state_set<alarm_state_t>();
+                return;
+            }
+        }
+    }
+
     if(button_select.pressed) {
         state_set<menu_state_t>();
     }
@@ -362,9 +398,13 @@ void timer_state_t::on_update()
             done = true;
         }
 
-        // any button dismisses
+        // any button dismisses, or auto-return when melody finishes
         if(button_select.pressed || button_left.pressed || button_right.pressed || button_up.pressed || button_down.pressed) {
             buzzer_stop();
+            state_set<clock_state_t>();
+            return;
+        }
+        if(!buzzer_is_playing()) {
             state_set<clock_state_t>();
             return;
         }
@@ -402,4 +442,112 @@ void timer_state_t::on_update()
     gfx.buffer[graphics_t::matrix_lookup[4][12]] = 1.0f;
 
     gfx.display();
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void alarm_state_t::on_start()
+{
+    int idx = (int)settings.alarm_melody;
+    if(idx < 0 || idx >= melodies::count) idx = 0;
+    auto const &m = melodies::table[idx];
+    buzzer_play_melody(m.notes, m.count, true);
+    end_time = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0 + 60.0;
+    snooze_msg = false;
+    snooze_msg_time = 0;
+
+    // Once mode: disable on first fire (snooze re-fires still work this session)
+    if(snooze_end_time == 0 && settings.alarm_mode == alarm_mode_t::Once) {
+        settings.alarm_enabled = alarm_enabled_t::Off;
+        settings.save();
+    }
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void alarm_state_t::on_update()
+{
+    double now = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0;
+    bool any_button = button_select.pressed || button_left.pressed || button_right.pressed || button_up.pressed || button_down.pressed;
+
+    if(snooze_msg) {
+
+        // snooze message phase: show "SNOOZE!" for 1 second
+        if(any_button) {
+            // second press during message: cancel this occurrence only
+            snooze_end_time = 0;
+            state_set<clock_state_t>();
+            return;
+        }
+
+        if(now - snooze_msg_time >= 1.0) {
+            // message done: set snooze timer and return to clock
+            snooze_end_time = now + settings.alarm_snooze * 60.0;
+            state_set<clock_state_t>();
+            return;
+        }
+
+        gfx.clear();
+        for(int i = 0; i < 60; ++i) {
+            gfx.set_second(0.15f, i);
+        }
+        font_5x7_narrow_modern_font.draw_string(gfx, "SNOOZE!", 0, 0, 1.0f);
+        gfx.display();
+
+    } else {
+
+        // firing phase: melody playing, show alarm time
+        bool timed_out = now >= end_time;
+
+        if(any_button) {
+            // first press: enter snooze message
+            buzzer_stop();
+            snooze_msg = true;
+            snooze_msg_time = now;
+            return;
+        }
+
+        if(timed_out) {
+            // 1 minute with no response: auto-snooze
+            buzzer_stop();
+            snooze_end_time = now + settings.alarm_snooze * 60.0;
+            state_set<clock_state_t>();
+            return;
+        }
+
+        gfx.clear();
+
+        // dim ring
+        for(int i = 0; i < 60; ++i) {
+            gfx.set_second(0.15f, i);
+        }
+
+        // display alarm time HH:MM
+        int hours = settings.alarm_hour;
+        int minutes = settings.alarm_minute;
+        char const *fmt;
+        if(settings.clock_mode == clock_mode_t::clock_24_hour) {
+            hours %= 24;
+            fmt = "%02d%02d";
+        } else {
+            hours %= 12;
+            if(hours == 0) {
+                hours = 12;
+            }
+            fmt = "%2d%02d";
+        }
+        char buf[16];
+        sprintf(buf, fmt, hours, minutes);
+        font_t const &font = settings.clock_font == clock_font_t::Square ? square_font_font : font_5x7_font;
+        font.draw_char_centered(gfx, buf[0], 2, 0, 1.0f);
+        font.draw_char_centered(gfx, buf[1], 8, 0, 1.0f);
+        font.draw_char_centered(gfx, buf[2], 16, 0, 1.0f);
+        font.draw_char_centered(gfx, buf[3], 22, 0, 1.0f);
+
+        // steady colon
+        gfx.buffer[graphics_t::matrix_lookup[2][12]] = 1.0f;
+        gfx.buffer[graphics_t::matrix_lookup[4][12]] = 1.0f;
+
+        gfx.display();
+    }
 }

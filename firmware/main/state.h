@@ -93,6 +93,18 @@ struct timer_state_t : state_handler_t
 
 //////////////////////////////////////////////////////////////////////
 
+struct alarm_state_t : state_handler_t
+{
+    void on_start() override;
+    void on_update() override;
+
+    double end_time;
+    bool snooze_msg;
+    double snooze_msg_time;
+};
+
+//////////////////////////////////////////////////////////////////////
+
 struct timezone_select_state_t : state_handler_t
 {
     void on_start() override;

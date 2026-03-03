@@ -24,3 +24,4 @@ void buzzer_play_tone(float freq_hz, float amplitude = 1.0f, uint16_t duration_m
                       float sustain_level = 1.0f, uint16_t release_ms = 30);
 void buzzer_play_melody(note_t const *notes, int count, bool loop);
 void buzzer_stop();
+bool buzzer_is_playing();
