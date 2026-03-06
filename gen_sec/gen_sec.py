@@ -20,8 +20,8 @@ import qrcode
 from qr_code_pdf import create_qr_pdf
 
 # --- CONFIGURATION & CONSTANTS ---
-PASSWORD_CHAR_SET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-PASSWORD_LENGTH = 4
+PASSWORD_CHAR_SET = "abcdefghjkmnprstuvwxyz"
+PASSWORD_LENGTH = 6
 DEFAULT_USERNAME = "wifiprov"
 DEFAULT_PARTITION_NAME = "prov_dat"
 DEFAULT_SERVICE_NAME = "Clock Monsieur"
@@ -85,15 +85,15 @@ def get_mac_address():
 
 def generate_mac_based_password():
     """
-    Generate a password from low 21 bits of device mac address
+    Generate a password from device mac address
     """
-    mac = get_mac_address() & ((1 << 20) - 1)  # get low 20 bits of mac address
     base = len(PASSWORD_CHAR_SET)
+    mac = get_mac_address() % (base ** PASSWORD_LENGTH)
     new_password = ""
     while mac > 0:
         new_password = f"{PASSWORD_CHAR_SET[mac % base]}{new_password}"
         mac //= base
-    return new_password.zfill(PASSWORD_LENGTH)
+    return new_password.rjust(PASSWORD_LENGTH, PASSWORD_CHAR_SET[0])
 
 
 def get_sec_output(username, actual_password):
