@@ -23,8 +23,8 @@ LOG_CONTEXT("ota");
 
 #define OTA_RECV_BUF_SIZE 1024
 
-#define LATEST_URL "https://clockmonsieur.com/fw/" VERSION_HW_STR "/latest.txt"
-#define FIRMWARE_URL_FORMAT_STR "https://clockmonsieur.com/fw/" VERSION_HW_STR "/%s.bin"
+#define LATEST_URL "https://firmware.clockmonsieur.com/" VERSION_HW_STR "/latest.txt"
+#define FIRMWARE_URL_FORMAT_STR "https://firmware.clockmonsieur.com/" VERSION_HW_STR "/%s.bin"
 
 //////////////////////////////////////////////////////////////////////
 // Mark the current app as valid.
@@ -88,6 +88,13 @@ esp_err_t get_latest_firmware_version(char *buffer, size_t buffer_len)
     }
 
     int data_read = esp_http_client_read_response(client, buffer, buffer_len - 1);
+
+    int status_code = esp_http_client_get_status_code(client);
+
+    if(status_code >= 400) {
+        LOG_ERROR("Can't find firmware!? Fix the server!");
+        return ESP_FAIL;
+    }
 
     // trim trailing whitespace/newlines
     while(data_read > 0 && isspace(buffer[data_read - 1])) {

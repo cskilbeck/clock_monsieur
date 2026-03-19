@@ -23,10 +23,9 @@ void state_init();
 void state_enqueue(void (*ctor)(void *));
 void state_update();
 
-template <typename T>
-void state_set()
+template <typename T> void state_set()
 {
-    state_enqueue([](void *buf) { new (buf) T{}; });
+    state_enqueue([](void *buf) { new(buf) T{}; });
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -127,6 +126,20 @@ struct led_edit_state_t : state_handler_t
 
     uint8_t led_number = 0;
 };
+
+//////////////////////////////////////////////////////////////////////
+
+#if defined(DEBUG)
+
+struct led_test_state_t : state_handler_t
+{
+    void on_start() override;
+    void on_update() override;
+
+    float brightness = 0;
+};
+
+#endif
 
 //////////////////////////////////////////////////////////////////////
 

@@ -24,23 +24,23 @@ ENUM(alarm_melody_t, uint8_t, Gentle, Standard, Urgent, Cuckoo, Charge, Birthday
 
 // #define X(ID, NAME, TYPE, DEFAULT_VALUE)
 
-#define SETTINGS_FIELDS                                                 \
-    X(0, clock_mode, clock_mode_t, clock_mode_t::clock_12_hour)         \
-    X(1, auto_brightness, auto_brightness_t, auto_brightness_t::Auto)   \
-    X(3, seconds_mode, seconds_mode_t, seconds_mode_t::Long)            \
-    X(4, colon_mode, colon_mode_t, colon_mode_t::On)                    \
-    X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::Medium) \
-    X(6, clock_font, clock_font_t, clock_font_t::Square)                \
-    X(7, timezone_mode, timezone_mode_t, timezone_mode_t::Auto)         \
-    X(8, location, timezone_location_t, 0)                              \
-    X(9, ticks, tick_mode_t, tick_mode_t::Track)                        \
-    X(10, brightness, brightness_level_t, brightness_level_t::Max)      \
-    X(11, timer_seconds, uint16_t, 60)                                   \
-    X(12, alarm_hour, uint8_t, 7)                                          \
-    X(13, alarm_minute, uint8_t, 0)                                        \
-    X(14, alarm_mode, alarm_mode_t, alarm_mode_t::EveryDay)                  \
-    X(15, alarm_melody, alarm_melody_t, alarm_melody_t::Charge)         \
-    X(16, alarm_snooze, uint8_t, 5)                                     \
+#define SETTINGS_FIELDS                                               \
+    X(0, clock_mode, clock_mode_t, clock_mode_t::clock_12_hour)       \
+    X(1, auto_brightness, auto_brightness_t, auto_brightness_t::Auto) \
+    X(3, seconds_mode, seconds_mode_t, seconds_mode_t::Long)          \
+    X(4, colon_mode, colon_mode_t, colon_mode_t::On)                  \
+    X(5, clock_fade_mode, clock_fade_mode_t, clock_fade_mode_t::High) \
+    X(6, clock_font, clock_font_t, clock_font_t::Normal)              \
+    X(7, timezone_mode, timezone_mode_t, timezone_mode_t::Auto)       \
+    X(8, location, timezone_location_t, 0)                            \
+    X(9, ticks, tick_mode_t, tick_mode_t::Track)                      \
+    X(10, brightness, brightness_level_t, brightness_level_t::Medium) \
+    X(11, timer_seconds, uint16_t, 60)                                \
+    X(12, alarm_hour, uint8_t, 7)                                     \
+    X(13, alarm_minute, uint8_t, 0)                                   \
+    X(14, alarm_mode, alarm_mode_t, alarm_mode_t::EveryDay)           \
+    X(15, alarm_melody, alarm_melody_t, alarm_melody_t::Charge)       \
+    X(16, alarm_snooze, uint8_t, 5)                                   \
     X(17, alarm_enabled, alarm_enabled_t, alarm_enabled_t::Off)
 
 //////////////////////////////////////////////////////////////////////

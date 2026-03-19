@@ -378,6 +378,45 @@ void led_edit_state_t::on_update()
 
 //////////////////////////////////////////////////////////////////////
 
+#if defined(DEBUG)
+
+void led_test_state_t::on_start()
+{
+    brightness = 0.0f;
+}
+
+//////////////////////////////////////////////////////////////////////
+
+void led_test_state_t::on_update()
+{
+    if(button_select.pressed) {
+        state_set<menu_state_t>();
+    }
+    display->set_ambient(255);
+    gfx.clear();
+    if(button_up.held) {
+        brightness += 0.01f;
+    }
+    if(button_down.held) {
+        brightness -= 0.01f;
+    }
+    if(button_left.pressed) {
+        brightness -= 0.01f;
+    }
+    if(button_right.pressed) {
+        brightness += 0.01f;
+    }
+    brightness = std::clamp(brightness, 0.0f, 1.0f);
+    for(int i = 0; i < 256; ++i) {
+        gfx.set_led(brightness, i);
+    }
+    gfx.display();
+}
+
+#endif
+
+//////////////////////////////////////////////////////////////////////
+
 void timer_state_t::on_start()
 {
     end_time = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0 + settings.timer_seconds;
@@ -449,7 +488,8 @@ void timer_state_t::on_update()
 void alarm_state_t::on_start()
 {
     int idx = (int)settings.alarm_melody;
-    if(idx < 0 || idx >= melodies::count) idx = 0;
+    if(idx < 0 || idx >= melodies::count)
+        idx = 0;
     auto const &m = melodies::table[idx];
     buzzer_play_melody(m.notes, m.count, true);
     end_time = utc_wall_time.tv_sec + utc_wall_time.tv_usec / 1000000.0 + 60.0;

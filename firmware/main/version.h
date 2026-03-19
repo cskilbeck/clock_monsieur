@@ -9,7 +9,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 0
-#define VERSION_REVISION 1
+#define VERSION_REVISION 2
 
 #define VER_STR(x) VER_STR_X(x)
 #define VER_STR_X(x) #x

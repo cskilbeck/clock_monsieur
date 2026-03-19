@@ -332,8 +332,14 @@ namespace
     struct : enum_item_t<alarm_enabled_t, settings.alarm_enabled>
     {
         using enum_item_t::enum_item_t;
-        void on_up() override { item_t::on_up(); }
-        void on_down() override { item_t::on_down(); }
+        void on_up() override
+        {
+            item_t::on_up();
+        }
+        void on_down() override
+        {
+            item_t::on_down();
+        }
     } alarm_enabled_toption(&alarm_menu);
 
     MENU_HEADER(alarm_set_menu, "Set", &alarm_menu);
@@ -685,6 +691,25 @@ namespace
             return "Yes";
         }
     } factory_reset_yes{ &factory_reset_really_menu };
+
+    // LED Test
+
+#if defined(DEBUG)
+
+    struct : item_t
+    {
+        using item_t::item_t;
+        void on_select() override
+        {
+            state_set<led_test_state_t>();
+        }
+        char const *text() const
+        {
+            return "LED Test";
+        }
+    } led_test{ &system_menu };
+
+#endif
 
 }    // namespace
 
